@@ -1,0 +1,25 @@
+{
+  "name": "@workspace/discord-bot",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "deploy": "tsx src/deploy.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "@distube/ytdl-core": "^4.16.12",
+    "discord.js": "^14.27.0",
+    "opusscript": "^0.1.1",
+    "play-dl": "^1.9.7",
+    "prism-media": "^1.3.5"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "~5.9.3"
+  }
+}

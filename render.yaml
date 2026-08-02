@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: voidy-moderation-bot
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm install -g pnpm@10 && pnpm install --no-frozen-lockfile
+    startCommand: pnpm --filter @workspace/discord-bot run start
+    envVars:
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_CLIENT_ID
+        sync: false
+      - key: DISCORD_GUILD_ID
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20.20.0
