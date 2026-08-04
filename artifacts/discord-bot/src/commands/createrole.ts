@@ -4,17 +4,17 @@ import type { Command } from '../types.js';
 export const createrole: Command = {
   data: new SlashCommandBuilder()
     .setName('createrole')
-    .setDescription('Create a new role in the server')
+    .setDescription('Create a new role with optional color and hierarchy placement')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
     .addStringOption(o =>
       o.setName('name').setDescription('Name of the role').setRequired(true).setMaxLength(100),
     )
     .addStringOption(o =>
-      o.setName('color')
-        .setDescription('Hex color code (e.g. #FF5733 or FF5733)'),
+      o.setName('color').setDescription('Hex color code (e.g. #FF5733 or FF5733)'),
     )
     .addBooleanOption(o =>
-      o.setName('hoist').setDescription('Display role members separately in the member list'),
+      o.setName('high_position')
+        .setDescription('Place role high in hierarchy (below my top role) so its color displays'),
     )
     .addBooleanOption(o =>
       o.setName('mentionable').setDescription('Allow anyone to mention this role'),
@@ -26,9 +26,10 @@ export const createrole: Command = {
 
     const name = interaction.options.getString('name', true);
     const colorInput = interaction.options.getString('color');
-    const hoist = interaction.options.getBoolean('hoist') ?? false;
+    const highPosition = interaction.options.getBoolean('high_position') ?? false;
     const mentionable = interaction.options.getBoolean('mentionable') ?? false;
 
+    // Parse and validate hex color
     let color: number | undefined;
     if (colorInput) {
       const hex = colorInput.replace('#', '');
@@ -41,13 +42,32 @@ export const createrole: Command = {
     }
 
     try {
+      // Create role with no permissions (0n) so it's cosmetic/display only
       const role = await interaction.guild.roles.create({
         name,
         color,
-        hoist,
+        hoist: false,
         mentionable,
+        permissions: 0n,
         reason: `Created by ${interaction.user.tag} via /createrole`,
       });
+
+      // If high_position, move role just below the bot's highest role so colors display
+      let positionNote = 'Bottom (default)';
+      if (highPosition) {
+        const botMember = interaction.guild.members.me;
+        if (botMember) {
+          const botTop = botMember.roles.highest.position;
+          if (botTop > 1) {
+            await role.setPosition(botTop - 1).catch(() => null);
+            positionNote = `High (below my top role, position ~${botTop - 1})`;
+          }
+        }
+      }
+
+      const displayColor = color !== undefined
+        ? `#${role.color.toString(16).padStart(6, '0').toUpperCase()}`
+        : 'Default';
 
       const embed = new EmbedBuilder()
         .setColor(role.color || 0x5865F2)
@@ -55,15 +75,16 @@ export const createrole: Command = {
         .addFields(
           { name: 'Role', value: `<@&${role.id}>`, inline: true },
           { name: 'Name', value: role.name, inline: true },
-          { name: 'Color', value: colorInput ? `#${role.color.toString(16).padStart(6, '0').toUpperCase()}` : 'Default', inline: true },
-          { name: 'Hoisted', value: hoist ? 'Yes' : 'No', inline: true },
+          { name: 'Color', value: displayColor, inline: true },
+          { name: 'Position', value: positionNote, inline: true },
+          { name: 'Permissions', value: 'None (cosmetic)', inline: true },
           { name: 'Mentionable', value: mentionable ? 'Yes' : 'No', inline: true },
         )
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
     } catch {
-      await interaction.editReply('❌ Failed to create the role. Make sure I have the **Manage Roles** permission and my role is above where you want the new role.');
+      await interaction.editReply('❌ Failed to create the role. Make sure I have the **Manage Roles** permission and my top role is above where new roles are created.');
     }
   },
 };

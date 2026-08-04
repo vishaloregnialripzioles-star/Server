@@ -1094,7 +1094,7 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
         `${prefix}clearwarns @user`,
         `${prefix}nick @user [nickname]`,
         `${prefix}temprole @user @role <duration> [reason]`,
-        `${prefix}createrole <name> [#hex]`,
+        `${prefix}createrole <name> [#hex] [high]`,
         `${prefix}roleassign @member @role [add|remove]`,
       ]},
       { name: 'Channels', emoji: '📢', commands: [
@@ -1333,35 +1333,77 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
   }
 
   // ── .createrole ──────────────────────────────────────────────────────────────
-  // Usage: .createrole <name> [#hex color]
+  // Usage: .createrole <name> [#hex color] [high]
+  //   high  — place role just below bot's top role so color displays correctly
   if (cmd === 'createrole') {
     if (!perm(member, PermissionFlagsBits.ManageRoles)) {
       await reply('❌ You need **Manage Roles** permission.');
       return;
     }
-    // Split name and optional hex color (last arg if it looks like #RRGGBB or RRGGBB)
-    const lastArg = args[args.length - 1] ?? '';
-    const hexRe = /^#?[0-9a-fA-F]{6}$/;
-    let roleName: string;
-    let color: number | undefined;
-    if (args.length > 1 && hexRe.test(lastArg)) {
-      roleName = args.slice(0, -1).join(' ').trim();
-      color = parseInt(lastArg.replace('#', ''), 16);
-    } else {
-      roleName = args.join(' ').trim();
+
+    if (!args.length) {
+      await reply(`❌ Usage: \`${prefix}createrole <name> [#hex] [high]\`\nExample: \`${prefix}createrole VIP #FFD700 high\``);
+      return;
     }
-    if (!roleName) { await reply(`❌ Usage: \`${prefix}createrole <name> [#hex]\``); return; }
+
+    const hexRe = /^#?[0-9a-fA-F]{6}$/;
+
+    // Detect trailing 'high' flag
+    let highPosition = false;
+    if (args[args.length - 1]?.toLowerCase() === 'high') {
+      highPosition = true;
+      args.pop();
+    }
+
+    // Detect trailing hex color (after removing 'high' if present)
+    let color: number | undefined;
+    const lastArg = args[args.length - 1] ?? '';
+    if (args.length > 1 && hexRe.test(lastArg)) {
+      color = parseInt(lastArg.replace('#', ''), 16);
+      args.pop();
+    }
+
+    const roleName = args.join(' ').trim();
+    if (!roleName) {
+      await reply(`❌ Usage: \`${prefix}createrole <name> [#hex] [high]\``);
+      return;
+    }
+
     try {
       const role = await guild.roles.create({
         name: roleName,
         color,
+        hoist: false,
+        permissions: 0n,
         reason: `Created by ${message.author.tag} via ${prefix}createrole`,
       });
-      await reply({ embeds: [new EmbedBuilder().setColor(role.color || 0x5865F2).setTitle('✅ Role Created')
+
+      // If high flag, move role just below bot's top role so its color displays
+      let positionNote = 'Bottom (default)';
+      if (highPosition) {
+        const botMember = guild.members.me;
+        if (botMember) {
+          const botTop = botMember.roles.highest.position;
+          if (botTop > 1) {
+            await role.setPosition(botTop - 1).catch(() => null);
+            positionNote = `High (position ~${botTop - 1})`;
+          }
+        }
+      }
+
+      const displayColor = color !== undefined
+        ? `#${role.color.toString(16).padStart(6, '0').toUpperCase()}`
+        : 'Default';
+
+      await reply({ embeds: [new EmbedBuilder()
+        .setColor(role.color || 0x5865F2)
+        .setTitle('✅ Role Created')
         .addFields(
           { name: 'Role', value: `<@&${role.id}>`, inline: true },
           { name: 'Name', value: role.name, inline: true },
-          { name: 'Color', value: color !== undefined ? `#${role.color.toString(16).padStart(6, '0').toUpperCase()}` : 'Default', inline: true },
+          { name: 'Color', value: displayColor, inline: true },
+          { name: 'Position', value: positionNote, inline: true },
+          { name: 'Permissions', value: 'None (cosmetic)', inline: true },
         ).setTimestamp()] });
     } catch {
       await reply('❌ Failed to create role. Check my **Manage Roles** permission.');
