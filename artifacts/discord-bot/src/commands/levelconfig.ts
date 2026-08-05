@@ -136,7 +136,7 @@ export function buildLevelUpEmbed(
 
   const description = customDescription
     ? applyPlaceholders(customDescription)
-    : `${userMention} reached **Level ${level}**! Keep chatting!`;
+    : `Congratulations ${userMention}!\nYou reached **level ${level}**.`;
 
   const embed = new EmbedBuilder()
     .setColor(0x9B59B6)

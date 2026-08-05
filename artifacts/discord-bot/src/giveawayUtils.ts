@@ -9,121 +9,138 @@ import {
 import type { Giveaway } from './types.js';
 import { loadGuild, updateGuild } from './storage.js';
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDurationStr(durationStr: string | undefined, endsAt: number): string {
+  if (durationStr) return durationStr;
+  // Fallback: derive from remaining time
+  const ms = Math.max(0, endsAt - Date.now());
+  const d = Math.floor(ms / 86400000);
+  const h = Math.floor((ms % 86400000) / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (d > 0) return d === 1 ? '1 day' : `${d} days`;
+  if (h > 0) return h === 1 ? '1 hour' : `${h} hours`;
+  if (m > 0) return m === 1 ? '1 minute' : `${m} minutes`;
+  return 'less than a minute';
+}
+
+function formatEndDateTime(endsAt: number): string {
+  const now = Date.now();
+  const date = new Date(endsAt);
+  const msUntil = endsAt - now;
+
+  const timeStr = date.toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC',
+  });
+
+  const todayUtc = new Date(now);
+  todayUtc.setUTCHours(0, 0, 0, 0);
+  const tomorrowUtc = new Date(todayUtc.getTime() + 86400000);
+  const dayAfterUtc = new Date(tomorrowUtc.getTime() + 86400000);
+
+  if (date >= tomorrowUtc && date < dayAfterUtc) return `Tomorrow at ${timeStr} UTC`;
+  if (date >= todayUtc && date < tomorrowUtc) return `Today at ${timeStr} UTC`;
+
+  const days = Math.floor(msUntil / 86400000);
+  if (days > 1 && days <= 6) {
+    const weekday = date.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+    return `${weekday} at ${timeStr} UTC`;
+  }
+
+  return date.toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC',
+  }) + ` at ${timeStr} UTC`;
+}
+
+// ── Active giveaway embed (Cinnamon style) ────────────────────────────────────
+
 export function buildGiveawayEmbed(giveaway: Giveaway): EmbedBuilder {
-  const embed = new EmbedBuilder()
-    .setColor(0x5865F2)
-    .setTitle('🎉 GIVEAWAY 🎉')
-    .addFields(
-      { name: '🏆 Prize', value: giveaway.prize, inline: true },
-      { name: '📋 Name', value: giveaway.name, inline: true },
-      { name: '⏰ Ends', value: `<t:${Math.floor(giveaway.endsAt / 1000)}:R>`, inline: true },
-      { name: '🎟️ Entries', value: `${giveaway.entries.length}`, inline: true },
-      { name: '👑 Hosted By', value: `<@${giveaway.hostId}>`, inline: true },
-    )
-    .setFooter({ text: `Giveaway ID: ${giveaway.id}` })
-    .setTimestamp(giveaway.endsAt);
+  const winnerCount = giveaway.winnerCount ?? 1;
+  const unixTs = Math.floor(giveaway.endsAt / 1000);
+  const durationLabel = formatDurationStr(giveaway.durationStr, giveaway.endsAt);
+
+  let desc = `Click 🎉 to enter!\n`;
+  desc += `**Duration:** ${durationLabel} (Ends <t:${unixTs}:R>)\n`;
+  desc += `Hosted by: <@${giveaway.hostId}>`;
+  if (giveaway.donorId) desc += `\nDonor: <@${giveaway.donorId}>`;
 
   if (giveaway.requiredRoleId) {
-    embed.addFields({ name: '✅ Required Role', value: `<@&${giveaway.requiredRoleId}>`, inline: true });
+    desc += `\n\n**Required:** <@&${giveaway.requiredRoleId}>`;
   }
   if (giveaway.blacklistRoleId) {
-    embed.addFields({ name: '🚫 Blacklisted Role', value: `<@&${giveaway.blacklistRoleId}>`, inline: true });
+    desc += `\n**Excluded:** <@&${giveaway.blacklistRoleId}>`;
   }
+
   if (giveaway.extraEntryRoles && giveaway.extraEntryRoles.length > 0) {
-    const extraText = giveaway.extraEntryRoles
-      .map(e => `<@&${e.roleId}>: **${e.entries}x** entries`)
-      .join('\n');
-    embed.addFields({ name: '⭐ Bonus Entries', value: extraText, inline: false });
+    desc += `\n\nMultipliers`;
+    for (const er of giveaway.extraEntryRoles) {
+      desc += `\n<@&${er.roleId}>: +${er.entries} entries`;
+    }
   }
-  if (giveaway.imageUrl) {
-    embed.setImage(giveaway.imageUrl);
+
+  if (giveaway.customMessage) {
+    desc += `\n\n${giveaway.customMessage}`;
   }
+
+  const winnerLabel = `${winnerCount} winner${winnerCount !== 1 ? 's' : ''}`;
+  const footerText = `${winnerLabel} • ID: ${giveaway.id} • Ends | ${formatEndDateTime(giveaway.endsAt)}`;
+
+  const embed = new EmbedBuilder()
+    .setColor(0xFAA61A)
+    .setTitle(giveaway.prize)
+    .setDescription(desc)
+    .setFooter({ text: footerText });
+
+  if (giveaway.imageUrl) embed.setImage(giveaway.imageUrl);
 
   return embed;
 }
 
-export function buildGiveawayRow(giveawayId: string, entryCount = 0): ActionRowBuilder<ButtonBuilder> {
+// ── Entry button ──────────────────────────────────────────────────────────────
+
+export function buildGiveawayRow(
+  giveawayId: string,
+  entryCount = 0,
+  hideCount = false,
+): ActionRowBuilder<ButtonBuilder> {
+  const label = hideCount ? '🎉' : `🎉 ${entryCount}`;
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId(`giveaway_enter:${giveawayId}`)
-      .setLabel('🎉 Enter Giveaway')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`giveaway_leave:${giveawayId}`)
-      .setLabel('🚪 Leave Giveaway')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(`giveaway_participants:${giveawayId}`)
-      .setLabel(`👥 Participants (${entryCount})`)
-      .setStyle(ButtonStyle.Secondary),
+      .setLabel(label)
+      .setStyle(ButtonStyle.Success),
   );
 }
 
-export function buildGiveawayEndedEmbed(giveaway: Giveaway, rerollPrefix = '.'): EmbedBuilder {
+// ── Ended embed ───────────────────────────────────────────────────────────────
+
+export function buildGiveawayEndedEmbed(giveaway: Giveaway): EmbedBuilder {
+  const winnerCount = giveaway.winnerCount ?? 1;
+  const winnerIds = giveaway.winnerIds ?? (giveaway.winnerId ? [giveaway.winnerId] : []);
+  const winnerMentions = winnerIds.length > 0
+    ? winnerIds.map(id => `<@${id}>`).join(', ')
+    : '*(No eligible entries)*';
+
   const embed = new EmbedBuilder()
     .setColor(0xED4245)
-    .setTitle('🎉 GIVEAWAY ENDED')
-    .addFields(
-      { name: '🏆 Prize', value: giveaway.prize, inline: true },
-      { name: '📋 Name', value: giveaway.name, inline: true },
-      { name: '🎟️ Total Entries', value: `${giveaway.entries.length}`, inline: true },
-      {
-        name: '🏅 Winner',
-        value: giveaway.winnerId ? `<@${giveaway.winnerId}>` : '*(No eligible entries)*',
-        inline: false,
-      },
+    .setTitle(`🎉 ${giveaway.prize} — ENDED`)
+    .setDescription(
+      `**Winner${winnerIds.length !== 1 ? 's' : ''}:** ${winnerMentions}\n\n` +
+      `**Total Entries:** ${giveaway.entries.length}\n` +
+      `Hosted by: <@${giveaway.hostId}>` +
+      (giveaway.donorId ? `\nDonor: <@${giveaway.donorId}>` : ''),
     )
-    .setFooter({ text: `Giveaway ID: ${giveaway.id} • To reroll: ${rerollPrefix}random ${giveaway.id}` })
+    .setFooter({ text: `${winnerCount} winner${winnerCount !== 1 ? 's' : ''} • ID: ${giveaway.id}` })
     .setTimestamp();
+
   if (giveaway.imageUrl) embed.setImage(giveaway.imageUrl);
   return embed;
 }
 
-/**
- * Pick a new winner for a reroll, excluding the previous winner if enough
- * entries remain. Returns the new winner's user ID, or null if impossible.
- */
-export async function rerollWinner(
-  guild: Guild,
-  giveaway: Giveaway,
-): Promise<string | null> {
-  const eligibleEntries = giveaway.entries.filter(id => id !== giveaway.winnerId);
-  const pool = eligibleEntries.length > 0 ? eligibleEntries : giveaway.entries;
-  if (pool.length === 0) return null;
+// ── Winner selection ──────────────────────────────────────────────────────────
 
-  const weightedPool: string[] = [];
-  for (const userId of pool) {
-    let weight = 1;
-    if (giveaway.extraEntryRoles && giveaway.extraEntryRoles.length > 0) {
-      const member = await guild.members.fetch(userId).catch(() => null);
-      if (member) {
-        for (const extra of giveaway.extraEntryRoles) {
-          if (member.roles.cache.has(extra.roleId)) {
-            weight = Math.max(weight, extra.entries);
-          }
-        }
-      }
-    }
-    for (let i = 0; i < weight; i++) weightedPool.push(userId);
-  }
-
-  if (weightedPool.length === 0) return null;
-  return weightedPool[Math.floor(Math.random() * weightedPool.length)] ?? null;
-}
-
-/**
- * Build a weighted entry pool for winner selection.
- * Each user gets 1 entry by default, plus bonus entries from extraEntryRoles
- * if the guild member holds that role (checked at draw time).
- */
-export async function pickWinner(
-  guild: Guild,
-  giveaway: Giveaway,
-): Promise<string | null> {
-  if (giveaway.entries.length === 0) return null;
-
+async function buildWeightedPool(guild: Guild, giveaway: Giveaway): Promise<string[]> {
   const pool: string[] = [];
-
   for (const userId of giveaway.entries) {
     let weight = 1;
     if (giveaway.extraEntryRoles && giveaway.extraEntryRoles.length > 0) {
@@ -138,20 +155,62 @@ export async function pickWinner(
     }
     for (let i = 0; i < weight; i++) pool.push(userId);
   }
-
-  if (pool.length === 0) return null;
-  return pool[Math.floor(Math.random() * pool.length)] ?? null;
+  return pool;
 }
 
-/** End a giveaway: pick winner, update message, announce. Called from the loop. */
+export async function pickWinners(
+  guild: Guild,
+  giveaway: Giveaway,
+  count = 1,
+  excludeIds: string[] = [],
+): Promise<string[]> {
+  const entries = giveaway.entries.filter(id => !excludeIds.includes(id));
+  if (entries.length === 0) return [];
+
+  const pool = await buildWeightedPool(guild, { ...giveaway, entries });
+  if (pool.length === 0) return [];
+
+  const winners: string[] = [];
+  const remaining = [...pool];
+
+  for (let i = 0; i < Math.min(count, new Set(entries).size); i++) {
+    if (remaining.length === 0) break;
+    const idx = Math.floor(Math.random() * remaining.length);
+    const winner = remaining[idx]!;
+    winners.push(winner);
+    // Remove all entries for this winner so they can't win again
+    for (let j = remaining.length - 1; j >= 0; j--) {
+      if (remaining[j] === winner) remaining.splice(j, 1);
+    }
+  }
+
+  return winners;
+}
+
+/** @deprecated Use pickWinners */
+export async function rerollWinner(guild: Guild, giveaway: Giveaway): Promise<string | null> {
+  const winners = await pickWinners(guild, giveaway, 1, giveaway.winnerIds ?? (giveaway.winnerId ? [giveaway.winnerId] : []));
+  return winners[0] ?? null;
+}
+
+/** @deprecated Use pickWinners */
+export async function pickWinner(guild: Guild, giveaway: Giveaway): Promise<string | null> {
+  const winners = await pickWinners(guild, giveaway, 1);
+  return winners[0] ?? null;
+}
+
+// ── End giveaway ──────────────────────────────────────────────────────────────
+
 export async function endGiveaway(guild: Guild, giveaway: Giveaway): Promise<void> {
-  const winnerId = await pickWinner(guild, giveaway);
+  const count = giveaway.winnerCount ?? 1;
+  const winnerIds = await pickWinners(guild, giveaway, count);
 
   updateGuild(guild.id, data => {
     const g = data.giveaways.find(g => g.id === giveaway.id);
     if (g) {
       g.ended = true;
-      g.winnerId = winnerId ?? undefined;
+      g.winnerIds = winnerIds;
+      g.winnerId = winnerIds[0]; // backward compat
     }
   });
 
@@ -160,22 +219,23 @@ export async function endGiveaway(guild: Guild, giveaway: Giveaway): Promise<voi
     if (!ch?.isTextBased()) return;
     const channel = ch as BaseGuildTextChannel;
 
-    const rerollPrefix = loadGuild(guild.id).config.prefix ?? '.';
-    const endedEmbed = buildGiveawayEndedEmbed({ ...giveaway, winnerId: winnerId ?? undefined }, rerollPrefix);
+    const endedEmbed = buildGiveawayEndedEmbed({ ...giveaway, winnerIds, winnerId: winnerIds[0] });
 
     const msg = await channel.messages.fetch(giveaway.messageId).catch(() => null);
     if (msg) {
       await msg.edit({ embeds: [endedEmbed], components: [] }).catch(() => undefined);
     }
 
-    if (winnerId) {
+    if (winnerIds.length > 0) {
+      const mentions = winnerIds.map(id => `<@${id}>`).join(', ');
+      const rerollInfo = loadGuild(guild.id).config.prefix ?? '.';
       await channel.send({
-        content: `🎉 Congratulations <@${winnerId}>! You won **${giveaway.prize}** in **${giveaway.name}**!\n-# To pick a new winner: \`${rerollPrefix}random ${giveaway.id}\``,
-        allowedMentions: { users: [winnerId] },
+        content: `🎉 Congratulations ${mentions}! You won **${giveaway.prize}**!\n-# To reroll: \`${rerollInfo}reroll ${giveaway.id}\` or \`/giveaway reroll\``,
+        allowedMentions: { users: winnerIds },
       });
     } else {
       await channel.send({
-        content: `❌ The giveaway **${giveaway.name}** ended with no eligible entries.\n-# To retry: \`${rerollPrefix}random ${giveaway.id}\``,
+        content: `❌ The giveaway **${giveaway.prize}** ended with no eligible entries.`,
       });
     }
   } catch {

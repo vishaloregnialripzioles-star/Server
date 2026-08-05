@@ -1513,8 +1513,8 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
       const ch = await guild.channels.fetch(giveaway.channelId);
       if (ch?.isTextBased()) {
         const channel = ch as BaseGuildTextChannel;
-        const updatedGiveaway = { ...giveaway, winnerId: newWinnerId };
-        const embed = buildGiveawayEndedEmbed(updatedGiveaway, prefix);
+        const updatedGiveaway = { ...giveaway, winnerId: newWinnerId, winnerIds: [newWinnerId] };
+        const embed = buildGiveawayEndedEmbed(updatedGiveaway);
         const panelMsg = await channel.messages.fetch(giveaway.messageId).catch(() => null);
         if (panelMsg) await panelMsg.edit({ embeds: [embed], components: [] }).catch(() => undefined);
 

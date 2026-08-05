@@ -162,6 +162,15 @@ export interface Giveaway {
   prize: string;
   endsAt: number;
   hostId: string;
+  donorId?: string;
+  winnerCount?: number;
+  winnerIds?: string[];
+  /** 'standard' | 'drop' | 'lottery' */
+  type?: string;
+  pingRoleId?: string;
+  customMessage?: string;
+  hideEntryCount?: boolean;
+  durationStr?: string;
   /** Unique user IDs who have entered */
   entries: string[];
   requiredRoleId?: string;
