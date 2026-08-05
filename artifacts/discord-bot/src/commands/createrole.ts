@@ -16,6 +16,9 @@ export const createrole: Command = {
       o.setName('high_position')
         .setDescription('Place role high in hierarchy (below my top role) so its color displays'),
     )
+    .addUserOption(o =>
+      o.setName('give_to').setDescription('Optionally assign the new role to this member right away'),
+    )
     .addBooleanOption(o =>
       o.setName('mentionable').setDescription('Allow anyone to mention this role'),
     ),
@@ -28,6 +31,7 @@ export const createrole: Command = {
     const colorInput = interaction.options.getString('color');
     const highPosition = interaction.options.getBoolean('high_position') ?? false;
     const mentionable = interaction.options.getBoolean('mentionable') ?? false;
+    const giveToUser = interaction.options.getUser('give_to');
 
     // Parse and validate hex color
     let color: number | undefined;
@@ -69,6 +73,18 @@ export const createrole: Command = {
         ? `#${role.color.toString(16).padStart(6, '0').toUpperCase()}`
         : 'Default';
 
+      // Optionally assign the role to a member
+      let assignedTo = 'Nobody';
+      if (giveToUser) {
+        const targetMember = await interaction.guild.members.fetch(giveToUser.id).catch(() => null);
+        if (targetMember) {
+          await targetMember.roles.add(role.id, `Role assigned by ${interaction.user.tag} via /createrole`).catch(() => null);
+          assignedTo = `<@${giveToUser.id}>`;
+        } else {
+          assignedTo = '⚠️ User not in server';
+        }
+      }
+
       const embed = new EmbedBuilder()
         .setColor(role.color || 0x5865F2)
         .setTitle('✅ Role Created')
@@ -79,6 +95,7 @@ export const createrole: Command = {
           { name: 'Position', value: positionNote, inline: true },
           { name: 'Permissions', value: 'None (cosmetic)', inline: true },
           { name: 'Mentionable', value: mentionable ? 'Yes' : 'No', inline: true },
+          { name: 'Given To', value: assignedTo, inline: true },
         )
         .setTimestamp();
 

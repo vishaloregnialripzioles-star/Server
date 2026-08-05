@@ -1094,7 +1094,7 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
         `${prefix}clearwarns @user`,
         `${prefix}nick @user [nickname]`,
         `${prefix}temprole @user @role <duration> [reason]`,
-        `${prefix}createrole <name> [#hex] [high]`,
+        `${prefix}createrole <name> [#hex] [high] [@member]`,
         `${prefix}roleassign @member @role [add|remove]`,
       ]},
       { name: 'Channels', emoji: '📢', commands: [
@@ -1365,7 +1365,7 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
 
     const roleName = args.join(' ').trim();
     if (!roleName) {
-      await reply(`❌ Usage: \`${prefix}createrole <name> [#hex] [high]\``);
+      await reply(`❌ Usage: \`${prefix}createrole <name> [#hex] [high] [@member]\``);
       return;
     }
 
@@ -1391,6 +1391,19 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
         }
       }
 
+      // Optionally assign the role to a mentioned member
+      const mentionedUser = message.mentions.users.first();
+      let assignedTo = 'Nobody';
+      if (mentionedUser) {
+        const targetMember = await guild.members.fetch(mentionedUser.id).catch(() => null);
+        if (targetMember) {
+          await targetMember.roles.add(role.id, `Role assigned by ${message.author.tag} via ${prefix}createrole`).catch(() => null);
+          assignedTo = `<@${mentionedUser.id}>`;
+        } else {
+          assignedTo = '⚠️ User not in server';
+        }
+      }
+
       const displayColor = color !== undefined
         ? `#${role.color.toString(16).padStart(6, '0').toUpperCase()}`
         : 'Default';
@@ -1404,6 +1417,7 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
           { name: 'Color', value: displayColor, inline: true },
           { name: 'Position', value: positionNote, inline: true },
           { name: 'Permissions', value: 'None (cosmetic)', inline: true },
+          { name: 'Given To', value: assignedTo, inline: true },
         ).setTimestamp()] });
     } catch {
       await reply('❌ Failed to create role. Check my **Manage Roles** permission.');
