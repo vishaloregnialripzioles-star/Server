@@ -19,6 +19,8 @@ import {
   buildGiveawayEmbed,
   buildGiveawayRow,
   buildGiveawayEndedEmbed,
+  buildAdminPanelEmbed,
+  buildAdminPanelRows,
   endGiveaway,
   pickWinners,
 } from '../giveawayUtils.js';
@@ -522,10 +524,177 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
       await interaction.showModal(modal);
       return;
     }
+
+    // ── Admin panel: End Giveaway ────────────────────────────────────────────
+    if (customId.startsWith('gwadmin_end:')) {
+      if (!interaction.guild) return;
+      const giveawayId = customId.slice('gwadmin_end:'.length);
+      const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+      if (!member?.permissions.has(PermissionFlagsBits.ManageGuild)) {
+        await interaction.reply({ content: '❌ You need **Manage Server** permission.', flags: 64 });
+        return;
+      }
+      await interaction.deferUpdate();
+      const giveaway = loadGuild(interaction.guild.id).giveaways.find(g => g.id === giveawayId);
+      if (!giveaway || giveaway.ended) {
+        await interaction.editReply({ content: '❌ Giveaway already ended or not found.', embeds: [], components: [] });
+        return;
+      }
+      await endGiveaway(interaction.guild, giveaway);
+      const updated = loadGuild(interaction.guild.id).giveaways.find(g => g.id === giveawayId) ?? { ...giveaway, ended: true };
+      await interaction.editReply({
+        embeds: [buildAdminPanelEmbed(updated as typeof giveaway)],
+        components: buildAdminPanelRows(giveawayId, true),
+      }).catch(() => undefined);
+      return;
+    }
+
+    // ── Admin panel: Edit Giveaway ───────────────────────────────────────────
+    if (customId.startsWith('gwadmin_edit:')) {
+      if (!interaction.guild) return;
+      const giveawayId = customId.slice('gwadmin_edit:'.length);
+      const giveaway = loadGuild(interaction.guild.id).giveaways.find(g => g.id === giveawayId);
+      if (!giveaway) {
+        await interaction.reply({ content: '❌ Giveaway not found.', flags: 64 });
+        return;
+      }
+      const modal = new ModalBuilder()
+        .setCustomId(`gwadmin_modal_edit:${giveawayId}`)
+        .setTitle('Edit Giveaway')
+        .addComponents(
+          new ActionRowBuilder<TextInputBuilder>().addComponents(
+            new TextInputBuilder()
+              .setCustomId('prize').setLabel('Prize').setStyle(TextInputStyle.Short)
+              .setRequired(true).setValue(giveaway.prize),
+          ),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(
+            new TextInputBuilder()
+              .setCustomId('winners').setLabel('Number of Winners').setStyle(TextInputStyle.Short)
+              .setRequired(true).setValue(String(giveaway.winnerCount ?? 1)),
+          ),
+          new ActionRowBuilder<TextInputBuilder>().addComponents(
+            new TextInputBuilder()
+              .setCustomId('extend').setLabel('Extend By (e.g. 30m, 2h, 1d — blank to skip)')
+              .setStyle(TextInputStyle.Short).setRequired(false)
+              .setPlaceholder('Leave blank to keep current end time'),
+          ),
+        );
+      await interaction.showModal(modal);
+      return;
+    }
+
+    // ── Admin panel: View / Remove Participants ──────────────────────────────
+    if (customId.startsWith('gwadmin_participants:')) {
+      if (!interaction.guild) return;
+      const giveawayId = customId.slice('gwadmin_participants:'.length);
+      const giveaway = loadGuild(interaction.guild.id).giveaways.find(g => g.id === giveawayId);
+      if (!giveaway) {
+        await interaction.reply({ content: '❌ Giveaway not found.', flags: 64 });
+        return;
+      }
+      await interaction.deferReply({ ephemeral: true });
+      const entries = giveaway.entries;
+      const list = entries.length === 0
+        ? '*No participants yet.*'
+        : entries.slice(0, 50).map((id, i) => `${i + 1}. <@${id}>`).join('\n') +
+          (entries.length > 50 ? `\n*… and ${entries.length - 50} more*` : '');
+      const embed = new EmbedBuilder()
+        .setColor(0x5865F2)
+        .setTitle(`👥 Participants — ${giveaway.prize}`)
+        .setDescription(list)
+        .setFooter({ text: `Total: ${entries.length} • ID: ${giveawayId}` });
+      const components: ActionRowBuilder<StringSelectMenuBuilder>[] = [];
+      if (entries.length > 0) {
+        const selectIds = entries.slice(0, 25);
+        const memberMap = new Map<string, string>();
+        try {
+          const fetched = await interaction.guild.members.fetch({ user: selectIds });
+          for (const [id, m] of fetched) memberMap.set(id, m.displayName);
+        } catch { /* fall back to IDs */ }
+        components.push(
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId(`gwadmin_remove_select:${giveawayId}`)
+              .setPlaceholder('🔨 Select a participant to remove')
+              .addOptions(selectIds.map(id => ({
+                label: (memberMap.get(id) ?? `User ${id}`).slice(0, 100),
+                value: id,
+              }))),
+          ),
+        );
+      }
+      await interaction.editReply({ embeds: [embed], components });
+      return;
+    }
   }
 
   // ── String select menus ──────────────────────────────────────────────────────
   if (interaction.isStringSelectMenu()) {
+
+    // ── Admin panel: Remove participant (select menu) ────────────────────────
+    if (interaction.customId.startsWith('gwadmin_remove_select:')) {
+      if (!interaction.guild) return;
+      const giveawayId = interaction.customId.slice('gwadmin_remove_select:'.length);
+      const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+      if (!member?.permissions.has(PermissionFlagsBits.ManageGuild)) {
+        await interaction.reply({ content: '❌ You need **Manage Server** permission.', flags: 64 });
+        return;
+      }
+      const targetUserId = interaction.values[0];
+      if (!targetUserId) return;
+      await interaction.deferUpdate();
+      updateGuild(interaction.guild.id, d => {
+        const g = d.giveaways.find(g => g.id === giveawayId);
+        if (g) g.entries = g.entries.filter(id => id !== targetUserId);
+      });
+      const updatedGiveaway = loadGuild(interaction.guild.id).giveaways.find(g => g.id === giveawayId);
+      if (updatedGiveaway) {
+        // Update live panel
+        try {
+          const ch = await interaction.guild.channels.fetch(updatedGiveaway.channelId);
+          if (ch?.isTextBased()) {
+            const panelMsg = await (ch as BaseGuildTextChannel).messages.fetch(updatedGiveaway.messageId).catch(() => null);
+            if (panelMsg) {
+              await panelMsg.edit({
+                embeds: [buildGiveawayEmbed(updatedGiveaway)],
+                components: [buildGiveawayRow(giveawayId, updatedGiveaway.entries.length, updatedGiveaway.hideEntryCount)],
+              }).catch(() => undefined);
+            }
+          }
+        } catch { /* channel inaccessible */ }
+        // Refresh participants list in admin panel
+        const entries = updatedGiveaway.entries;
+        const list = entries.length === 0
+          ? '*No participants yet.*'
+          : entries.slice(0, 50).map((id, i) => `${i + 1}. <@${id}>`).join('\n') +
+            (entries.length > 50 ? `\n*… and ${entries.length - 50} more*` : '');
+        const embed = new EmbedBuilder()
+          .setColor(0x5865F2)
+          .setTitle(`👥 Participants — ${updatedGiveaway.prize}`)
+          .setDescription(`✅ Removed <@${targetUserId}>.\n\n${list}`)
+          .setFooter({ text: `Total: ${entries.length} • ID: ${giveawayId}` });
+        const rows: ActionRowBuilder<StringSelectMenuBuilder>[] = [];
+        if (entries.length > 0) {
+          const selectIds = entries.slice(0, 25);
+          const memberMap = new Map<string, string>();
+          try {
+            const fetched = await interaction.guild.members.fetch({ user: selectIds });
+            for (const [id, m] of fetched) memberMap.set(id, m.displayName);
+          } catch { /* fall back */ }
+          rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId(`gwadmin_remove_select:${giveawayId}`)
+              .setPlaceholder('🔨 Select another participant to remove')
+              .addOptions(selectIds.map(id => ({
+                label: (memberMap.get(id) ?? `User ${id}`).slice(0, 100),
+                value: id,
+              }))),
+          ));
+        }
+        await interaction.editReply({ embeds: [embed], components: rows });
+      }
+      return;
+    }
 
     // ── Giveaway remove participant (admin) ──────────────────────────────────
     if (interaction.customId.startsWith('giveaway_remove_select:')) {
@@ -828,6 +997,69 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
       if (error) embed.setColor(0xED4245).setFooter({ text: `❌ ${error}` });
 
       await interaction.update({ embeds: [embed], components: buildConfigRows(userId) });
+      return;
+    }
+
+    // ── Admin panel: Edit Giveaway modal submit ──────────────────────────────
+    if (interaction.customId.startsWith('gwadmin_modal_edit:')) {
+      if (!interaction.guild) return;
+      const giveawayId = interaction.customId.slice('gwadmin_modal_edit:'.length);
+      const giveaway = loadGuild(interaction.guild.id).giveaways.find(g => g.id === giveawayId);
+      if (!giveaway) {
+        await interaction.reply({ content: '❌ Giveaway not found.', flags: 64 });
+        return;
+      }
+      const prize = interaction.fields.getTextInputValue('prize').trim();
+      const winnersRaw = interaction.fields.getTextInputValue('winners').trim();
+      const extendRaw = interaction.fields.getTextInputValue('extend').trim();
+      const winnerCount = parseInt(winnersRaw, 10);
+      if (!prize) {
+        await interaction.reply({ content: '❌ Prize cannot be empty.', flags: 64 });
+        return;
+      }
+      if (isNaN(winnerCount) || winnerCount < 1 || winnerCount > 20) {
+        await interaction.reply({ content: '❌ Winner count must be 1–20.', flags: 64 });
+        return;
+      }
+      let newEndsAt = giveaway.endsAt;
+      if (extendRaw) {
+        const match = extendRaw.match(/^(\d+)(s|m|h|d)$/i);
+        if (!match) {
+          await interaction.reply({ content: '❌ Invalid duration. Use e.g. `30m`, `2h`, `1d`.', flags: 64 });
+          return;
+        }
+        const amount = parseInt(match[1]!, 10);
+        const unit = match[2]!.toLowerCase();
+        const ms = unit === 's' ? amount * 1000 :
+                   unit === 'm' ? amount * 60_000 :
+                   unit === 'h' ? amount * 3_600_000 :
+                   amount * 86_400_000;
+        newEndsAt = giveaway.endsAt + ms;
+      }
+      updateGuild(interaction.guild.id, d => {
+        const g = d.giveaways.find(g => g.id === giveawayId);
+        if (g) { g.prize = prize; g.winnerCount = winnerCount; g.endsAt = newEndsAt; }
+      });
+      const updated = loadGuild(interaction.guild.id).giveaways.find(g => g.id === giveawayId)!;
+      // Refresh the live giveaway panel
+      try {
+        const ch = await interaction.guild.channels.fetch(updated.channelId);
+        if (ch?.isTextBased()) {
+          const panelMsg = await (ch as BaseGuildTextChannel).messages.fetch(updated.messageId).catch(() => null);
+          if (panelMsg) {
+            await panelMsg.edit({
+              embeds: [buildGiveawayEmbed(updated)],
+              components: [buildGiveawayRow(giveawayId, updated.entries.length, updated.hideEntryCount)],
+            }).catch(() => undefined);
+          }
+        }
+      } catch { /* channel inaccessible */ }
+      // Reply with refreshed admin panel
+      await interaction.reply({
+        embeds: [buildAdminPanelEmbed(updated)],
+        components: buildAdminPanelRows(giveawayId, updated.ended),
+        flags: 64,
+      });
       return;
     }
   }

@@ -59,10 +59,12 @@ export function buildGiveawayEmbed(giveaway: Giveaway): EmbedBuilder {
   const unixTs = Math.floor(giveaway.endsAt / 1000);
   const durationLabel = formatDurationStr(giveaway.durationStr, giveaway.endsAt);
 
+  const entryCount = giveaway.entries.length;
   let desc = `Click 🎉 to enter!\n`;
   desc += `**Duration:** ${durationLabel} (Ends <t:${unixTs}:R>)\n`;
   desc += `Hosted by: <@${giveaway.hostId}>`;
   if (giveaway.donorId) desc += `\nDonor: <@${giveaway.donorId}>`;
+  desc += `\n👥 **${entryCount}** participant${entryCount !== 1 ? 's' : ''} entered`;
 
   if (giveaway.requiredRoleId) {
     desc += `\n\n**Required:** <@&${giveaway.requiredRoleId}>`;
@@ -185,6 +187,45 @@ export async function pickWinners(
   }
 
   return winners;
+}
+
+// ── Admin panel ───────────────────────────────────────────────────────────────
+
+export function buildAdminPanelEmbed(giveaway: Giveaway): EmbedBuilder {
+  const unixTs = Math.floor(giveaway.endsAt / 1000);
+  const status = giveaway.ended ? '🔴 Ended' : `🟢 Active — ends <t:${unixTs}:R>`;
+  const winnerCount = giveaway.winnerCount ?? 1;
+  return new EmbedBuilder()
+    .setColor(0x5865F2)
+    .setTitle(`⚙️ Managing: ${giveaway.prize}`)
+    .setDescription(
+      `**Status:** ${status}\n` +
+      `**Participants:** ${giveaway.entries.length}\n` +
+      `**Winners:** ${winnerCount}\n` +
+      `**Hosted by:** <@${giveaway.hostId}>\n` +
+      `**ID:** \`${giveaway.id}\``,
+    );
+}
+
+export function buildAdminPanelRows(giveawayId: string, ended: boolean): ActionRowBuilder<ButtonBuilder>[] {
+  return [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`gwadmin_participants:${giveawayId}`)
+        .setLabel('👥 Participants')
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId(`gwadmin_edit:${giveawayId}`)
+        .setLabel('✏️ Edit')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(ended),
+      new ButtonBuilder()
+        .setCustomId(`gwadmin_end:${giveawayId}`)
+        .setLabel('🔴 End Giveaway')
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(ended),
+    ),
+  ];
 }
 
 /** @deprecated Use pickWinners */

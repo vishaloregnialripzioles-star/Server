@@ -13,6 +13,8 @@ import {
   buildGiveawayEmbed,
   buildGiveawayRow,
   buildGiveawayEndedEmbed,
+  buildAdminPanelEmbed,
+  buildAdminPanelRows,
   rerollWinner,
   endGiveaway,
 } from '../giveawayUtils.js';
@@ -69,6 +71,17 @@ export const giveaway: Command = {
           o
             .setName('id')
             .setDescription('Giveaway ID (panel footer) OR the Discord message ID of the giveaway panel')
+            .setRequired(true),
+        ),
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('manage')
+        .setDescription('Open admin control panel for a giveaway (Admin)')
+        .addStringOption(o =>
+          o
+            .setName('id')
+            .setDescription('Giveaway ID (panel footer) OR Discord message ID of the giveaway panel')
             .setRequired(true),
         ),
     ),
@@ -317,6 +330,30 @@ export const giveaway: Command = {
         }
       } catch { /* channel inaccessible */ }
       await interaction.editReply(`✅ Removed <@${targetUser.id}> from **${gv.prize}**.`);
+      return;
+    }
+
+    // ── /giveaway manage ──────────────────────────────────────────────────────
+    if (sub === 'manage') {
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+        await interaction.reply({ content: '❌ You need **Manage Server** permission.', flags: 64 });
+        return;
+      }
+      await interaction.deferReply({ flags: 64 });
+      const input = interaction.options.getString('id', true).trim();
+      const data = loadGuild(interaction.guild.id);
+      const gv = data.giveaways.find(g => g.id === input || g.messageId === input);
+      if (!gv) {
+        await interaction.editReply(
+          `❌ No giveaway found with ID or message ID \`${input}\`.\n` +
+          `Right-click the giveaway panel → Copy Message ID, or use the ID shown in the footer.`,
+        );
+        return;
+      }
+      await interaction.editReply({
+        embeds: [buildAdminPanelEmbed(gv)],
+        components: buildAdminPanelRows(gv.id, gv.ended),
+      });
       return;
     }
   },
