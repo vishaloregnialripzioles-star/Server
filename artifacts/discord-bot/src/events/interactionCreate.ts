@@ -27,6 +27,12 @@ import {
 import { pendingGiveaways, buildConfigEmbed, buildConfigRows } from '../giveawaySetup.js';
 import type { PendingGiveaway } from '../giveawaySetup.js';
 import { parseDuration, generateId } from '../utils.js';
+import {
+  HELP_SELECT_CUSTOM_ID,
+  buildHelpEmbed,
+  buildHelpMenu,
+  findHelpCategory,
+} from '../commands/help.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -630,6 +636,21 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
 
   // ── String select menus ──────────────────────────────────────────────────────
   if (interaction.isStringSelectMenu()) {
+
+    // ── Sparxie help category menu ────────────────────────────────────────────
+    if (interaction.customId === HELP_SELECT_CUSTOM_ID) {
+      const category = interaction.values[0];
+      if (!category || (category !== 'all' && !findHelpCategory(category))) {
+        await interaction.reply({ content: '❌ That help category is no longer available.', flags: 64 });
+        return;
+      }
+
+      await interaction.update({
+        embeds: [buildHelpEmbed(category)],
+        components: [buildHelpMenu(category)],
+      });
+      return;
+    }
 
     // ── Admin panel: Remove participant (select menu) ────────────────────────
     if (interaction.customId.startsWith('gwadmin_remove_select:')) {

@@ -1178,7 +1178,8 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
 
     if (!filterArg) {
       const overview =
-        `## 📖 Bot Commands\n` +
+        `## ✨ Sparxie Help Center\n` +
+        `Welcome to **Sparxie** — your all-in-one Discord companion.\n` +
         `Most commands work with both \`${prefix}\` prefix and \`/\` slash commands.\n` +
         `Use \`${prefix}help <category>\` to filter to one section.\n\n` +
         CATEGORIES.map(c => `${c.emoji} **${c.name}** — ${c.commands.length} command(s)`).join('\n');

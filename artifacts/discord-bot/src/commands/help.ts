@@ -1,7 +1,18 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import {
+  ActionRowBuilder,
+  EmbedBuilder,
+  SlashCommandBuilder,
+  StringSelectMenuBuilder,
+} from 'discord.js';
 import type { Command } from '../types.js';
 
-const CATEGORIES: { name: string; emoji: string; commands: { name: string; description: string }[] }[] = [
+export const HELP_SELECT_CUSTOM_ID = 'sparxie_help_category';
+
+export const HELP_CATEGORIES: {
+  name: string;
+  emoji: string;
+  commands: { name: string; description: string }[];
+}[] = [
   {
     name: 'Setup',
     emoji: '⚙️',
@@ -125,6 +136,76 @@ const CATEGORIES: { name: string; emoji: string; commands: { name: string; descr
   },
 ];
 
+type HelpCategory = (typeof HELP_CATEGORIES)[number];
+
+export function findHelpCategory(category?: string | null): HelpCategory | undefined {
+  if (!category || category === 'all') return undefined;
+  return HELP_CATEGORIES.find(c => c.name.toLowerCase() === category.toLowerCase());
+}
+
+export const HELP_COMMAND_COUNT = HELP_CATEGORIES.reduce(
+  (total, category) => total + category.commands.length,
+  0,
+);
+
+function formatCategoryList(): string {
+  return HELP_CATEGORIES.map(c => `${c.emoji} **${c.name}**`).join('\n');
+}
+
+export function buildHelpEmbed(category?: string | null, prefix = '/'): EmbedBuilder {
+  const selected = findHelpCategory(category);
+  const embed = new EmbedBuilder()
+    .setColor(0x12d9d3)
+    .setAuthor({ name: '❄️ Sparxie Help Menu' })
+    .setTitle(selected ? `${selected.emoji} ${selected.name}` : '✨ Welcome to Sparxie!')
+    .setDescription(
+      selected
+        ? `Here are the commands in the **${selected.name}** category.\nChoose another category below to explore more.`
+        : `Hello! It's **Sparxie**, your ultimate server management and utility bot.\nEnhance your server's security, management, and entertainment with our comprehensive toolkit.\n\n` +
+          `🔹 **Prefix:** \`${prefix}\`\n` +
+          `🔹 **Total Commands:** \`${HELP_COMMAND_COUNT}\`\n` +
+          `🔹 **Type** \`${prefix}help <category>\` **to view commands by section.**\n\n` +
+          '`<>` — Required  |  `[]` — Optional\n\n' +
+          '**Select a category below to view commands:**\n' +
+          formatCategoryList() +
+          '\n\nSupport Server  |  Invite Sparxie',
+    )
+    .setFooter({ text: 'Sparxie • Fast, friendly, and made for your server' });
+
+  if (selected) {
+    embed.addFields({
+      name: `${selected.emoji} ${selected.name}`,
+      value: selected.commands
+        .map(cmd => `\`${cmd.name}\` — ${cmd.description}`)
+        .join('\n'),
+    });
+  }
+
+  return embed;
+}
+
+export function buildHelpMenu(category?: string | null): ActionRowBuilder<StringSelectMenuBuilder> {
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(HELP_SELECT_CUSTOM_ID)
+      .setPlaceholder('Select a category...')
+      .addOptions(
+        {
+          label: 'All commands',
+          description: 'See every Sparxie command category',
+          value: 'all',
+          default: !category || category === 'all',
+        },
+        ...HELP_CATEGORIES.map(c => ({
+          label: c.name,
+          description: `${c.commands.length} command${c.commands.length === 1 ? '' : 's'}`,
+          value: c.name.toLowerCase(),
+          default: category?.toLowerCase() === c.name.toLowerCase(),
+        })),
+      ),
+  );
+}
+
 export const help: Command = {
   data: new SlashCommandBuilder()
     .setName('help')
@@ -133,7 +214,7 @@ export const help: Command = {
       o.setName('category')
         .setDescription('Show commands for a specific category only')
         .addChoices(
-          ...CATEGORIES.map(c => ({ name: `${c.emoji} ${c.name}`, value: c.name.toLowerCase() })),
+          ...HELP_CATEGORIES.map(c => ({ name: `${c.emoji} ${c.name}`, value: c.name.toLowerCase() })),
         ),
     ),
 
@@ -141,33 +222,14 @@ export const help: Command = {
     await interaction.deferReply();
 
     const filter = interaction.options.getString('category');
-    const selected = filter
-      ? CATEGORIES.filter(c => c.name.toLowerCase() === filter)
-      : CATEGORIES;
-
-    if (selected.length === 0) {
+    if (filter && !findHelpCategory(filter)) {
       await interaction.editReply('❌ Unknown category.');
       return;
     }
 
-    const embeds = selected.map(cat =>
-      new EmbedBuilder()
-        .setColor(0x9B59B6)
-        .setTitle(`${cat.emoji} ${cat.name}`)
-        .setDescription(
-          cat.commands.map(cmd => `\`${cmd.name}\` — ${cmd.description}`).join('\n'),
-        ),
-    );
-
-    // Discord allows up to 10 embeds per message — send the overview as content text
-    if (!filter) {
-      const overview =
-        `## 📖 Bot Commands\n` +
-        `Use \`/help category:<name>\` to filter to one section.\n\n` +
-        CATEGORIES.map(c => `${c.emoji} **${c.name}** — ${c.commands.length} commands`).join('\n');
-      await interaction.editReply({ content: overview, embeds });
-    } else {
-      await interaction.editReply({ embeds });
-    }
+    await interaction.editReply({
+      embeds: [buildHelpEmbed(filter)],
+      components: [buildHelpMenu(filter)],
+    });
   },
 };
