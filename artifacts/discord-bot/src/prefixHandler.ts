@@ -27,6 +27,7 @@ import { ROASTS } from './roasts.js';
 import { createTicketForUser } from './ticketUtils.js';
 import { buildSnipeEmbed, buildSnipeButtons } from './snipeUtils.js';
 import { buildLevelUpEmbed } from './commands/levelconfig.js';
+import { buildHelpEmbed, buildHelpMenu } from './commands/help.js';
 import { buildGiveawayEmbed, buildGiveawayRow, buildGiveawayEndedEmbed, rerollWinner } from './giveawayUtils.js';
 import type { Giveaway, ExtraEntryRole } from './types.js';
 import { searchTrack, enqueue, skip, stop, pause, resume, getQueue, buildQueueEmbed, buildNowPlayingEmbed } from './musicPlayer.js';
@@ -1170,23 +1171,11 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
       return;
     }
 
-    const embeds = selected.map(cat =>
-      new EmbedBuilder().setColor(0x9B59B6)
-        .setTitle(`${cat.emoji} ${cat.name}`)
-        .setDescription(cat.commands.map(c => `\`${c}\``).join('\n')),
-    );
-
-    if (!filterArg) {
-      const overview =
-        `## ✨ Sparxie Help Center\n` +
-        `Welcome to **Sparxie** — your all-in-one Discord companion.\n` +
-        `Most commands work with both \`${prefix}\` prefix and \`/\` slash commands.\n` +
-        `Use \`${prefix}help <category>\` to filter to one section.\n\n` +
-        CATEGORIES.map(c => `${c.emoji} **${c.name}** — ${c.commands.length} command(s)`).join('\n');
-      await reply({ content: overview, embeds });
-    } else {
-      await reply({ embeds });
-    }
+    const selectedCategory = filterArg ? selected[0]?.name : undefined;
+    await reply({
+      embeds: [buildHelpEmbed(selectedCategory, prefix)],
+      components: [buildHelpMenu(selectedCategory)],
+    });
     return;
   }
 
