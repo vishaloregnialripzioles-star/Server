@@ -1,0 +1,1 @@
+- [Package install firewall](package-install-firewall.md) — preserve the lockfile when a Replit firewall blocks a dependency fetch and report verification limits.
