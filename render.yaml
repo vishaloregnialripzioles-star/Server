@@ -5,7 +5,9 @@ services:
     region: oregon
     plan: free
     buildCommand: npm install -g pnpm@10 && pnpm install --no-frozen-lockfile
-    startCommand: pnpm --filter @workspace/discord-bot run start
+    # Register commands with the same application before starting the gateway client.
+    # DISCORD_GUILD_ID makes updates appear immediately in the target server.
+    startCommand: pnpm --filter @workspace/discord-bot run deploy && pnpm --filter @workspace/discord-bot run start
     envVars:
       - key: DISCORD_BOT_TOKEN
         sync: false
