@@ -29,15 +29,23 @@ function getDefinitions(command: any, args: string[]) {
   let defs = options;
   let cursor = 0;
 
-  if (defs[0]?.type === 2) {
-    selectedGroup = args[cursor++]?.toLowerCase();
-    const group = defs.find((x: any) => x.name === selectedGroup);
-    defs = group?.options ?? [];
-  }
-  if (defs[0]?.type === 1) {
-    selectedSubcommand = args[cursor++]?.toLowerCase();
-    const sub = defs.find((x: any) => x.name === selectedSubcommand);
-    defs = sub?.options ?? [];
+  const firstName = args[cursor]?.toLowerCase();
+  const firstDef = defs.find((x: any) => x.name === firstName);
+  if (firstDef?.type === 2) {
+    selectedGroup = firstName;
+    cursor++;
+    defs = firstDef.options ?? [];
+    const subName = args[cursor]?.toLowerCase();
+    const sub = defs.find((x: any) => x.name === subName);
+    if (sub?.type === 1) {
+      selectedSubcommand = subName;
+      cursor++;
+      defs = sub.options ?? [];
+    }
+  } else if (firstDef?.type === 1) {
+    selectedSubcommand = firstName;
+    cursor++;
+    defs = firstDef.options ?? [];
   }
 
   return { selectedSubcommand, selectedGroup, defs, cursor };
@@ -54,16 +62,22 @@ function makeOptions(message: Message, command: any, rawArgs: string[]) {
 
   for (const def of defs) {
     if (def.type === 6) {
+      const token = rawArgs[cursor];
+      if (token?.startsWith('<@')) cursor++;
       const user = message.mentions.users.at(mentionUserIndex++);
       if (user) values.set(def.name, user);
       continue;
     }
     if (def.type === 8) {
+      const token = rawArgs[cursor];
+      if (token?.startsWith('<@&')) cursor++;
       const role = message.mentions.roles.at(mentionRoleIndex++);
       if (role) values.set(def.name, role);
       continue;
     }
     if (def.type === 7) {
+      const token = rawArgs[cursor];
+      if (token?.startsWith('<#')) cursor++;
       const channel = message.mentions.channels.at(mentionChannelIndex++);
       if (channel) values.set(def.name, channel);
       continue;
