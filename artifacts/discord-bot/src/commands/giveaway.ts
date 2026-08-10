@@ -107,10 +107,8 @@ export const giveaway: Command = {
     const sub = interaction.options.getSubcommand();
 
     // ── /giveaway create ──────────────────────────────────────────────────────
-    // Only the four required creation options are shown:
-    // name, prize, duration, channel.
-    // Winner count is intentionally not exposed as a default/optional option;
-    // giveaways always start with 1 winner and can be managed afterward.
+    // Only these four fields are exposed: name, prize, duration, channel.
+    // Winner count stays at the existing default of 1 and is not shown as an option.
     if (sub === 'create') {
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
         await interaction.reply({ content: '❌ You need **Manage Server** permission.', flags: 64 });
@@ -381,7 +379,22 @@ export const giveaway: Command = {
         const g = d.giveaways.find(g => g.id === gvId);
         if (g) g.entries = g.entries.filter(id => id !== targetUser.id);
       });
-      await interaction.editReply(`✅ Removed <@${targetUser.id}> from the giveaway.`);
+      try {
+        const updated = loadGuild(interaction.guild.id).giveaways.find(g => g.id === gvId);
+        if (updated) {
+          const ch = await interaction.guild.channels.fetch(updated.channelId);
+          if (ch?.isTextBased()) {
+            const msg = await (ch as BaseGuildTextChannel).messages.fetch(updated.messageId).catch(() => null);
+            if (msg) {
+              await msg.edit({
+                embeds: [buildGiveawayEmbed(updated)],
+                components: [buildGiveawayRow(gvId, updated.entries.length, updated.hideEntryCount)],
+              }).catch(() => undefined);
+            }
+          }
+        }
+      } catch { /* channel inaccessible */ }
+      await interaction.editReply(`✅ Removed <@${targetUser.id}> from **${gv.prize}**.`);
       return;
     }
 
@@ -392,16 +405,19 @@ export const giveaway: Command = {
         return;
       }
       await interaction.deferReply({ flags: 64 });
-      const gvId = interaction.options.getString('id', true).trim();
+      const input = interaction.options.getString('id', true).trim();
       const data = loadGuild(interaction.guild.id);
-      const gv = data.giveaways.find(g => g.id === gvId || g.messageId === gvId);
+      const gv = data.giveaways.find(g => g.id === input || g.messageId === input);
       if (!gv) {
-        await interaction.editReply(`❌ No giveaway found with ID or message ID \`${gvId}\`.`);
+        await interaction.editReply(
+          `❌ No giveaway found with ID or message ID \`${input}\`.\n` +
+          `Right-click the giveaway panel → Copy Message ID, or use the ID shown in the footer.`,
+        );
         return;
       }
       await interaction.editReply({
         embeds: [buildAdminPanelEmbed(gv)],
-        components: buildAdminPanelRows(gv),
+        components: buildAdminPanelRows(gv.id, gv.ended),
       });
       return;
     }
