@@ -2,12 +2,11 @@ import {
   SlashCommandBuilder,
   EmbedBuilder,
   PermissionFlagsBits,
-  ActionRowBuilder,
-  StringSelectMenuBuilder,
+  ChannelType,
   type BaseGuildTextChannel,
 } from 'discord.js';
 import type { Command } from '../types.js';
-import { generateId } from '../utils.js';
+import { generateId, parseDuration } from '../utils.js';
 import { loadGuild, updateGuild } from '../storage.js';
 import {
   buildGiveawayEmbed,
@@ -26,7 +25,31 @@ export const giveaway: Command = {
     .addSubcommand(sub =>
       sub
         .setName('create')
-        .setDescription('Create a new giveaway — opens a guided setup panel (Admin)'),
+        .setDescription('Create a giveaway directly')
+        .addStringOption(o =>
+          o.setName('name').setDescription('Giveaway name').setRequired(true),
+        )
+        .addStringOption(o =>
+          o.setName('prize').setDescription('Prize for the giveaway').setRequired(true),
+        )
+        .addStringOption(o =>
+          o.setName('duration').setDescription('Duration, e.g. 30m, 1h, 2d').setRequired(true),
+        )
+        .addChannelOption(o =>
+          o
+            .setName('channel')
+            .setDescription('Channel where the giveaway will be posted')
+            .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+            .setRequired(true),
+        )
+        .addIntegerOption(o =>
+          o
+            .setName('winners')
+            .setDescription('Number of winners (default: 1)')
+            .setMinValue(1)
+            .setMaxValue(20)
+            .setRequired(false),
+        ),
     )
     .addSubcommand(sub =>
       sub
@@ -92,49 +115,100 @@ export const giveaway: Command = {
     const sub = interaction.options.getSubcommand();
 
     // ── /giveaway create ──────────────────────────────────────────────────────
+    // Direct options: name, prize, duration, channel, winners.
+    // No setup menu/buttons are shown.
     if (sub === 'create') {
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
         await interaction.reply({ content: '❌ You need **Manage Server** permission.', flags: 64 });
         return;
       }
 
-      const typeRow = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('giveaway_type_select')
-          .setPlaceholder('Make a selection')
-          .addOptions([
-            {
-              label: 'Standard Giveaway',
-              description: 'A regular giveaway.',
-              value: 'standard',
-            },
-            {
-              label: 'Drop Giveaway',
-              description: 'A race against the clock where the first person to click wins!',
-              value: 'drop',
-            },
-            {
-              label: 'Lottery',
-              description: 'A lottery giveaway with customizable entries.',
-              value: 'lottery',
-            },
-          ]),
-      );
+      const name = interaction.options.getString('name', true).trim();
+      const prize = interaction.options.getString('prize', true).trim();
+      const durationStr = interaction.options.getString('duration', true).trim().toLowerCase();
+      const targetChannel = interaction.options.getChannel('channel', true);
+      const winnerCount = interaction.options.getInteger('winners') ?? 1;
 
-      const botAvatar = interaction.client.user?.displayAvatarURL();
-      await interaction.reply({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setAuthor({ name: 'Giveaway Setup', iconURL: botAvatar })
-            .setTitle('Welcome to Giveaways!')
-            .setDescription(
-              'Please choose which type of giveaway you would like to create from the list below.',
-            ),
-        ],
-        components: [typeRow],
-        flags: 64,
-      });
+      if (!name || name.length > 100) {
+        await interaction.reply({ content: '❌ Giveaway name must be between 1 and 100 characters.', flags: 64 });
+        return;
+      }
+      if (!prize || prize.length > 256) {
+        await interaction.reply({ content: '❌ Prize must be between 1 and 256 characters.', flags: 64 });
+        return;
+      }
+
+      const durationMs = parseDuration(durationStr);
+      if (!durationMs || durationMs < 10_000 || durationMs > 30 * 24 * 60 * 60 * 1000) {
+        await interaction.reply({
+          content: '❌ Invalid duration. Use `10s`–`30d`, for example `30m`, `1h`, `2d`.',
+          flags: 64,
+        });
+        return;
+      }
+
+      if (!targetChannel.isTextBased()) {
+        await interaction.reply({ content: '❌ The selected channel is not a text channel.', flags: 64 });
+        return;
+      }
+
+      const channel = targetChannel as BaseGuildTextChannel;
+      const botMember = interaction.guild.members.me;
+      if (!botMember) {
+        await interaction.reply({ content: '❌ I could not verify my server permissions.', flags: 64 });
+        return;
+      }
+      const permissions = channel.permissionsFor(botMember);
+      if (!permissions?.has('ViewChannel') || !permissions.has('SendMessages') || !permissions.has('EmbedLinks')) {
+        await interaction.reply({
+          content: '❌ I need **View Channel**, **Send Messages**, and **Embed Links** permissions in the selected channel.',
+          flags: 64,
+        });
+        return;
+      }
+
+      await interaction.deferReply({ flags: 64 });
+
+      const giveawayId = generateId();
+      const endsAt = Date.now() + durationMs;
+      const giveaway = {
+        id: giveawayId,
+        guildId: interaction.guild.id,
+        channelId: channel.id,
+        messageId: '',
+        name,
+        prize,
+        endsAt,
+        hostId: interaction.user.id,
+        winnerCount,
+        type: 'standard',
+        durationStr,
+        entries: [],
+        extraEntryRoles: [],
+        hideEntryCount: false,
+        ended: false,
+      };
+
+      try {
+        const message = await channel.send({
+          embeds: [buildGiveawayEmbed(giveaway)],
+          components: [buildGiveawayRow(giveawayId, 0, false)],
+        });
+
+        giveaway.messageId = message.id;
+        updateGuild(interaction.guild.id, data => {
+          data.giveaways.push(giveaway);
+        });
+
+        await interaction.editReply(
+          `✅ Giveaway **${name}** created in <#${channel.id}>!\n` +
+          `Prize: **${prize}** • Winners: **${winnerCount}** • Duration: **${durationStr}**\n` +
+          `ID: \`${giveawayId}\``,
+        );
+      } catch (err) {
+        console.error('[giveaway create]', err);
+        await interaction.editReply('❌ I could not create the giveaway. Check my permissions in the selected channel.');
+      }
       return;
     }
 
@@ -171,7 +245,6 @@ export const giveaway: Command = {
 
       const gvId = interaction.options.getString('id', true).trim();
       const data = loadGuild(interaction.guild.id);
-      // Accept both the internal giveaway ID and the Discord message ID of the panel
       const gv = data.giveaways.find(g => g.id === gvId || g.messageId === gvId);
 
       if (!gv) {
