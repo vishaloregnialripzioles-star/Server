@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, Partials, REST, Routes } from 'discord.js';
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, chmodSync } from 'node:fs';
 import { exec } from 'node:child_process';
@@ -16,7 +16,7 @@ async function ensureYtDlp(): Promise<void> {
     '/home/runner/.local/bin/yt-dlp',
     '/home/user/.local/bin/yt-dlp',
     '/app/.local/bin/yt-dlp',        // Render
-    '/tmp/yt-dlp',                    // fallback writable on any platform
+    '/tmp/yt-dlp',                   // fallback writable on any platform
   ];
 
   const found = candidates.find(p => existsSync(p));
@@ -86,3 +86,27 @@ registerEvents(client);
 startLoops(client);
 
 await client.login(token);
+
+// ── Always sync the current slash-command definitions on startup ─────────────
+// This is important for Render: changing a command in source code does not
+// change the already-registered Discord command until Discord receives the
+// new command schema. In particular, /giveaway create must have NO options.
+try {
+  const guildId = process.env.DISCORD_GUILD_ID?.trim();
+  const commandData = allCommands.map(command => command.data.toJSON());
+  const rest = new REST({ version: '10' }).setToken(token);
+
+  if (guildId && /^\d+$/.test(guildId)) {
+    await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), {
+      body: commandData,
+    });
+    console.log(`✅ Synced ${commandData.length} slash commands to guild ${guildId}`);
+  } else {
+    await rest.put(Routes.applicationCommands(client.user!.id), {
+      body: commandData,
+    });
+    console.log(`✅ Synced ${commandData.length} global slash commands`);
+  }
+} catch (err) {
+  console.error('[Slash command sync error]', err);
+}
