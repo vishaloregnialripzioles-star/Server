@@ -42,6 +42,9 @@ export interface Giveaway {
   donorId?: string; winnerCount?: number; winnerIds?: string[]; type?: string; pingRoleId?: string; customMessage?: string; hideEntryCount?: boolean; durationStr?: string;
   entries: string[]; requiredRoleId?: string; blacklistRoleId?: string; extraEntryRoles?: ExtraEntryRole[]; imageUrl?: string; ended: boolean; winnerId?: string;
 }
+export interface ShopRoleItem { id: string; name: string; roleId: string; position: number; price: number; }
+export interface ShopColourItem { id: string; name: string; roleId: string; price: number; }
+export interface ShopConfig { roles: ShopRoleItem[]; colours: ShopColourItem[]; }
 export interface GuildData {
   config: Config; afk: Record<string, AfkEntry>; levels: Record<string, LevelEntry>;
   /** ⚡ sparks balance per member */
@@ -49,4 +52,5 @@ export interface GuildData {
   warnings: Record<string, Warning[]>; reminders: Reminder[]; starboard: Record<string, StarboardEntry>;
   lastDeleted: Record<string, SnipedMessage[]>; lastEdited: Record<string, SnipedMessage[]>; tempRoles: TempRole[];
   tickets: Record<string, Ticket>; autoResponders: AutoResponder[]; giveaways: Giveaway[]; savedEmbeds: Record<string, SavedEmbed>; welcome?: WelcomeConfig;
+  shop: ShopConfig;
 }
