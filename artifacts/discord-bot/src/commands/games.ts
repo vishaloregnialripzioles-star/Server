@@ -52,10 +52,11 @@ function addSparks(guildId: string, userId: string, amount: number): void {
   updateGuild(guildId, d => { d.sparks[userId] = (d.sparks[userId] ?? 0) + amount; });
 }
 
-function joinRow(id: string): ActionRowBuilder<ButtonBuilder> {
+function joinRow(id: string, gameName: GameName): ActionRowBuilder<ButtonBuilder> {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId(`${id}:join`).setLabel('🎮 Join').setStyle(ButtonStyle.Success),
     new ButtonBuilder().setCustomId(`${id}:start`).setLabel('▶️ Start').setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId(`global:queue:${gameName}`).setLabel('🌐 Global').setStyle(ButtonStyle.Secondary),
   );
 }
 
@@ -65,7 +66,7 @@ async function lobby(interaction: ChatInputCommandInteraction, game: GameDef): P
   const message = await interaction.reply({
     fetchReply: true,
     embeds: [new EmbedBuilder().setTitle(`🎮 ${game.label}`).setDescription(`**${game.description}**\n\nPlayers: <@${interaction.user.id}>\n\nNeed at least **${game.min}** player(s). Click **Join** to enter.`).setFooter({ text: `Winner reward: ⚡ ${game.reward} sparks` })],
-    components: [joinRow(id)],
+    components: [joinRow(id, game.name)],
   });
   const collector = message.createMessageComponentCollector({ time: 45_000 });
   let started = false;
@@ -74,7 +75,7 @@ async function lobby(interaction: ChatInputCommandInteraction, game: GameDef): P
       if (players.has(i.user.id)) { await i.reply({ content:'You are already in.', ephemeral:true }); return; }
       if (players.size >= game.max) { await i.reply({ content:'This game is full.', ephemeral:true }); return; }
       players.add(i.user.id);
-      await i.update({ embeds: [new EmbedBuilder().setTitle(`🎮 ${game.label}`).setDescription(`**${game.description}**\n\nPlayers (${players.size}/${game.max}): ${[...players].map(x => `<@${x}>`).join(', ')}\n\nNeed at least **${game.min}** player(s).`)], components: [joinRow(id)] });
+      await i.update({ embeds: [new EmbedBuilder().setTitle(`🎮 ${game.label}`).setDescription(`**${game.description}**\n\nPlayers (${players.size}/${game.max}): ${[...players].map(x => `<@${x}>`).join(', ')}\n\nNeed at least **${game.min}** player(s).`)], components: [joinRow(id, game.name)] });
     } else if (i.customId === `${id}:start`) {
       if (i.user.id !== interaction.user.id) { await i.reply({ content:'Only the game creator can start it.', ephemeral:true }); return; }
       if (players.size < game.min) { await i.reply({ content:`Need at least ${game.min} players.`, ephemeral:true }); return; }
