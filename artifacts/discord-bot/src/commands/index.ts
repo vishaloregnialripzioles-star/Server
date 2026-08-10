@@ -49,6 +49,7 @@ import { welcome } from './welcome.js';
 import { greet } from './greet.js';
 import { game, games } from './games.js';
 import { coinLeaderboard } from './sparks.js';
+import { shop } from './shop.js';
 
 export const allCommands: Command[] = [
   setup,
@@ -79,4 +80,5 @@ export const allCommands: Command[] = [
   greet,
   game, games,
   coinLeaderboard,
+  shop,
 ];
