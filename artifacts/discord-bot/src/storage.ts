@@ -35,7 +35,7 @@ export function loadGuild(guildId: string): GuildData {
     const defaults = defaultGuildData();
     const data: GuildData = {
       ...defaults, ...parsed, config: { ...defaults.config, ...parsed.config }, sparks: parsed.sparks ?? {},
-      autoResponders: parsed.autoResponders ?? [], giveaways: parsed.giveaways ?? [], savedEmbeds: parsed.savedEmbeds ?? [], welcome: parsed.welcome,
+      autoResponders: parsed.autoResponders ?? [], giveaways: parsed.giveaways ?? [], savedEmbeds: parsed.savedEmbeds ?? {}, welcome: parsed.welcome,
     };
     if (parsed.lastDeleted) data.lastDeleted = migrateSnipeField(parsed.lastDeleted as Record<string, SnipedMessage | SnipedMessage[]>);
     if (parsed.lastEdited) data.lastEdited = migrateSnipeField(parsed.lastEdited as Record<string, SnipedMessage | SnipedMessage[]>);
