@@ -41,14 +41,6 @@ export const giveaway: Command = {
             .setDescription('Channel where the giveaway will be posted')
             .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
             .setRequired(true),
-        )
-        .addIntegerOption(o =>
-          o
-            .setName('winners')
-            .setDescription('Number of winners (default: 1)')
-            .setMinValue(1)
-            .setMaxValue(20)
-            .setRequired(false),
         ),
     )
     .addSubcommand(sub =>
@@ -115,8 +107,10 @@ export const giveaway: Command = {
     const sub = interaction.options.getSubcommand();
 
     // ── /giveaway create ──────────────────────────────────────────────────────
-    // Direct options: name, prize, duration, channel, winners.
-    // No setup menu/buttons are shown.
+    // Only the four required creation options are shown:
+    // name, prize, duration, channel.
+    // Winner count is intentionally not exposed as a default/optional option;
+    // giveaways always start with 1 winner and can be managed afterward.
     if (sub === 'create') {
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
         await interaction.reply({ content: '❌ You need **Manage Server** permission.', flags: 64 });
@@ -127,7 +121,7 @@ export const giveaway: Command = {
       const prize = interaction.options.getString('prize', true).trim();
       const durationStr = interaction.options.getString('duration', true).trim().toLowerCase();
       const targetChannel = interaction.options.getChannel('channel', true);
-      const winnerCount = interaction.options.getInteger('winners') ?? 1;
+      const winnerCount = 1;
 
       if (!name || name.length > 100) {
         await interaction.reply({ content: '❌ Giveaway name must be between 1 and 100 characters.', flags: 64 });
@@ -387,22 +381,7 @@ export const giveaway: Command = {
         const g = d.giveaways.find(g => g.id === gvId);
         if (g) g.entries = g.entries.filter(id => id !== targetUser.id);
       });
-      try {
-        const updated = loadGuild(interaction.guild.id).giveaways.find(g => g.id === gvId);
-        if (updated) {
-          const ch = await interaction.guild.channels.fetch(updated.channelId);
-          if (ch?.isTextBased()) {
-            const msg = await (ch as BaseGuildTextChannel).messages.fetch(updated.messageId).catch(() => null);
-            if (msg) {
-              await msg.edit({
-                embeds: [buildGiveawayEmbed(updated)],
-                components: [buildGiveawayRow(gvId, updated.entries.length, updated.hideEntryCount)],
-              }).catch(() => undefined);
-            }
-          }
-        }
-      } catch { /* channel inaccessible */ }
-      await interaction.editReply(`✅ Removed <@${targetUser.id}> from **${gv.prize}**.`);
+      await interaction.editReply(`✅ Removed <@${targetUser.id}> from the giveaway.`);
       return;
     }
 
@@ -413,19 +392,16 @@ export const giveaway: Command = {
         return;
       }
       await interaction.deferReply({ flags: 64 });
-      const input = interaction.options.getString('id', true).trim();
+      const gvId = interaction.options.getString('id', true).trim();
       const data = loadGuild(interaction.guild.id);
-      const gv = data.giveaways.find(g => g.id === input || g.messageId === input);
+      const gv = data.giveaways.find(g => g.id === gvId || g.messageId === gvId);
       if (!gv) {
-        await interaction.editReply(
-          `❌ No giveaway found with ID or message ID \`${input}\`.\n` +
-          `Right-click the giveaway panel → Copy Message ID, or use the ID shown in the footer.`,
-        );
+        await interaction.editReply(`❌ No giveaway found with ID or message ID \`${gvId}\`.`);
         return;
       }
       await interaction.editReply({
         embeds: [buildAdminPanelEmbed(gv)],
-        components: buildAdminPanelRows(gv.id, gv.ended),
+        components: buildAdminPanelRows(gv),
       });
       return;
     }
