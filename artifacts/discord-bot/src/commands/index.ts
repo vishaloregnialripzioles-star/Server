@@ -1,5 +1,4 @@
 import type { Command } from '../types.js';
-
 import { setup } from './setup.js';
 import { ban } from './ban.js';
 import { kick } from './kick.js';
@@ -48,6 +47,8 @@ import { music } from './music.js';
 import { embedCmd } from './embed.js';
 import { welcome } from './welcome.js';
 import { greet } from './greet.js';
+import { game, games } from './games.js';
+import { coinLeaderboard } from './sparks.js';
 
 export const allCommands: Command[] = [
   setup,
@@ -76,4 +77,6 @@ export const allCommands: Command[] = [
   embedCmd,
   welcome,
   greet,
+  game, games,
+  coinLeaderboard,
 ];
