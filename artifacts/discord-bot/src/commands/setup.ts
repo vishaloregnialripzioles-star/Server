@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import type { Command } from '../types.js';
 import { updateGuild, loadGuild } from '../storage.js';
+import { addColourSetup, setupShopRole, setupShopColour } from './shop.js';
 
 export const setup: Command = {
   data: new SlashCommandBuilder()
@@ -60,6 +61,22 @@ export const setup: Command = {
         .addBooleanOption(o => o.setName('enabled').setDescription('Enable snipe').setRequired(true)),
     )
     .addSubcommand(sub =>
+      sub.setName('shoprole')
+        .setDescription('Add a purchasable role to the sparks shop (server owner only)')
+        .addStringOption(o => o.setName('name').setDescription('Role/shop item name').setRequired(true))
+        .addIntegerOption(o => o.setName('position').setDescription('Display position in the shop').setRequired(true).setMinValue(1).setMaxValue(1000))
+        .addIntegerOption(o => o.setName('coins').setDescription('Price in ⚡ sparks').setRequired(true).setMinValue(0)),
+    )
+    .addSubcommandGroup(group =>
+      group.setName('shop')
+        .setDescription('Configure the sparks shop (server owner only)')
+        .addSubcommand(sub =>
+          addColourSetup(
+            sub.setName('colour').setDescription('Add a purchasable colour to the sparks shop'),
+          ),
+        ),
+    )
+    .addSubcommand(sub =>
       sub.setName('view')
         .setDescription('View current configuration'),
     ),
@@ -67,6 +84,16 @@ export const setup: Command = {
   async execute(interaction) {
     if (!interaction.guild) return;
     const sub = interaction.options.getSubcommand();
+    const group = interaction.options.getSubcommandGroup(false);
+
+    if (group === 'shop' && sub === 'colour') {
+      await setupShopColour(interaction);
+      return;
+    }
+    if (sub === 'shoprole') {
+      await setupShopRole(interaction);
+      return;
+    }
 
     if (sub === 'view') {
       const data = loadGuild(interaction.guild.id);
@@ -92,6 +119,7 @@ export const setup: Command = {
           { name: '📈 Level Channel', value: cfg.levelChannel ? `<#${cfg.levelChannel}>` : 'Current channel', inline: true },
           { name: '🔍 Snipe', value: cfg.snipeEnabled ? 'Enabled' : 'Disabled', inline: true },
           { name: '🏅 Level Roles', value: levelRolesText },
+          { name: '🛍️ Sparks Shop', value: `${data.shop.roles.length} role(s) · ${data.shop.colours.length} colour(s)` },
         )
         .setTimestamp();
       await interaction.reply({ embeds: [embed] });
@@ -161,9 +189,7 @@ export const setup: Command = {
     if (sub === 'levelrole') {
       const level = interaction.options.getInteger('level', true);
       const role = interaction.options.getRole('role', true);
-      await interaction.editReply({
-        content: `✅ Members who reach **Level ${level}** will now receive <@&${role.id}>.`,
-      });
+      await interaction.editReply({ content: `✅ Members who reach **Level ${level}** will now receive <@&${role.id}>.` });
     } else {
       await interaction.editReply({ content: `✅ Configuration updated for **${sub}**.` });
     }
