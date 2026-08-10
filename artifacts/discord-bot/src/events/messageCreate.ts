@@ -2,6 +2,7 @@ import type { Message, BaseGuildTextChannel, GuildMember } from 'discord.js';
 import { loadGuild, updateGuild } from '../storage.js';
 import { levelFromXp } from '../utils.js';
 import { handlePrefixCommand, getGuildPrefix } from '../prefixHandler.js';
+import { handleMissingPrefixCommand } from '../prefixBridge.js';
 import { buildLevelUpEmbed } from '../commands/levelconfig.js';
 
 const XP_COOLDOWN_MS = 60_000;
@@ -20,16 +21,18 @@ export async function handleMessageCreate(message: Message): Promise<void> {
     (jailRole    && memberRoles.has(jailRole))
   ) {
     await message.delete().catch(() => undefined);
-    return; // skip everything else for restricted users
+    return;
   }
 
   // ── Prefix commands ─────────────────────────────────────────────
-  await handlePrefixCommand(message);
+  // Existing prefix implementations stay untouched. The bridge only handles
+  // commands that did not previously have a prefix implementation, plus the
+  // new shop setup subcommands.
+  const bridged = await handleMissingPrefixCommand(message);
+  if (!bridged) await handlePrefixCommand(message);
 
   const guildId = message.guild.id;
   const userId = message.author.id;
-
-  // ── AFK system ─────────────────────────────────────────────────
   const data = loadGuild(guildId);
 
   // Detect if this message IS the AFK-set command, so we don't immediately remove it
@@ -39,7 +42,6 @@ export async function handleMessageCreate(message: Message): Promise<void> {
 
   // Remove AFK when the user sends any message OTHER than the afk command itself
   if (data.afk[userId] && !isSettingAfk) {
-    // Restore nickname (remove [AFK] prefix)
     const member = message.member as GuildMember;
     if (member.nickname?.startsWith('[AFK] ')) {
       const original = member.nickname.slice(6);
@@ -69,7 +71,7 @@ export async function handleMessageCreate(message: Message): Promise<void> {
     for (const ar of freshData.autoResponders) {
       if (lowerContent.includes(ar.trigger.toLowerCase())) {
         await message.reply({ content: ar.response }).catch(() => undefined);
-        break; // only one autoresponse per message
+        break;
       }
     }
   }
@@ -87,19 +89,15 @@ export async function handleMessageCreate(message: Message): Promise<void> {
 
     updateGuild(guildId, d => { d.levels[userId] = levelData; });
 
-    // Level up
     if (levelData.level > oldLevel) {
       const guildData = loadGuild(guildId);
       const announceCh = guildData.config.levelChannel ?? message.channelId;
-
-      // Assign level role silently (no role ping)
       const levelRoleId = guildData.config.levelRoles?.[String(levelData.level)];
       let roleName: string | undefined;
       if (levelRoleId) {
         const guildMember = await message.guild!.members.fetch(userId).catch(() => null);
         if (guildMember) {
           await guildMember.roles.add(levelRoleId).catch(() => undefined);
-          // Fetch role name for display — don't mention the role to avoid pinging everyone
           const role = await message.guild!.roles.fetch(levelRoleId).catch(() => null);
           roleName = role?.name;
         }
@@ -118,12 +116,7 @@ export async function handleMessageCreate(message: Message): Promise<void> {
             cfg?.description,
             cfg?.imageUrl,
           );
-
-          if (roleName) {
-            embed.addFields({ name: '🎖️ Role Unlocked', value: roleName, inline: true });
-          }
-
-          // allowedMentions: only ping the leveled-up user, never the role
+          if (roleName) embed.addFields({ name: '🎖️ Role Unlocked', value: roleName, inline: true });
           await (ch as BaseGuildTextChannel).send({
             embeds: [embed],
             allowedMentions: { users: [userId], roles: [] },
