@@ -1,5 +1,6 @@
 import type { Message } from 'discord.js';
 import { allCommands } from './commands/index.js';
+import { loadGuild, updateGuild } from './storage.js';
 
 const PREFIX_NATIVE = new Set([
   'ban','kick','mute','unmute','timeout','warn','warnings','clearwarns','purge','purgebots',
@@ -111,6 +112,63 @@ function shouldBridge(raw: string, commandName: string): boolean {
   return !PREFIX_NATIVE.has(commandName);
 }
 
+async function handleShopPurchase(message: Message, prefix: string, tokens: string[]): Promise<boolean> {
+  if (!message.guild) return false;
+  const type = tokens.shift()?.toLowerCase();
+  if (type !== 'role' && type !== 'colour' && type !== 'color') return false;
+  const requested = tokens.join(' ').trim();
+  if (!requested) {
+    await message.reply(`❌ Usage: \`${prefix}buy role <name>\` or \`${prefix}buy colour <name>\``).catch(() => undefined);
+    return true;
+  }
+
+  const data = loadGuild(message.guild.id);
+  const page = type === 'role' ? data.shop.roles : data.shop.colours;
+  const item = page.find((x: any) => x.name.toLowerCase() === requested.toLowerCase())
+    ?? page.find((x: any) => x.name.toLowerCase().includes(requested.toLowerCase()));
+  if (!item) {
+    await message.reply(`❌ I couldn't find **${requested}** in the ${type === 'role' ? 'role' : 'colour'} shop. Use \`${prefix}shop\` to see available items.`).catch(() => undefined);
+    return true;
+  }
+
+  const balance = data.sparks[message.author.id] ?? 0;
+  if (balance < item.price) {
+    await message.reply(`❌ You need **⚡ ${item.price.toLocaleString()} sparks**, but you only have **⚡ ${balance.toLocaleString()}**.`).catch(() => undefined);
+    return true;
+  }
+
+  const role = await message.guild.roles.fetch(item.roleId).catch(() => null);
+  if (!role) {
+    await message.reply('❌ That shop role no longer exists. Ask the server owner to reconfigure the shop.').catch(() => undefined);
+    return true;
+  }
+  const member = await message.guild.members.fetch(message.author.id);
+
+  if (type === 'role' && member.roles.cache.has(role.id)) {
+    await message.reply('❌ You already own this role.').catch(() => undefined);
+    return true;
+  }
+
+  if (type !== 'role') {
+    for (const colour of data.shop.colours as any[]) {
+      if (colour.roleId === role.id) continue;
+      const old = await message.guild.roles.fetch(colour.roleId).catch(() => null);
+      if (old && member.roles.cache.has(old.id)) await member.roles.remove(old).catch(() => undefined);
+    }
+  }
+
+  try {
+    await member.roles.add(role);
+    updateGuild(message.guild.id, d => {
+      d.sparks[message.author.id] = (d.sparks[message.author.id] ?? 0) - item.price;
+    });
+    await message.reply(`✅ You bought **${item.name}** for **⚡ ${item.price.toLocaleString()} sparks**.`).catch(() => undefined);
+  } catch {
+    await message.reply('❌ I could not give you that role. Make sure my bot has **Manage Roles** and its role is above the shop role.').catch(() => undefined);
+  }
+  return true;
+}
+
 export async function handleMissingPrefixCommand(message: Message): Promise<boolean> {
   if (!message.guild || message.author.bot || !message.content) return false;
   const prefix = (await import('./prefixHandler.js')).getGuildPrefix(message.guild.id);
@@ -120,6 +178,8 @@ export async function handleMissingPrefixCommand(message: Message): Promise<bool
   const tokens = tokenize(raw);
   const commandName = tokens.shift()?.toLowerCase();
   if (!commandName || !shouldBridge(raw, commandName)) return false;
+
+  if (commandName === 'buy') return handleShopPurchase(message, prefix, tokens);
 
   const command = findCommand(commandName);
   if (!command) return false;
