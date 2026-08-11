@@ -1,5 +1,5 @@
 /**
- * Music player — SoundCloud primary (works on all cloud servers),
+ * Music player — SoundCloud primary (works on cloud servers),
  * YouTube via yt-dlp as fallback.
  */
 import {
@@ -27,7 +27,7 @@ async function ensureSoundCloud(): Promise<void> {
     const id = await playdl.getFreeClientID();
     await playdl.setToken({ soundcloud: { client_id: id } });
     scReady = true;
-    console.log('[Music] SoundCloud client_id fetched ✅');
+    console.log('[Music] SoundCloud client_id fetched');
   } catch (e) {
     console.error('[Music] SoundCloud init failed:', e);
   }
@@ -92,12 +92,28 @@ function formatSeconds(s: number): string {
 async function createStream(track: Track): Promise<{ stream: NodeJS.ReadableStream; type: StreamType }> {
   if (track.source === 'soundcloud') {
     const s = await playdl.stream(track.url);
-    return { stream: s.stream, type: StreamType.Arbitrary };
+    // IMPORTANT: play-dl returns the actual codec/container type. The old
+    // code discarded it and forced Arbitrary, which can produce silence.
+    return { stream: s.stream, type: s.type };
   }
-  const proc = spawn(YTDLP, ['-f', 'bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio/best', '--no-playlist', '--quiet', '--no-warnings', '-o', '-', track.url], { stdio: ['ignore', 'pipe', 'pipe'] });
-  proc.stderr.on('data', (d: Buffer) => { const msg = d.toString().trim(); if (msg) console.error('[yt-dlp]', msg); });
+
+  // Ask yt-dlp for an Opus/WebM stream when possible. Discord can consume
+  // this directly without an extra transcoding step.
+  const proc = spawn(YTDLP, [
+    '-f', 'bestaudio[acodec=opus][ext=webm]/bestaudio[ext=webm]/bestaudio',
+    '--no-playlist',
+    '--quiet',
+    '--no-warnings',
+    '--output', '-',
+    track.url,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+  proc.stderr.on('data', (d: Buffer) => {
+    const msg = d.toString().trim();
+    if (msg) console.error('[yt-dlp]', msg);
+  });
   proc.on('error', err => console.error('[yt-dlp] spawn error:', err.message));
-  return { stream: proc.stdout, type: StreamType.Arbitrary };
+  return { stream: proc.stdout, type: StreamType.WebmOpus };
 }
 
 export async function enqueue(guild: Guild, voiceChannel: VoiceBasedChannel, textChannel: TextBasedChannel, track: Track): Promise<{ position: number }> {
@@ -108,57 +124,163 @@ export async function enqueue(guild: Guild, voiceChannel: VoiceBasedChannel, tex
     connection.subscribe(player);
     q = { connection, player, tracks: [], current: null, textChannel };
     queues.set(guild.id, q);
+
     connection.on(VoiceConnectionStatus.Disconnected, async () => {
-      try { await Promise.race([entersState(connection, VoiceConnectionStatus.Signalling, 5_000), entersState(connection, VoiceConnectionStatus.Connecting, 5_000)]); } catch { cleanup(guild.id); }
+      try {
+        await Promise.race([
+          entersState(connection, VoiceConnectionStatus.Signalling, 5_000),
+          entersState(connection, VoiceConnectionStatus.Connecting, 5_000),
+        ]);
+      } catch {
+        cleanup(guild.id);
+      }
     });
-    player.on(AudioPlayerStatus.Idle, () => { const still = queues.get(guild.id); if (still) still.current = null; void advanceQueue(guild.id); });
-    player.on('error', err => { console.error('[Music] Player error:', err.message, '— skipping track'); const still = queues.get(guild.id); if (still) still.current = null; void advanceQueue(guild.id); });
+
+    player.on(AudioPlayerStatus.Idle, () => {
+      const still = queues.get(guild.id);
+      if (still) still.current = null;
+      void advanceQueue(guild.id);
+    });
+
+    player.on('error', err => {
+      console.error('[Music] AudioPlayer error:', err.message);
+      const still = queues.get(guild.id);
+      if (still) still.current = null;
+      void advanceQueue(guild.id);
+    });
   }
+
   q.tracks.push(track);
   const position = q.tracks.length;
-  if (q.player.state.status === AudioPlayerStatus.Idle && !q.current) await advanceQueue(guild.id);
+  if (q.player.state.status === AudioPlayerStatus.Idle && !q.current) {
+    await advanceQueue(guild.id);
+  }
   return { position };
 }
 
 async function advanceQueue(guildId: string): Promise<void> {
-  const q = queues.get(guildId); if (!q) return;
+  const q = queues.get(guildId);
+  if (!q) return;
+
   const next = q.tracks.shift();
-  if (!next) { setTimeout(() => { const still = queues.get(guildId); if (still && !still.current && still.tracks.length === 0) cleanup(guildId); }, 5 * 60 * 1000); return; }
+  if (!next) {
+    setTimeout(() => {
+      const still = queues.get(guildId);
+      if (still && !still.current && still.tracks.length === 0) cleanup(guildId);
+    }, 5 * 60 * 1000);
+    return;
+  }
+
   q.current = next;
+
   try {
+    // Wait until Discord's voice connection is actually ready before
+    // starting the player. This prevents a successful-looking silent play.
+    await entersState(q.connection, VoiceConnectionStatus.Ready, 15_000);
+
     const { stream, type } = await createStream(next);
     const resource = createAudioResource(stream, { inputType: type });
+
+    if (!resource.readable) {
+      throw new Error(`Audio resource is not readable (${type})`);
+    }
+
     q.player.play(resource);
-    console.log(`[Music] Playing "${next.title}" from ${next.source}`);
+    console.log(`[Music] Playing "${next.title}" from ${next.source} (${type})`);
     await q.textChannel.send({ embeds: [buildNowPlayingEmbed(next)] }).catch(() => undefined);
   } catch (err) {
-    console.error('[Music] Failed to play track:', err); q.current = null;
+    console.error('[Music] Failed to play track:', err);
+    q.current = null;
+
+    // Keep the original SoundCloud -> YouTube fallback behavior.
     if (next.source === 'soundcloud') {
       try {
         const ytResults = await playdl.search(next.title, { source: { youtube: 'video' }, limit: 1 });
-        if (ytResults.length > 0) q.tracks.unshift({ title: ytResults[0].title ?? next.title, url: ytResults[0].url, thumbnail: ytResults[0].thumbnails?.[0]?.url, duration: formatSeconds(ytResults[0].durationInSec ?? 0), requestedBy: next.requestedBy, source: 'youtube' });
-      } catch { /* give up */ }
+        if (ytResults.length > 0) {
+          const v = ytResults[0];
+          q.tracks.unshift({
+            title: v.title ?? next.title,
+            url: v.url,
+            thumbnail: v.thumbnails?.[0]?.url,
+            duration: formatSeconds(v.durationInSec ?? 0),
+            requestedBy: next.requestedBy,
+            source: 'youtube',
+          });
+        }
+      } catch (fallbackErr) {
+        console.error('[Music] YouTube fallback failed:', fallbackErr);
+      }
     }
+
     void advanceQueue(guildId);
   }
 }
 
-function cleanup(guildId: string): void { const q = queues.get(guildId); if (!q) return; try { q.player.stop(true); } catch {} try { q.connection.destroy(); } catch {} queues.delete(guildId); }
-export function skip(guildId: string): Track | null { const q = queues.get(guildId); if (!q) return null; const skipped = q.current; q.current = null; q.player.stop(); return skipped; }
+function cleanup(guildId: string): void {
+  const q = queues.get(guildId);
+  if (!q) return;
+  try { q.player.stop(true); } catch {}
+  try { q.connection.destroy(); } catch {}
+  queues.delete(guildId);
+}
+
+export function skip(guildId: string): Track | null {
+  const q = queues.get(guildId);
+  if (!q) return null;
+  const skipped = q.current;
+  q.current = null;
+  q.player.stop();
+  return skipped;
+}
+
 export function stop(guildId: string): void { cleanup(guildId); }
-export function pause(guildId: string): boolean { const q = queues.get(guildId); if (!q || q.player.state.status !== AudioPlayerStatus.Playing) return false; q.player.pause(); return true; }
-export function resume(guildId: string): boolean { const q = queues.get(guildId); if (!q || q.player.state.status !== AudioPlayerStatus.Paused) return false; q.player.unpause(); return true; }
+
+export function pause(guildId: string): boolean {
+  const q = queues.get(guildId);
+  if (!q || q.player.state.status !== AudioPlayerStatus.Playing) return false;
+  q.player.pause();
+  return true;
+}
+
+export function resume(guildId: string): boolean {
+  const q = queues.get(guildId);
+  if (!q || q.player.state.status !== AudioPlayerStatus.Paused) return false;
+  q.player.unpause();
+  return true;
+}
+
 export function getQueue(guildId: string): GuildQueue | null { return queues.get(guildId) ?? null; }
 
 export function buildNowPlayingEmbed(track: Track): EmbedBuilder {
   const sourceIcon = track.source === 'soundcloud' ? '☁️ SoundCloud' : '▶️ YouTube';
-  return new EmbedBuilder().setColor(track.source === 'soundcloud' ? 0xFF5500 : 0xFF0000).setTitle('🎵 Now Playing').setDescription(`**[${track.title}](${track.url})**`).addFields({ name: '⏱️ Duration', value: track.duration, inline: true }, { name: '🎧 Source', value: sourceIcon, inline: true }, ...(track.requestedBy ? [{ name: '👤 Requested by', value: `<@${track.requestedBy}>`, inline: true }] : [])).setThumbnail(track.thumbnail ?? null).setTimestamp();
+  return new EmbedBuilder()
+    .setColor(track.source === 'soundcloud' ? 0xFF5500 : 0xFF0000)
+    .setTitle('🎵 Now Playing')
+    .setDescription(`**[${track.title}](${track.url})**`)
+    .addFields(
+      { name: '⏱️ Duration', value: track.duration, inline: true },
+      { name: '🎧 Source', value: sourceIcon, inline: true },
+      ...(track.requestedBy ? [{ name: '👤 Requested by', value: `<@${track.requestedBy}>`, inline: true }] : []),
+    )
+    .setThumbnail(track.thumbnail ?? null)
+    .setTimestamp();
 }
 
 export function buildQueueEmbed(guildId: string): EmbedBuilder {
-  const q = queues.get(guildId); const embed = new EmbedBuilder().setColor(0x5865F2).setTitle('📋 Music Queue');
+  const q = queues.get(guildId);
+  const embed = new EmbedBuilder().setColor(0x5865F2).setTitle('📋 Music Queue');
   if (!q || (!q.current && q.tracks.length === 0)) return embed.setDescription('*The queue is empty.*');
-  if (q.current) { const icon = q.current.source === 'soundcloud' ? '☁️' : '▶️'; embed.addFields({ name: `${icon} Now Playing`, value: `**[${q.current.title}](${q.current.url})** \`${q.current.duration}\`` }); }
-  if (q.tracks.length > 0) { const list = q.tracks.slice(0, 10).map((t, i) => { const icon = t.source === 'soundcloud' ? '☁️' : '▶️'; return `\`${i + 1}.\` ${icon} [${t.title}](${t.url}) \`${t.duration}\``; }).join('\n'); const extra = q.tracks.length > 10 ? `\n*...and ${q.tracks.length - 10} more*` : ''; embed.addFields({ name: `⏭️ Up Next (${q.tracks.length})`, value: list + extra }); }
+  if (q.current) {
+    const icon = q.current.source === 'soundcloud' ? '☁️' : '▶️';
+    embed.addFields({ name: `${icon} Now Playing`, value: `**[${q.current.title}](${q.current.url})** \`${q.current.duration}\`` });
+  }
+  if (q.tracks.length > 0) {
+    const list = q.tracks.slice(0, 10).map((t, i) => {
+      const icon = t.source === 'soundcloud' ? '☁️' : '▶️';
+      return `\`${i + 1}.\` ${icon} [${t.title}](${t.url}) \`${t.duration}\``;
+    }).join('\n');
+    const extra = q.tracks.length > 10 ? `\n*...and ${q.tracks.length - 10} more*` : '';
+    embed.addFields({ name: `⏭️ Up Next (${q.tracks.length})`, value: list + extra });
+  }
   return embed;
 }
