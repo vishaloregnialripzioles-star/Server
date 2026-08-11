@@ -176,9 +176,20 @@ export async function handleMissingPrefixCommand(message: Message): Promise<bool
 
   const raw = message.content.slice(prefix.length).trim();
   const tokens = tokenize(raw);
-  const commandName = tokens.shift()?.toLowerCase();
-  if (!commandName || !shouldBridge(raw, commandName)) return false;
+  let commandName = tokens.shift()?.toLowerCase();
+  if (!commandName) return false;
 
+  // Friendly aliases so both `.antinuke enable` and `.anti nuke enable` work.
+  if (commandName === 'anti' && tokens[0]?.toLowerCase() === 'nuke') {
+    tokens.shift();
+    commandName = 'antinuke';
+  }
+  if (commandName === 'extra' && tokens[0]?.toLowerCase() === 'owner') {
+    tokens.shift();
+    commandName = 'extraowner';
+  }
+
+  if (!shouldBridge(raw, commandName)) return false;
   if (commandName === 'buy') return handleShopPurchase(message, prefix, tokens);
 
   const command = findCommand(commandName);
