@@ -100,6 +100,18 @@ export const HELP_CATEGORIES: {
     ],
   },
   {
+    name: 'Games',
+    emoji: '🎮',
+    commands: [
+      { name: '/game <game>', description: 'Start a server game and play with other members' },
+      { name: '/games', description: 'View the available games, player limits, and rewards' },
+      { name: '/coinleaderboard', description: 'View the ⚡ sparks leaderboard' },
+      { name: '/shop', description: 'Open the server shop and spend ⚡ sparks on roles and colour customisation' },
+      { name: '.buy role <name>', description: 'Buy a configured shop role using ⚡ sparks' },
+      { name: '.buy colour <name>', description: 'Buy a configured colour role using ⚡ sparks' },
+    ],
+  },
+  {
     name: 'Fun',
     emoji: '🎉',
     commands: [
@@ -154,13 +166,16 @@ function formatCategoryList(): string {
 
 export function buildHelpEmbed(category?: string | null, prefix = '/'): EmbedBuilder {
   const selected = findHelpCategory(category);
+  const isGames = selected?.name === 'Games';
   const embed = new EmbedBuilder()
     .setColor(0x12d9d3)
     .setAuthor({ name: '❄️ Sparxie Help Menu' })
     .setTitle(selected ? `${selected.emoji} ${selected.name}` : '✨ Welcome to Sparxie!')
     .setDescription(
       selected
-        ? `Here are the commands in the **${selected.name}** category.\nChoose another category below to explore more.`
+        ? isGames
+          ? `🎮 **Server Games**\nPlay games with other members, win **⚡ sparks**, and use your sparks to unlock server rewards.\n\n🏆 **Win games → earn ⚡ sparks → spend sparks in the server shop → get roles and profile colour customisation.**\n\nGames support different player limits depending on the game, and multiplayer games can be joined by other members. Use **Global** in supported game lobbies to find players from other servers.\n\n**Game commands:**\n\`${prefix}game <game>\` to start a game · \`${prefix}games\` to browse games and rewards\n\n**Sparks & Shop:**\n\`${prefix}coinleaderboard\` to see the richest players · \`${prefix}shop\` to open the shop\n\n**Prefix purchases:** \`${prefix}buy role <name>\` · \`${prefix}buy colour <name>\``
+          : `Here are the commands in the **${selected.name}** category.\nChoose another category below to explore more.`
         : `Hello! It's **Sparxie**, your ultimate server management and utility bot.\nEnhance your server's security, management, and entertainment with our comprehensive toolkit.\n\n` +
           `🔹 **Prefix:** \`${prefix}\`\n` +
           `🔹 **Total Commands:** \`${HELP_COMMAND_COUNT}\`\n` +
