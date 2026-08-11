@@ -169,6 +169,29 @@ async function handleShopPurchase(message: Message, prefix: string, tokens: stri
   return true;
 }
 
+function waitForComponent(message: Message, filter: (component: any) => boolean, time = 30_000): Promise<any> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      message.client.off('interactionCreate', listener);
+      clearTimeout(timer);
+    };
+    const listener = (component: any) => {
+      if (settled || !component?.isMessageComponent?.() || !filter(component)) return;
+      settled = true;
+      cleanup();
+      resolve(component);
+    };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('InteractionCollectorError: time')); 
+    }, time);
+    message.client.on('interactionCreate', listener);
+  });
+}
+
 export async function handleMissingPrefixCommand(message: Message): Promise<boolean> {
   if (!message.guild || message.author.bot || !message.content) return false;
   const prefix = (await import('./prefixHandler.js')).getGuildPrefix(message.guild.id);
@@ -179,7 +202,6 @@ export async function handleMissingPrefixCommand(message: Message): Promise<bool
   let commandName = tokens.shift()?.toLowerCase();
   if (!commandName) return false;
 
-  // Friendly aliases so both `.antinuke enable` and `.anti nuke enable` work.
   if (commandName === 'anti' && tokens[0]?.toLowerCase() === 'nuke') {
     tokens.shift();
     commandName = 'antinuke';
@@ -217,6 +239,7 @@ export async function handleMissingPrefixCommand(message: Message): Promise<bool
     deleteReply: async () => response?.delete().catch(() => undefined),
     fetchReply: async () => response,
     followUp: async (payload: any) => message.reply(payload),
+    awaitMessageComponent: async (options: any) => waitForComponent(message, options?.filter ?? (() => true), options?.time ?? 30_000),
   };
 
   try {
