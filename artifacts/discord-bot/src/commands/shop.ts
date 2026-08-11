@@ -9,6 +9,7 @@ import {
 } from 'discord.js';
 import type { Command } from '../types.js';
 import { loadGuild, updateGuild } from '../storage.js';
+import { isOwnerOrExtraOwner } from '../security.js';
 
 const PAGE_SIZE = 8;
 type ShopPage = 'roles' | 'colours';
@@ -143,7 +144,7 @@ export function addColourSetup(subcommand: any) {
 }
 
 export async function setupShopRole(interaction: ChatInputCommandInteraction): Promise<void> {
-  if (!interaction.guild || interaction.user.id !== interaction.guild.ownerId) { await interaction.reply({ content: '❌ Only the server owner can configure the shop.', ephemeral: true }); return; }
+  if (!interaction.guild || !isOwnerOrExtraOwner(interaction.guild, interaction.user.id)) { await interaction.reply({ content: '❌ Only the server owner or an extra owner can configure the shop.', ephemeral: true }); return; }
   const name = interaction.options.getString('name', true);
   const position = interaction.options.getInteger('position', true);
   const price = interaction.options.getInteger('coins', true);
@@ -158,7 +159,7 @@ export async function setupShopRole(interaction: ChatInputCommandInteraction): P
 }
 
 export async function setupShopColour(interaction: ChatInputCommandInteraction): Promise<void> {
-  if (!interaction.guild || interaction.user.id !== interaction.guild.ownerId) { await interaction.reply({ content: '❌ Only the server owner can configure the shop.', ephemeral: true }); return; }
+  if (!interaction.guild || !isOwnerOrExtraOwner(interaction.guild, interaction.user.id)) { await interaction.reply({ content: '❌ Only the server owner or an extra owner can configure the shop.', ephemeral: true }); return; }
   const colourText = interaction.options.getString('colour', true);
   const price = interaction.options.getInteger('coins', true);
   const colour = parseHex(colourText);
