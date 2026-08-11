@@ -52,6 +52,7 @@ import { coinLeaderboard } from './sparks.js';
 import { shop } from './shop.js';
 import { antinuke } from './antinuke.js';
 import { extraowner } from './extraowner.js';
+import { recovery } from './recovery.js';
 
 export const allCommands: Command[] = [
   setup,
@@ -85,4 +86,5 @@ export const allCommands: Command[] = [
   shop,
   antinuke,
   extraowner,
+  recovery,
 ];
