@@ -1,13 +1,13 @@
-import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import type { Command } from '../types.js';
 import { updateGuild, loadGuild } from '../storage.js';
 import { addColourSetup, setupShopRole, setupShopColour } from './shop.js';
+import { hasGuildManageAccess, isOwnerOrExtraOwner } from '../security.js';
 
 export const setup: Command = {
   data: new SlashCommandBuilder()
     .setName('setup')
     .setDescription('Configure bot settings for this server')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand(sub =>
       sub.setName('logs')
         .setDescription('Set the log channel for moderation actions')
@@ -62,14 +62,14 @@ export const setup: Command = {
     )
     .addSubcommand(sub =>
       sub.setName('shoprole')
-        .setDescription('Add a purchasable role to the sparks shop (server owner only)')
+        .setDescription('Add a purchasable role to the sparks shop (owner/extra owner only)')
         .addStringOption(o => o.setName('name').setDescription('Role/shop item name').setRequired(true))
         .addIntegerOption(o => o.setName('position').setDescription('Display position in the shop').setRequired(true).setMinValue(1).setMaxValue(1000))
         .addIntegerOption(o => o.setName('coins').setDescription('Price in ⚡ sparks').setRequired(true).setMinValue(0)),
     )
     .addSubcommandGroup(group =>
       group.setName('shop')
-        .setDescription('Configure the sparks shop (server owner only)')
+        .setDescription('Configure the sparks shop (owner/extra owner only)')
         .addSubcommand(sub =>
           addColourSetup(
             sub.setName('colour').setDescription('Add a purchasable colour to the sparks shop'),
@@ -83,6 +83,13 @@ export const setup: Command = {
 
   async execute(interaction) {
     if (!interaction.guild) return;
+    const member = interaction.member;
+    const canConfigure = interaction.user.id === interaction.guild.ownerId || isOwnerOrExtraOwner(interaction.guild, interaction.user.id) || (member && 'permissions' in member && hasGuildManageAccess(member as any));
+    if (!canConfigure) {
+      await interaction.reply({ content: '❌ You need **Manage Server** or extra-owner access to use setup commands.', ephemeral: true });
+      return;
+    }
+
     const sub = interaction.options.getSubcommand();
     const group = interaction.options.getSubcommandGroup(false);
 
@@ -118,6 +125,8 @@ export const setup: Command = {
           { name: '⭐ Starboard Threshold', value: `${cfg.starboardThreshold} stars`, inline: true },
           { name: '📈 Level Channel', value: cfg.levelChannel ? `<#${cfg.levelChannel}>` : 'Current channel', inline: true },
           { name: '🔍 Snipe', value: cfg.snipeEnabled ? 'Enabled' : 'Disabled', inline: true },
+          { name: '🛡️ Anti-Nuke', value: data.antiNuke.enabled ? 'Enabled' : 'Disabled', inline: true },
+          { name: '👑 Extra Owners', value: data.extraOwners.length ? data.extraOwners.map(id => `<@${id}>`).join(', ') : 'None', inline: true },
           { name: '🏅 Level Roles', value: levelRolesText },
           { name: '🛍️ Sparks Shop', value: `${data.shop.roles.length} role(s) · ${data.shop.colours.length} colour(s)` },
         )
