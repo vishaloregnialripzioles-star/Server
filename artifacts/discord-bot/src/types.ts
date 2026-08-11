@@ -23,6 +23,7 @@ export interface Config {
   levelRoles?: Record<string, string>;
   levelUpMessage?: { title?: string; description?: string; imageUrl?: string; };
 }
+export interface AntiNukeConfig { enabled: boolean; whitelist: string[]; }
 export interface AfkEntry { reason: string; timestamp: number; }
 export interface LevelEntry { xp: number; level: number; lastMessage: number; }
 export interface Warning { id: string; moderatorId: string; reason: string; timestamp: number; }
@@ -46,7 +47,8 @@ export interface ShopRoleItem { id: string; name: string; roleId: string; positi
 export interface ShopColourItem { id: string; name: string; roleId: string; price: number; }
 export interface ShopConfig { roles: ShopRoleItem[]; colours: ShopColourItem[]; }
 export interface GuildData {
-  config: Config; afk: Record<string, AfkEntry>; levels: Record<string, LevelEntry>;
+  config: Config; antiNuke: AntiNukeConfig; extraOwners: string[];
+  afk: Record<string, AfkEntry>; levels: Record<string, LevelEntry>;
   /** ⚡ sparks balance per member */
   sparks: Record<string, number>;
   warnings: Record<string, Warning[]>; reminders: Reminder[]; starboard: Record<string, StarboardEntry>;
