@@ -7,6 +7,7 @@ import { handleMessageDelete } from './messageDelete.js';
 import { handleMessageUpdate } from './messageUpdate.js';
 import { handleMessageReactionAdd } from './messageReactionAdd.js';
 import { handleGuildMemberAdd } from './guildMemberAdd.js';
+import { handleAntiNukeAudit } from './antiNuke.js';
 
 function safe(name: string, fn: (...args: any[]) => any) {
   return (...args: any[]) => {
@@ -26,4 +27,5 @@ export function registerEvents(client: Client): void {
   client.on(Events.MessageUpdate, safe('messageUpdate', handleMessageUpdate));
   client.on(Events.MessageReactionAdd, safe('messageReactionAdd', handleMessageReactionAdd));
   client.on(Events.GuildMemberAdd, safe('guildMemberAdd', handleGuildMemberAdd));
+  client.on(Events.GuildAuditLogEntryCreate, safe('guildAuditLogEntryCreate', handleAntiNukeAudit));
 }
