@@ -70,22 +70,43 @@ async function lobby(interaction: ChatInputCommandInteraction, game: GameDef): P
   });
   const collector = message.createMessageComponentCollector({ time: 45_000 });
   let started = false;
+
   collector.on('collect', async i => {
-    if (i.customId === `${id}:join`) {
-      if (players.has(i.user.id)) { await i.reply({ content:'You are already in.', ephemeral:true }); return; }
-      if (players.size >= game.max) { await i.reply({ content:'This game is full.', ephemeral:true }); return; }
-      players.add(i.user.id);
-      await i.update({ embeds: [new EmbedBuilder().setTitle(`🎮 ${game.label}`).setDescription(`**${game.description}**\n\nPlayers (${players.size}/${game.max}): ${[...players].map(x => `<@${x}>`).join(', ')}\n\nNeed at least **${game.min}** player(s).`)], components: [joinRow(id, game.name)] });
-    } else if (i.customId === `${id}:start`) {
-      if (i.user.id !== interaction.user.id) { await i.reply({ content:'Only the game creator can start it.', ephemeral:true }); return; }
-      if (players.size < game.min) { await i.reply({ content:`Need at least ${game.min} players.`, ephemeral:true }); return; }
-      started = true;
-      collector.stop('started');
-      await i.update({ embeds: [new EmbedBuilder().setTitle(`🎮 ${game.label}`).setDescription(`Starting with ${players.size} players…`)], components: [] });
+    try {
+      if (i.customId === `${id}:join`) {
+        if (players.has(i.user.id)) { await i.reply({ content:'You are already in.', ephemeral:true }); return; }
+        if (players.size >= game.max) { await i.reply({ content:'This game is full.', ephemeral:true }); return; }
+        players.add(i.user.id);
+        await i.update({ embeds: [new EmbedBuilder().setTitle(`🎮 ${game.label}`).setDescription(`**${game.description}**\n\nPlayers (${players.size}/${game.max}): ${[...players].map(x => `<@${x}>`).join(', ')}\n\nNeed at least **${game.min}** player(s).`)], components: [joinRow(id, game.name)] });
+        return;
+      }
+
+      if (i.customId === `${id}:start`) {
+        if (i.user.id !== interaction.user.id) { await i.reply({ content:'Only the game creator can start it.', ephemeral:true }); return; }
+        if (players.size < game.min) { await i.reply({ content:`Need at least ${game.min} players.`, ephemeral:true }); return; }
+
+        // Defer the button interaction first, then edit the lobby message directly.
+        // This avoids a race between i.update() and collector.stop() that could leave
+        // prefix-created games stuck on "Starting with ... players…".
+        started = true;
+        await i.deferUpdate();
+        collector.stop('started');
+        await message.edit({
+          embeds: [new EmbedBuilder().setTitle(`🎮 ${game.label}`).setDescription(`Starting with ${players.size} players…`)],
+          components: [],
+        });
+      }
+    } catch (err) {
+      console.error(`[game:${game.name}:lobby]`, err);
+      await i.reply({ content:'❌ Something went wrong starting this game. Please try again.', ephemeral:true }).catch(()=>{});
     }
   });
+
   await new Promise<void>(resolve => collector.once('end', () => resolve()));
-  if (!started) { await message.edit({ embeds:[new EmbedBuilder().setTitle(`🎮 ${game.label}`).setDescription(players.size >= game.min ? 'Game lobby closed.' : `Not enough players joined (${players.size}/${game.min}).`)], components:[] }).catch(()=>{}); return []; }
+  if (!started) {
+    await message.edit({ embeds:[new EmbedBuilder().setTitle(`🎮 ${game.label}`).setDescription(players.size >= game.min ? 'Game lobby closed.' : `Not enough players joined (${players.size}/${game.min}).`)], components:[] }).catch(()=>{});
+    return [];
+  }
   return [...players];
 }
 
