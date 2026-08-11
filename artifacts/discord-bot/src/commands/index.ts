@@ -50,6 +50,8 @@ import { greet } from './greet.js';
 import { game, games } from './games.js';
 import { coinLeaderboard } from './sparks.js';
 import { shop } from './shop.js';
+import { antinuke } from './antinuke.js';
+import { extraowner } from './extraowner.js';
 
 export const allCommands: Command[] = [
   setup,
@@ -81,4 +83,6 @@ export const allCommands: Command[] = [
   game, games,
   coinLeaderboard,
   shop,
+  antinuke,
+  extraowner,
 ];
