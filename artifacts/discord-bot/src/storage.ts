@@ -9,6 +9,7 @@ const DATA_DIR = join(__dirname, '..', 'data');
 function defaultGuildData(): GuildData {
   return {
     config: { starboardThreshold: 3, snipeEnabled: true },
+    antiNuke: { enabled: false, whitelist: [] }, extraOwners: [],
     afk: {}, levels: {}, sparks: {}, warnings: {}, reminders: [], starboard: {}, lastDeleted: {}, lastEdited: {},
     tempRoles: [], tickets: {}, autoResponders: [], giveaways: [], savedEmbeds: {},
     shop: { roles: [], colours: [] },
@@ -35,7 +36,11 @@ export function loadGuild(guildId: string): GuildData {
     const parsed = JSON.parse(raw) as Partial<GuildData>;
     const defaults = defaultGuildData();
     const data: GuildData = {
-      ...defaults, ...parsed, config: { ...defaults.config, ...parsed.config }, sparks: parsed.sparks ?? {},
+      ...defaults, ...parsed,
+      config: { ...defaults.config, ...parsed.config },
+      antiNuke: { ...defaults.antiNuke, ...(parsed.antiNuke ?? {}), whitelist: parsed.antiNuke?.whitelist ?? [] },
+      extraOwners: parsed.extraOwners ?? [],
+      sparks: parsed.sparks ?? {},
       autoResponders: parsed.autoResponders ?? [], giveaways: parsed.giveaways ?? [], savedEmbeds: parsed.savedEmbeds ?? {}, welcome: parsed.welcome,
       shop: { ...defaults.shop, ...(parsed.shop ?? {}), roles: parsed.shop?.roles ?? [], colours: parsed.shop?.colours ?? [] },
     };
