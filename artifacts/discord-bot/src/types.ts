@@ -46,6 +46,29 @@ export interface Giveaway {
 export interface ShopRoleItem { id: string; name: string; roleId: string; position: number; price: number; }
 export interface ShopColourItem { id: string; name: string; roleId: string; price: number; }
 export interface ShopConfig { roles: ShopRoleItem[]; colours: ShopColourItem[]; }
+
+export interface RecoveryRole {
+  id: string; name: string; color: number; hoist: boolean; mentionable: boolean; permissions: string; position: number;
+}
+export interface RecoveryOverwrite { id: string; type: number; allow: string; deny: string; }
+export interface RecoveryChannel {
+  id: string; name: string; type: number; position: number; parentId?: string;
+  topic?: string; nsfw?: boolean; rateLimitPerUser?: number; bitrate?: number; userLimit?: number;
+  rtcRegion?: string | null; videoQualityMode?: number; defaultAutoArchiveDuration?: number;
+  defaultThreadRateLimitPerUser?: number; defaultForumLayout?: number; defaultSortOrder?: number;
+  permissionOverwrites: RecoveryOverwrite[];
+}
+export interface RecoveryEmoji { id: string; name: string; url: string; animated: boolean; roles: string[]; }
+export interface RecoveryGuildSettings {
+  name: string; iconUrl?: string; verificationLevel: number; explicitContentFilter: number;
+  defaultMessageNotifications: number; afkTimeout: number; systemChannelId?: string;
+  rulesChannelId?: string; publicUpdatesChannelId?: string; safetyAlertsChannelId?: string; afkChannelId?: string;
+}
+export interface RecoveryBackup {
+  id: string; name: string; createdAt: number; guild: RecoveryGuildSettings;
+  roles: RecoveryRole[]; channels: RecoveryChannel[]; emojis: RecoveryEmoji[];
+}
+
 export interface GuildData {
   config: Config; antiNuke: AntiNukeConfig; extraOwners: string[];
   afk: Record<string, AfkEntry>; levels: Record<string, LevelEntry>;
@@ -54,5 +77,5 @@ export interface GuildData {
   warnings: Record<string, Warning[]>; reminders: Reminder[]; starboard: Record<string, StarboardEntry>;
   lastDeleted: Record<string, SnipedMessage[]>; lastEdited: Record<string, SnipedMessage[]>; tempRoles: TempRole[];
   tickets: Record<string, Ticket>; autoResponders: AutoResponder[]; giveaways: Giveaway[]; savedEmbeds: Record<string, SavedEmbed>; welcome?: WelcomeConfig;
-  shop: ShopConfig;
+  shop: ShopConfig; recoveryBackups: RecoveryBackup[];
 }
