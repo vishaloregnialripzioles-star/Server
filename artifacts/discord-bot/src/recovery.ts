@@ -127,7 +127,6 @@ export async function restoreRecoveryBackup(guild: Guild, backup: RecoveryBackup
     throw new Error('I need **Manage Channels** and **Manage Roles** to restore a recovery save.');
   }
 
-  // This channel keeps progress available even when the channel containing the command is deleted.
   const progress = await guild.channels.create({
     name: 'recovery-in-progress',
     type: ChannelType.GuildText,
@@ -176,10 +175,10 @@ export async function restoreRecoveryBackup(guild: Guild, backup: RecoveryBackup
     const makeOverwrites = (snapshot: RecoveryChannel): OverwriteData[] => snapshot.permissionOverwrites
       .map(overwrite => ({
         id: overwrite.type === 0 ? (roleMap.get(overwrite.id) ?? overwrite.id) : overwrite.id,
-        type: overwrite.type,
+        type: overwrite.type as 0 | 1,
         allow: BigInt(overwrite.allow),
         deny: BigInt(overwrite.deny),
-      } satisfies OverwriteData));
+      }));
 
     for (const snapshot of [...categories, ...children]) {
       try {
@@ -202,14 +201,14 @@ export async function restoreRecoveryBackup(guild: Guild, backup: RecoveryBackup
     }
 
     const settings: any = backup.guild;
-    await guild.edit({
+    const guildEdit: any = {
       name: settings.name,
-      icon: settings.iconUrl,
       verificationLevel: settings.verificationLevel,
       explicitContentFilter: settings.explicitContentFilter,
       defaultMessageNotifications: settings.defaultMessageNotifications,
       afkTimeout: settings.afkTimeout,
-    }).catch(() => undefined);
+    };
+    await guild.edit(guildEdit).catch(() => undefined);
 
     const channelSettings: any = {};
     for (const [field, oldId] of Object.entries({
@@ -239,7 +238,8 @@ export async function restoreRecoveryBackup(guild: Guild, backup: RecoveryBackup
       }
     }
 
-    await progress.delete('Server recovery complete').catch(() => undefined);
+    await progress.send(`✅ Recovery completed. Restored **${roleMap.size} roles**, **${channelMap.size} channels** and **${emojiCount} emojis**.${skipped.length ? `\n⚠️ ${skipped.length} item(s) could not be restored.` : ''}`).catch(() => undefined);
+    setTimeout(() => { void progress.delete('Server recovery complete').catch(() => undefined); }, 5000);
     return { roles: roleMap.size, channels: channelMap.size, emojis: emojiCount, skipped };
   } catch (error) {
     await progress.send(`⚠️ Recovery stopped: ${error instanceof Error ? error.message : 'unknown error'}`).catch(() => undefined);
