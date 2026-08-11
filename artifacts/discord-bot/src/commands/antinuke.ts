@@ -10,14 +10,17 @@ export const antinuke: Command = {
     .addSubcommand(sub => sub.setName('enable').setDescription('Enable anti-nuke protection'))
     .addSubcommand(sub => sub.setName('disable').setDescription('Disable anti-nuke protection'))
     .addSubcommand(sub => sub.setName('status').setDescription('Show anti-nuke status and whitelist'))
-    .addSubcommand(sub => sub
-      .setName('whitelist-add')
-      .setDescription('Whitelist a member from anti-nuke punishment')
-      .addUserOption(o => o.setName('user').setDescription('Member to whitelist').setRequired(true)))
-    .addSubcommand(sub => sub
-      .setName('whitelist-remove')
-      .setDescription('Remove a member from the anti-nuke whitelist')
-      .addUserOption(o => o.setName('user').setDescription('Member to remove').setRequired(true))),
+    .addSubcommandGroup(group => group
+      .setName('whitelist')
+      .setDescription('Manage anti-nuke trusted members')
+      .addSubcommand(sub => sub
+        .setName('add')
+        .setDescription('Whitelist a member from anti-nuke punishment')
+        .addUserOption(o => o.setName('user').setDescription('Member to whitelist').setRequired(true)))
+      .addSubcommand(sub => sub
+        .setName('remove')
+        .setDescription('Remove a member from the anti-nuke whitelist')
+        .addUserOption(o => o.setName('user').setDescription('Member to remove').setRequired(true)))),
 
   async execute(interaction) {
     if (!interaction.guild) return;
@@ -27,6 +30,7 @@ export const antinuke: Command = {
     }
 
     const sub = interaction.options.getSubcommand();
+    const group = interaction.options.getSubcommandGroup(false);
     const guildId = interaction.guild.id;
 
     if (sub === 'enable' || sub === 'disable') {
@@ -36,13 +40,13 @@ export const antinuke: Command = {
       return;
     }
 
-    if (sub === 'whitelist-add' || sub === 'whitelist-remove') {
+    if (group === 'whitelist' && (sub === 'add' || sub === 'remove')) {
       const user = interaction.options.getUser('user', true);
       if (user.id === interaction.guild.ownerId || user.id === interaction.client.user.id) {
         await interaction.reply({ content: '❌ The server owner and bot are always trusted.', ephemeral: true });
         return;
       }
-      const adding = sub === 'whitelist-add';
+      const adding = sub === 'add';
       let changed = false;
       updateGuild(guildId, data => {
         const has = data.antiNuke.whitelist.includes(user.id);
