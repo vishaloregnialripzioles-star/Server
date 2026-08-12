@@ -34,9 +34,13 @@ export const recovery: Command = {
     const sub = interaction.options.getSubcommand(true);
     const guildId = interaction.guild.id;
     const isServerOwner = interaction.guild.ownerId === interaction.user.id;
+    const isAdministrator = Boolean(
+      interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
+      || (interaction.member as any)?.permissions?.has?.(PermissionFlagsBits.Administrator),
+    );
 
     if (sub === 'save') {
-      if (!isServerOwner && !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      if (!isServerOwner && !isAdministrator) {
         await interaction.reply({ content: '❌ You need the **Administrator** permission to create a recovery save.', ephemeral: true });
         return;
       }
