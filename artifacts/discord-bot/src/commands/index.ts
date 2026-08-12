@@ -47,7 +47,8 @@ import { music } from './music.js';
 import { embedCmd } from './embed.js';
 import { welcome } from './welcome.js';
 import { greet } from './greet.js';
-import { game, games } from './games.js';
+import { gamePolicy } from './gamePolicy.js';
+import { games } from './games.js';
 import { coinLeaderboard } from './sparks.js';
 import { shop } from './shop.js';
 import { antinuke } from './antinuke.js';
@@ -81,7 +82,7 @@ export const allCommands: Command[] = [
   embedCmd,
   welcome,
   greet,
-  game, games,
+  gamePolicy, games,
   coinLeaderboard,
   shop,
   antinuke,
