@@ -13,6 +13,7 @@ import { updateGuild } from '../storage.js';
 interface GlobalPlayer {
   userId: string;
   guildId: string;
+  channelId: string;
 }
 
 interface GlobalSession {
@@ -83,20 +84,35 @@ function baseEmbed(session: GlobalSession): EmbedBuilder {
     .setDescription(`Matched with **${session.players.length} random global player(s)** for **${session.game.label}**.\n\nWinner reward: **⚡ ${session.game.reward} sparks**`);
 }
 
+/**
+ * Global games are cross-server, but never DM-based.
+ * Each player gets the live game message in the same server/channel where
+ * they pressed the Global button. The shared session lives in memory, so
+ * buttons and text answers from different guilds still resolve one match.
+ */
 async function sendToPlayers(client: Client, session: GlobalSession, content: string): Promise<boolean> {
   let ok = 0;
+
   for (const player of session.players) {
     try {
-      const user = await client.users.fetch(player.userId);
-      const message = await user.send({
+      const guild = await client.guilds.fetch(player.guildId);
+      const channel = await guild.channels.fetch(player.channelId);
+
+      if (!channel?.isTextBased() || !('send' in channel)) {
+        continue;
+      }
+
+      const message = await channel.send({
+        content: `<@${player.userId}>`,
         embeds: [baseEmbed(session).setDescription(`${content}\n\nWinner reward: **⚡ ${session.game.reward} sparks**`)],
       });
       session.messages.set(player.userId, message);
       ok++;
-    } catch {
-      // DMs can be disabled for individual users.
+    } catch (error) {
+      console.error(`[global:${session.game.name}] Could not post in guild ${player.guildId}, channel ${player.channelId}:`, error);
     }
   }
+
   return ok === session.players.length;
 }
 
@@ -254,7 +270,7 @@ async function startRps(session: GlobalSession): Promise<void> {
 }
 
 async function startXo(session: GlobalSession): Promise<void> {
-  const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,7],[2,4,6]];
   const collectors = session.players.map(player => {
     const message = session.messages.get(player.userId);
     if (!message) return null;
@@ -342,7 +358,7 @@ async function startMatchedGame(client: Client, game: (typeof GAME_DEFS)[number]
       queues.set(game.name, [...(queues.get(game.name) ?? []), player]);
       queuedUsers.add(player.userId);
       const message = session.messages.get(player.userId);
-      await message?.edit({ embeds: [new EmbedBuilder().setTitle('🌐 Global matchmaking').setDescription('❌ I could not DM every player, so the match was cancelled. You were returned to the global queue.')], components: [] }).catch(() => undefined);
+      await message?.edit({ embeds: [new EmbedBuilder().setTitle('🌐 Global matchmaking').setDescription('❌ I could not post the global game in every selected server channel. The players whose channels were available were returned to the global queue.')], components: [] }).catch(() => undefined);
     }
     return;
   }
@@ -389,8 +405,8 @@ export async function handleGlobalButton(interaction: ButtonInteraction, client:
   if (!id.startsWith('global:')) return false;
 
   if (id.startsWith('global:queue:')) {
-    if (!interaction.guildId) {
-      await interaction.reply({ content: '❌ Global matchmaking can only be started from a server game.', ephemeral: true });
+    if (!interaction.guildId || !interaction.channelId) {
+      await interaction.reply({ content: '❌ Global matchmaking can only be started from a server channel.', ephemeral: true });
       return true;
     }
 
@@ -405,7 +421,11 @@ export async function handleGlobalButton(interaction: ButtonInteraction, client:
       return true;
     }
 
-    const player = { userId: interaction.user.id, guildId: interaction.guildId };
+    const player: GlobalPlayer = {
+      userId: interaction.user.id,
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+    };
     const queue = queues.get(name) ?? [];
     queue.push(player);
     queues.set(name, queue);
@@ -413,7 +433,7 @@ export async function handleGlobalButton(interaction: ButtonInteraction, client:
 
     if (queue.length < game.min) {
       await interaction.reply({
-        content: `🔎 Searching for global **${game.label}** players… **${queue.length}/${game.min}** matched so far.`,
+        content: `🔎 Searching for global **${game.label}** players… **${queue.length}/${game.min}** matched so far.\n\n🌐 Players can join from other servers too. When matched, the game will appear in each player's server channel — never in DMs.`,
         ephemeral: true,
       });
       return true;
@@ -422,7 +442,7 @@ export async function handleGlobalButton(interaction: ButtonInteraction, client:
     const players = queue.splice(0, Math.min(game.max, queue.length));
     queues.set(name, queue);
     await interaction.reply({
-      content: `🌐 Match found! Connecting **${players.length}** random **${game.label}** players in DMs…`,
+      content: `🌐 Match found! Connecting **${players.length}** random **${game.label}** players across their server channels…`,
       ephemeral: true,
     });
     void startMatchedGame(client, game, players);
