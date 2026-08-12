@@ -6,6 +6,7 @@ import {
   StringSelectMenuBuilder,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
+  type Role,
 } from 'discord.js';
 import type { Command, ShopColourItem, ShopRoleItem } from '../types.js';
 import { loadGuild, updateGuild } from '../storage.js';
@@ -275,7 +276,7 @@ export const shop: Command = {
         return;
       }
 
-      let replacement: Awaited<ReturnType<typeof interaction.guild.roles.create>> | null = null;
+      let replacement: Role | null = null;
       try {
         replacement = await interaction.guild!.roles.create({
           name: sourceRole.name,
