@@ -12,7 +12,7 @@ function defaultGuildData(): GuildData {
     antiNuke: { enabled: false, whitelist: [] }, extraOwners: [],
     afk: {}, levels: {}, sparks: {}, warnings: {}, reminders: [], starboard: {}, lastDeleted: {}, lastEdited: {},
     tempRoles: [], tickets: {}, autoResponders: [], giveaways: [], savedEmbeds: {},
-    shop: { roles: [], colours: [] }, recoveryBackups: [],
+    shop: { roles: [], colours: [], customRoles: [] }, recoveryBackups: [],
   };
 }
 function ensureDir(): void { if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true }); }
@@ -42,7 +42,13 @@ export function loadGuild(guildId: string): GuildData {
       extraOwners: parsed.extraOwners ?? [],
       sparks: parsed.sparks ?? {},
       autoResponders: parsed.autoResponders ?? [], giveaways: parsed.giveaways ?? [], savedEmbeds: parsed.savedEmbeds ?? {}, welcome: parsed.welcome,
-      shop: { ...defaults.shop, ...(parsed.shop ?? {}), roles: parsed.shop?.roles ?? [], colours: parsed.shop?.colours ?? [] },
+      shop: {
+        ...defaults.shop,
+        ...(parsed.shop ?? {}),
+        roles: parsed.shop?.roles ?? [],
+        colours: parsed.shop?.colours ?? [],
+        customRoles: parsed.shop?.customRoles ?? [],
+      },
       recoveryBackups: parsed.recoveryBackups ?? [],
     };
     if (parsed.lastDeleted) data.lastDeleted = migrateSnipeField(parsed.lastDeleted as Record<string, SnipedMessage | SnipedMessage[]>);
