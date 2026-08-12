@@ -44,8 +44,11 @@ export interface Giveaway {
   entries: string[]; requiredRoleId?: string; blacklistRoleId?: string; extraEntryRoles?: ExtraEntryRole[]; imageUrl?: string; ended: boolean; winnerId?: string;
 }
 export interface ShopRoleItem { id: string; name: string; roleId: string; position: number; price: number; }
-export interface ShopColourItem { id: string; name: string; roleId: string; price: number; }
-export interface ShopConfig { roles: ShopRoleItem[]; colours: ShopColourItem[]; }
+/** A colour is a reusable shop cosmetic, not a Discord role. */
+export interface ShopColourItem { id: string; name: string; color?: number; price: number; /** legacy field from the old colour-role implementation */ roleId?: string; }
+/** Tracks the per-member role clone created when a purchased shop role is coloured. */
+export interface ShopCustomRole { id: string; userId: string; shopRoleId: string; roleId: string; }
+export interface ShopConfig { roles: ShopRoleItem[]; colours: ShopColourItem[]; customRoles: ShopCustomRole[]; }
 
 export interface RecoveryRole {
   id: string; name: string; color: number; hoist: boolean; mentionable: boolean; permissions: string; position: number;
