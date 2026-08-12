@@ -47,7 +47,6 @@ export const antinuke: Command = {
   async execute(interaction) {
     if (!interaction.guild) return;
 
-    // Anti-nuke configuration is deliberately owner/extra-owner only.
     if (!isOwnerOrExtraOwner(interaction.guild, interaction.user.id)) {
       await interaction.reply({ content: '🔒 Only the **server owner** or an **extra owner** can manage anti-nuke.', ephemeral: true });
       return;
@@ -77,7 +76,7 @@ export const antinuke: Command = {
         .setTitle('🚨 Important Note')
         .setDescription(
           '**Anti-Nuke Protection**\n\n' +
-          '➤ Sparxie.in cannot guarantee full protection if a person or bot has the **same or higher role** than the bot.\n\n' +
+          '➤ Sparxie cannot guarantee full protection if a person or bot has the **same or higher role** than the bot.\n\n' +
           '➤ Whitelisted users are trusted and will not be punished by anti-nuke.\n\n' +
           '➤ For strongest protection, keep the bot role **above all normal member/moderation roles** and only whitelist people you trust.\n\n' +
           '➤ When you press **Agree TOS**, the bot automatically checks its required permissions. It can only use permissions Discord has already granted to the bot; it cannot grant itself Administrator or bypass Discord role hierarchy.'
@@ -102,7 +101,6 @@ export const antinuke: Command = {
       await interaction.reply({ embeds: [tosEmbed], components: [tosRow], ephemeral: true });
 
       try {
-        // Use the reply message as the component collector target.
         const replyMessage = await interaction.fetchReply();
         const confirmation = await replyMessage.awaitMessageComponent({
           filter: component => component.user.id === interaction.user.id,
@@ -143,7 +141,6 @@ export const antinuke: Command = {
           return;
         }
 
-        // All required permissions are already present, so enabling is immediate after TOS acceptance.
         updateGuild(guildId, data => { data.antiNuke.enabled = true; });
         const enabledEmbed = new EmbedBuilder()
           .setColor(0x2ecc71)
