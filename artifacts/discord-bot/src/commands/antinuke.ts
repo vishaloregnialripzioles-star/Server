@@ -10,6 +10,21 @@ import type { Command } from '../types.js';
 import { loadGuild, updateGuild } from '../storage.js';
 import { isOwnerOrExtraOwner } from '../security.js';
 
+const REQUIRED_PERMISSIONS = [
+  [PermissionFlagsBits.ViewAuditLog, 'View Audit Log'],
+  [PermissionFlagsBits.BanMembers, 'Ban Members'],
+  [PermissionFlagsBits.KickMembers, 'Kick Members'],
+  [PermissionFlagsBits.ManageRoles, 'Manage Roles'],
+] as const;
+
+const REQUIRED_PERMISSION_VALUE = REQUIRED_PERMISSIONS.reduce((value, [permission]) => value | BigInt(permission), 0n);
+
+function permissionsInviteUrl(guildId: string): string | null {
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  if (!clientId) return null;
+  return `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&permissions=${REQUIRED_PERMISSION_VALUE.toString()}&scope=bot%20applications.commands&guild_id=${encodeURIComponent(guildId)}`;
+}
+
 export const antinuke: Command = {
   data: new SlashCommandBuilder()
     .setName('antinuke')
@@ -31,8 +46,10 @@ export const antinuke: Command = {
 
   async execute(interaction) {
     if (!interaction.guild) return;
+
+    // Anti-nuke configuration is deliberately owner/extra-owner only.
     if (!isOwnerOrExtraOwner(interaction.guild, interaction.user.id)) {
-      await interaction.reply({ content: '❌ Only the server owner or an extra owner can manage anti-nuke.', ephemeral: true });
+      await interaction.reply({ content: '🔒 Only the **server owner** or an **extra owner** can manage anti-nuke.', ephemeral: true });
       return;
     }
 
@@ -50,89 +67,108 @@ export const antinuke: Command = {
         return;
       }
 
-      const me = interaction.guild.members.me;
-      const requiredPermissions = [
-        [PermissionFlagsBits.ViewAuditLog, 'View Audit Log'],
-        [PermissionFlagsBits.BanMembers, 'Ban Members'],
-        [PermissionFlagsBits.ManageRoles, 'Manage Roles'],
-      ] as const;
+      const me = interaction.guild.members.me ?? await interaction.guild.members.fetchMe().catch(() => null);
       const missingPermissions = me
-        ? requiredPermissions.filter(([permission]) => !me.permissions.has(permission))
-        : requiredPermissions;
+        ? REQUIRED_PERMISSIONS.filter(([permission]) => !me.permissions.has(permission))
+        : REQUIRED_PERMISSIONS;
 
-      if (missingPermissions.length) {
-        const embed = new EmbedBuilder()
-          .setColor(0xe74c3c)
-          .setTitle('🛡️ Anti-Nuke Configuration')
-          .setDescription('I cannot enable anti-nuke yet because I am missing the permissions required to protect the server.')
-          .addFields(
-            { name: 'Status', value: '🔴 Disabled', inline: true },
-            { name: 'Missing Permissions', value: missingPermissions.map(([, name]) => `• ${name}`).join('\n') },
-            { name: 'What to do', value: 'Give my bot the permissions above, then run `/antinuke enable` again.' },
-          );
-        await interaction.reply({ embeds: [embed], ephemeral: true });
-        return;
-      }
+      const tosEmbed = new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle('🚨 Important Note')
+        .setDescription(
+          '**Anti-Nuke Protection**\n\n' +
+          '➤ Olympus/Sparxie cannot guarantee full protection if a person or bot has the **same or higher role** than the bot.\n\n' +
+          '➤ Whitelisted users are trusted and will not be punished by anti-nuke.\n\n' +
+          '➤ For strongest protection, keep the bot role **above all normal member/moderation roles** and only whitelist people you trust.\n\n' +
+          '➤ When you press **Agree TOS**, the bot automatically checks its required permissions. It can only use permissions Discord has already granted to the bot; it cannot grant itself Administrator or bypass Discord role hierarchy.'
+        )
+        .addFields({
+          name: 'Required permissions',
+          value: REQUIRED_PERMISSIONS.map(([, name]) => `• ${name}`).join('\n'),
+        })
+        .setFooter({ text: `Requested by ${interaction.user.tag}` });
 
-      const embed = new EmbedBuilder()
-        .setColor(0xf1c40f)
-        .setTitle('🛡️ Anti-Nuke Configuration')
-        .setDescription('Anti-nuke is currently disabled. Do you want to enable protection for this server?')
-        .addFields(
-          { name: 'Status', value: '🔴 Disabled', inline: true },
-          { name: 'Protection', value: 'Unauthorized bot invites and protected role changes will be punished.' },
-          { name: 'Trusted', value: 'Server owner, extra owners and anti-nuke whitelist members are excluded.' },
-        );
-
-      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      const tosRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
-          .setCustomId(`antinuke_enable_confirm:${interaction.user.id}`)
-          .setLabel('Enable Anti-Nuke')
+          .setCustomId(`antinuke_tos_agree:${interaction.user.id}`)
+          .setLabel('Agree TOS')
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
-          .setCustomId(`antinuke_enable_cancel:${interaction.user.id}`)
-          .setLabel('Cancel')
+          .setCustomId(`antinuke_tos_decline:${interaction.user.id}`)
+          .setLabel("Don't Agree")
           .setStyle(ButtonStyle.Danger),
       );
 
-      await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+      await interaction.reply({ embeds: [tosEmbed], components: [tosRow], ephemeral: true });
 
       try {
-        const confirmation = await interaction.awaitMessageComponent({
+        // Use the reply message as the component collector target.
+        const replyMessage = await interaction.fetchReply();
+        const confirmation = await replyMessage.awaitMessageComponent({
           filter: component => component.user.id === interaction.user.id,
-          time: 30_000,
+          time: 60_000,
         });
 
-        if (confirmation.customId === `antinuke_enable_confirm:${interaction.user.id}`) {
-          updateGuild(guildId, data => { data.antiNuke.enabled = true; });
-          const enabledEmbed = new EmbedBuilder()
-            .setColor(0x2ecc71)
-            .setTitle('🛡️ Anti-Nuke Configuration')
-            .addFields(
-              { name: 'Status', value: '🟢 Enabled', inline: true },
-              { name: 'Requested by', value: `${interaction.user}` },
-            );
-          await confirmation.update({ embeds: [enabledEmbed], components: [] });
-        } else {
-          await confirmation.update({
-            content: '❌ Anti-nuke was not enabled.',
-            embeds: [],
-            components: [],
-          });
+        if (confirmation.customId === `antinuke_tos_decline:${interaction.user.id}`) {
+          await confirmation.update({ content: '❌ Anti-nuke was not enabled.', embeds: [], components: [] });
+          return;
         }
+
+        const latestMe = interaction.guild.members.me ?? await interaction.guild.members.fetchMe().catch(() => null);
+        const latestMissing = latestMe
+          ? REQUIRED_PERMISSIONS.filter(([permission]) => !latestMe.permissions.has(permission))
+          : REQUIRED_PERMISSIONS;
+
+        if (latestMissing.length) {
+          const missingEmbed = new EmbedBuilder()
+            .setColor(0xe67e22)
+            .setTitle('🛡️ Permission Setup Required')
+            .setDescription(
+              'I cannot safely enable anti-nuke until Discord gives my bot the required permissions. **I cannot grant these permissions to myself.**\n\n' +
+              'Click **Grant Permissions** below to reopen the bot authorization with the required anti-nuke permissions, then run `/antinuke enable` again.'
+            )
+            .addFields({
+              name: 'Missing',
+              value: latestMissing.map(([, name]) => `• ${name}`).join('\n'),
+            });
+
+          const permissionUrl = permissionsInviteUrl(guildId);
+          const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+          if (permissionUrl) {
+            rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(
+              new ButtonBuilder().setLabel('Grant Permissions').setStyle(ButtonStyle.Link).setURL(permissionUrl),
+            ));
+          }
+          await confirmation.update({ embeds: [missingEmbed], components: rows });
+          return;
+        }
+
+        // All required permissions are already present, so enabling is immediate after TOS acceptance.
+        updateGuild(guildId, data => { data.antiNuke.enabled = true; });
+        const enabledEmbed = new EmbedBuilder()
+          .setColor(0x2ecc71)
+          .setTitle('🛡️ Anti-Nuke Enabled')
+          .setDescription('Anti-nuke protection is now active.')
+          .addFields(
+            { name: 'Status', value: '🟢 Enabled', inline: true },
+            { name: 'Protection', value: 'Unauthorized bot invites and protected role changes are monitored.' },
+            { name: 'Trusted', value: 'Server owner, extra owners and whitelist members are excluded.' },
+            { name: 'Requested by', value: `${interaction.user}` },
+          );
+        await confirmation.update({ embeds: [enabledEmbed], components: [] });
       } catch {
         await interaction.editReply({
           content: '⌛ Confirmation timed out. Anti-nuke was **not enabled**.',
           embeds: [],
           components: [],
-        });
+        }).catch(() => undefined);
       }
       return;
     }
 
     if (sub === 'disable') {
       updateGuild(guildId, data => { data.antiNuke.enabled = false; });
-      await interaction.reply(`🛡️ Anti-nuke is now **disabled**.`);
+      await interaction.reply({ content: '🛡️ Anti-nuke is now **disabled**.', ephemeral: true });
       return;
     }
 
@@ -149,9 +185,12 @@ export const antinuke: Command = {
         if (adding && !has) { data.antiNuke.whitelist.push(user.id); changed = true; }
         if (!adding && has) { data.antiNuke.whitelist = data.antiNuke.whitelist.filter(id => id !== user.id); changed = true; }
       });
-      await interaction.reply(changed
-        ? `${adding ? '✅ Added' : '✅ Removed'} ${user} ${adding ? 'to' : 'from'} the anti-nuke whitelist.`
-        : `ℹ️ ${user} is already ${adding ? 'whitelisted' : 'not whitelisted'}.`);
+      await interaction.reply({
+        content: changed
+          ? `${adding ? '✅ Added' : '✅ Removed'} ${user} ${adding ? 'to' : 'from'} the anti-nuke whitelist.`
+          : `ℹ️ ${user} is already ${adding ? 'whitelisted' : 'not whitelisted'}.`,
+        ephemeral: true,
+      });
       return;
     }
 
