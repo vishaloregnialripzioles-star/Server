@@ -30,15 +30,17 @@ export const recovery: Command = {
 
   async execute(interaction) {
     if (!interaction.guild) return;
-    if (!isOwnerOrExtraOwner(interaction.guild, interaction.user.id)) {
-      await interaction.reply({ content: '❌ Only the server owner or an extra owner can use recovery.', ephemeral: true });
-      return;
-    }
 
     const sub = interaction.options.getSubcommand(true);
     const guildId = interaction.guild.id;
+    const isServerOwner = interaction.guild.ownerId === interaction.user.id;
 
     if (sub === 'save') {
+      if (!isServerOwner && !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+        await interaction.reply({ content: '❌ You need the **Administrator** permission to create a recovery save.', ephemeral: true });
+        return;
+      }
+
       await interaction.deferReply({ ephemeral: true });
       try {
         const backup = await createRecoveryBackup(interaction.guild);
@@ -62,6 +64,17 @@ export const recovery: Command = {
       } catch (error) {
         await interaction.editReply({ content: `❌ Could not create recovery save: ${error instanceof Error ? error.message : 'unknown error'}` });
       }
+      return;
+    }
+
+    // Recovery start is owner-only. Extra owners/admins cannot restore the server.
+    if (sub === 'start' && !isServerOwner) {
+      await interaction.reply({ content: '🔒 **Recovery start is owner-only.** Only the actual server owner can restore a recovery save.', ephemeral: true });
+      return;
+    }
+
+    if (sub === 'list' && !isOwnerOrExtraOwner(interaction.guild, interaction.user.id)) {
+      await interaction.reply({ content: '❌ Only the server owner or an extra owner can view recovery saves.', ephemeral: true });
       return;
     }
 
@@ -105,9 +118,12 @@ export const recovery: Command = {
     await interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
 
     try {
-      const selection: any = await (interaction as any).awaitMessageComponent({
+      // ChatInputCommandInteraction has no awaitMessageComponent() method.
+      // Collect from the actual reply Message instead.
+      const replyMessage = await interaction.fetchReply();
+      const selection = await replyMessage.awaitMessageComponent({
         componentType: ComponentType.StringSelect,
-        filter: (component: any) => component.user.id === interaction.user.id && component.customId === `recovery_select:${interaction.user.id}`,
+        filter: component => component.user.id === interaction.user.id && component.customId === `recovery_select:${interaction.user.id}`,
         time: 60_000,
       });
 
@@ -133,9 +149,9 @@ export const recovery: Command = {
       );
       await selection.update({ embeds: [confirmEmbed], components: [confirmRow] });
 
-      const confirmation: any = await (interaction as any).awaitMessageComponent({
+      const confirmation = await selection.message.awaitMessageComponent({
         componentType: ComponentType.Button,
-        filter: (component: any) => component.user.id === interaction.user.id,
+        filter: component => component.user.id === interaction.user.id,
         time: 30_000,
       });
 
