@@ -24,12 +24,7 @@ function shopEmbed(interaction: ChatInputCommandInteraction, page: ShopPage, sel
   const start = Math.floor(selected / PAGE_SIZE) * PAGE_SIZE;
   const visible = items.slice(start, start + PAGE_SIZE);
   const lines = visible.length
-    ? visible.map((item, i) => {
-        const colour = page === 'colours' && typeof (item as ShopColourItem).color === 'number'
-          ? ` — ${(item as ShopColourItem).name}`
-          : '';
-        return `**${start + i + 1}. ${item.name}**${colour} — ⚡ **${item.price.toLocaleString()} sparks**`;
-      }).join('\n')
+    ? visible.map((item, i) => `**${start + i + 1}. ${item.name}** — ⚡ **${item.price.toLocaleString()} sparks**`).join('\n')
     : 'No items have been configured yet.';
 
   return new EmbedBuilder()
@@ -97,17 +92,6 @@ function parseHex(value: string): number | null {
   return Number.parseInt(raw, 16);
 }
 
-function getOwnedShopRole(
-  data: ReturnType<typeof loadGuild>,
-  member: { roles: { cache: { has(id: string): boolean } } },
-  shopRole: ShopRoleItem,
-) {
-  const custom = data.shop.customRoles.find(x => x.userId === member['userId'] && x.shopRoleId === shopRole.id);
-  if (custom) return { custom, roleId: custom.roleId };
-  if (member.roles.cache.has(shopRole.roleId)) return { custom: null, roleId: shopRole.roleId };
-  return null;
-}
-
 export const shop: Command = {
   data: new SlashCommandBuilder()
     .setName('shop')
@@ -157,8 +141,9 @@ export const shop: Command = {
         return;
       }
 
+      if (parts[0] === 'shop' && parts[1] === 'colour-target' && i.isStringSelectMenu()) return;
       if (parts[0] !== 'shop' || parts[1] !== 'buy' || !i.isStringSelectMenu()) {
-        if (i.customId !== 'shop:colour-target') await i.deferUpdate().catch(() => undefined);
+        await i.deferUpdate().catch(() => undefined);
         return;
       }
 
@@ -251,9 +236,6 @@ export const shop: Command = {
       return;
     });
 
-    collector.once('end', async () => { await message.edit({ components: [] }).catch(() => {}); });
-
-    // Keep the pending colour flow on the same collector without exposing an ephemeral component.
     collector.on('collect', async i => {
       if (i.user.id !== interaction.user.id || i.customId !== 'shop:colour-target' || !i.isStringSelectMenu()) return;
       const shopRoleId = i.values[0];
@@ -293,8 +275,9 @@ export const shop: Command = {
         return;
       }
 
+      let replacement: Awaited<ReturnType<typeof interaction.guild.roles.create>> | null = null;
       try {
-        const replacement = await interaction.guild!.roles.create({
+        replacement = await interaction.guild!.roles.create({
           name: sourceRole.name,
           color: colourValue,
           hoist: sourceRole.hoist,
@@ -315,7 +298,7 @@ export const shop: Command = {
             id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             userId: interaction.user.id,
             shopRoleId: shopRole.id,
-            roleId: replacement.id,
+            roleId: replacement!.id,
           });
         });
 
@@ -335,6 +318,7 @@ export const shop: Command = {
           ],
         });
       } catch {
+        if (replacement) await replacement.delete('Rollback failed sparks shop colour purchase').catch(() => undefined);
         await i.reply({ content: '❌ I could not create the coloured replacement role. Make sure I have **Manage Roles** and my bot role is above the purchased role.', ephemeral: true });
       }
     });
