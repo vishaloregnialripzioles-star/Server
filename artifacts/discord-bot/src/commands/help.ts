@@ -3,7 +3,7 @@ import {
   EmbedBuilder,
   SlashCommandBuilder,
   StringSelectMenuBuilder,
-  type Guild,
+  type Client,
 } from 'discord.js';
 import type { Command } from '../types.js';
 
@@ -24,15 +24,15 @@ const FALLBACK_EMOJIS: Record<string, string> = {
 };
 
 const EMOJI_KEYWORDS: Record<string, string[]> = {
-  Setup: ['setup', 'gear', 'config', 'settings'],
+  Setup: ['setup', 'gear', 'config', 'settings', 'wrench'],
   Moderation: ['mod', 'moderation', 'hammer', 'ban', 'shield'],
-  Channels: ['channel', 'megaphone', 'announce'],
+  Channels: ['channel', 'megaphone', 'announce', 'channel'],
   Restrictions: ['restrict', 'block', 'ban', 'stop', 'no'],
   Utility: ['utility', 'tool', 'wrench', 'tools'],
   Leveling: ['level', 'xp', 'rank', 'chart', 'graph'],
   Tickets: ['ticket', 'support'],
   Games: ['game', 'gaming', 'controller'],
-  Fun: ['fun', 'party', 'laugh'],
+  Fun: ['fun', 'party', 'laugh', 'joy'],
   Giveaways: ['giveaway', 'gift', 'present'],
   Music: ['music', 'note', 'song'],
 };
@@ -43,29 +43,42 @@ function hash(value: string): number {
   return h;
 }
 
-function getAnimatedEmoji(guild: Guild | null | undefined, category: string): any {
+/**
+ * Resolve emojis owned by Sparxie's Discord application only.
+ * This deliberately does NOT read emojis from the server where /help is used.
+ */
+export async function getHelpApplicationEmojis(client: Client): Promise<any[]> {
+  try {
+    const manager = client.application?.emojis;
+    if (!manager) return [];
+    const emojis = await manager.fetch();
+    return [...emojis.values()].filter(emoji => emoji.animated);
+  } catch {
+    return [];
+  }
+}
+
+function getAnimatedEmoji(applicationEmojis: any[], category: string): any {
   const fallback = FALLBACK_EMOJIS[category] ?? '✨';
-  const animated = guild?.emojis.cache.filter(emoji => emoji.animated) ?? new Map();
-  const list = [...animated.values()];
-  if (!list.length) return fallback;
+  if (!applicationEmojis.length) return fallback;
 
   const keywords = EMOJI_KEYWORDS[category] ?? [];
-  const matching = list.filter(emoji => {
+  const matching = applicationEmojis.filter(emoji => {
     const name = (emoji.name ?? '').toLowerCase();
     return keywords.some(keyword => name.includes(keyword));
   });
 
   if (matching.length) return matching[Math.abs(hash(category)) % matching.length];
-  return list[Math.abs(hash(`sparxie:${category}`)) % list.length];
+  return applicationEmojis[Math.abs(hash(`sparxie:${category}`)) % applicationEmojis.length];
 }
 
-function emojiText(guild: Guild | null | undefined, category: string): string {
-  const emoji = getAnimatedEmoji(guild, category);
+function emojiText(applicationEmojis: any[], category: string): string {
+  const emoji = getAnimatedEmoji(applicationEmojis, category);
   return typeof emoji === 'string' ? emoji : emoji.toString();
 }
 
-function emojiOption(guild: Guild | null | undefined, category: string): any {
-  const emoji = getAnimatedEmoji(guild, category);
+function emojiOption(applicationEmojis: any[], category: string): any {
+  const emoji = getAnimatedEmoji(applicationEmojis, category);
   if (typeof emoji === 'string') return emoji;
   return {
     id: emoji.id,
@@ -80,9 +93,7 @@ export const HELP_CATEGORIES: {
   commands: { name: string; description: string }[];
 }[] = [
   {
-    name: 'Setup',
-    emoji: '⚙️',
-    commands: [
+    name: 'Setup', emoji: '⚙️', commands: [
       { name: '/setup logs', description: 'Set moderation log channel' },
       { name: '/setup muterole', description: 'Set the Muted role' },
       { name: '/setup jailrole', description: 'Set the Jail role' },
@@ -96,9 +107,7 @@ export const HELP_CATEGORIES: {
     ],
   },
   {
-    name: 'Moderation',
-    emoji: '🔨',
-    commands: [
+    name: 'Moderation', emoji: '🔨', commands: [
       { name: '/ban', description: 'Permanently ban a member' },
       { name: '/kick', description: 'Kick a member from the server' },
       { name: '/mute', description: 'Mute a member for a set duration (s/m/h/d)' },
@@ -112,9 +121,7 @@ export const HELP_CATEGORIES: {
     ],
   },
   {
-    name: 'Channels',
-    emoji: '📢',
-    commands: [
+    name: 'Channels', emoji: '📢', commands: [
       { name: '/purge', description: 'Bulk-delete messages (up to 100)' },
       { name: '/purgebots', description: 'Delete bot messages from a channel' },
       { name: '/lock', description: "Lock a channel so members can't send messages" },
@@ -123,9 +130,7 @@ export const HELP_CATEGORIES: {
     ],
   },
   {
-    name: 'Restrictions',
-    emoji: '🚫',
-    commands: [
+    name: 'Restrictions', emoji: '🚫', commands: [
       { name: '/chatban', description: 'Prevent a member from sending messages' },
       { name: '/unchatban', description: 'Remove a chat ban' },
       { name: '/jail', description: 'Move a member to the jail role' },
@@ -133,9 +138,7 @@ export const HELP_CATEGORIES: {
     ],
   },
   {
-    name: 'Utility',
-    emoji: '🛠️',
-    commands: [
+    name: 'Utility', emoji: '🛠️', commands: [
       { name: '.av [@user]', description: "Show a user's full-size avatar (global + server)" },
       { name: '/afk', description: 'Set your AFK status with an optional reason' },
       { name: '/remindme', description: 'Set a reminder for yourself' },
@@ -149,26 +152,20 @@ export const HELP_CATEGORIES: {
     ],
   },
   {
-    name: 'Leveling',
-    emoji: '📈',
-    commands: [
+    name: 'Leveling', emoji: '📈', commands: [
       { name: '/rank', description: 'View your level, XP, and server rank' },
       { name: '/leaderboard', description: 'Show the top members by XP and level' },
     ],
   },
   {
-    name: 'Tickets',
-    emoji: '🎫',
-    commands: [
+    name: 'Tickets', emoji: '🎫', commands: [
       { name: '/ticket', description: 'Open a support ticket' },
       { name: '/closeticket', description: 'Close a ticket channel' },
       { name: '/ticketpanel', description: 'Post a ticket creation panel in a channel' },
     ],
   },
   {
-    name: 'Games',
-    emoji: '🎮',
-    commands: [
+    name: 'Games', emoji: '🎮', commands: [
       { name: '/game <game>', description: 'Start a server game and play with other members' },
       { name: '/games', description: 'View the available games, player limits, and rewards' },
       { name: '/coinleaderboard', description: 'View the ⚡ sparks leaderboard' },
@@ -178,9 +175,7 @@ export const HELP_CATEGORIES: {
     ],
   },
   {
-    name: 'Fun',
-    emoji: '🎉',
-    commands: [
+    name: 'Fun', emoji: '🎉', commands: [
       { name: '/roast', description: 'Roast a member with a random burn' },
       { name: '/gay', description: 'Rate how gay someone is' },
       { name: '/pro', description: 'Rate how pro someone is at something' },
@@ -189,9 +184,7 @@ export const HELP_CATEGORIES: {
     ],
   },
   {
-    name: 'Giveaways',
-    emoji: '🎁',
-    commands: [
+    name: 'Giveaways', emoji: '🎁', commands: [
       { name: '/giveaway create', description: 'Create a giveaway panel with Enter button (Admin)' },
       { name: '/giveaway end', description: 'Force-end an active giveaway immediately (Admin)' },
       { name: '/giveaway reroll', description: 'Pick a new winner for an ended giveaway (Admin)' },
@@ -201,9 +194,7 @@ export const HELP_CATEGORIES: {
     ],
   },
   {
-    name: 'Music',
-    emoji: '🎵',
-    commands: [
+    name: 'Music', emoji: '🎵', commands: [
       { name: '.music play', description: 'Play a song by name or URL (prefix command)' },
       { name: '.music skip', description: 'Skip the current song' },
       { name: '.music stop', description: 'Stop music and disconnect' },
@@ -226,16 +217,19 @@ export const HELP_COMMAND_COUNT = HELP_CATEGORIES.reduce(
   0,
 );
 
-function formatCategoryList(guild?: Guild | null): string {
-  return HELP_CATEGORIES
-    .map(c => `${emojiText(guild, c.name)} **${c.name}**`)
-    .join('\n');
+function formatCategoryList(applicationEmojis: any[]): string {
+  return HELP_CATEGORIES.map(c => `${emojiText(applicationEmojis, c.name)} **${c.name}**`).join('\n');
 }
 
-export function buildHelpEmbed(category?: string | null, prefix = '/', guild?: Guild | null): EmbedBuilder {
+export function buildHelpEmbed(
+  category?: string | null,
+  prefix = '/',
+  applicationEmojis: any[] = [],
+): EmbedBuilder {
   const selected = findHelpCategory(category);
   const isGames = selected?.name === 'Games';
-  const headerEmoji = selected ? emojiText(guild, selected.name) : emojiText(guild, 'Fun');
+  const headerEmoji = selected ? emojiText(applicationEmojis, selected.name) : emojiText(applicationEmojis, 'Fun');
+
   const embed = new EmbedBuilder()
     .setColor(0x12d9d3)
     .setAuthor({ name: `${headerEmoji} Sparxie Help Menu` })
@@ -251,7 +245,7 @@ export function buildHelpEmbed(category?: string | null, prefix = '/', guild?: G
           `🔹 **Type** \`${prefix}help <category>\` **to view commands by section.**\n\n` +
           '`<>` — Required  |  `[]` — Optional\n\n' +
           '**Select a category below to view commands:**\n' +
-          formatCategoryList(guild) +
+          formatCategoryList(applicationEmojis) +
           '\n\nSupport Server  |  Invite Sparxie',
     )
     .setFooter({ text: 'Sparxie • Fast, friendly, and made for your server' });
@@ -259,16 +253,17 @@ export function buildHelpEmbed(category?: string | null, prefix = '/', guild?: G
   if (selected) {
     embed.addFields({
       name: `${headerEmoji} ${selected.name}`,
-      value: selected.commands
-        .map(cmd => `\`${cmd.name}\` — ${cmd.description}`)
-        .join('\n'),
+      value: selected.commands.map(cmd => `\`${cmd.name}\` — ${cmd.description}`).join('\n'),
     });
   }
 
   return embed;
 }
 
-export function buildHelpMenu(category?: string | null, guild?: Guild | null): ActionRowBuilder<StringSelectMenuBuilder> {
+export function buildHelpMenu(
+  category?: string | null,
+  applicationEmojis: any[] = [],
+): ActionRowBuilder<StringSelectMenuBuilder> {
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(HELP_SELECT_CUSTOM_ID)
@@ -285,7 +280,7 @@ export function buildHelpMenu(category?: string | null, guild?: Guild | null): A
           description: `${c.commands.length} command${c.commands.length === 1 ? '' : 's'}`,
           value: c.name.toLowerCase(),
           default: category?.toLowerCase() === c.name.toLowerCase(),
-          emoji: emojiOption(guild, c.name),
+          emoji: emojiOption(applicationEmojis, c.name),
         })),
       ),
   );
@@ -312,9 +307,11 @@ export const help: Command = {
       return;
     }
 
+    const applicationEmojis = await getHelpApplicationEmojis(interaction.client);
+
     await interaction.editReply({
-      embeds: [buildHelpEmbed(filter, '/', interaction.guild)],
-      components: [buildHelpMenu(filter, interaction.guild)],
+      embeds: [buildHelpEmbed(filter, '/', applicationEmojis)],
+      components: [buildHelpMenu(filter, applicationEmojis)],
     });
   },
 };
