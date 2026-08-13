@@ -1,0 +1,45 @@
+name: Fix Sparxie help emoji
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fix application emoji formatting
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('artifacts/discord-bot/src/commands/help.ts')
+          text = path.read_text()
+          old = "function helpBulletText(): string { return cachedHelpBulletEmoji ? cachedHelpBulletEmoji.toString() : '🔹'; }"
+          new = '''function formatApplicationEmoji(emoji: any): string {
+            if (!emoji?.id || !emoji?.name) return '🔹';
+            return emoji.animated ? `<a:${emoji.name}:${emoji.id}>` : `<:${emoji.name}:${emoji.id}>`;
+          }
+          function helpBulletText(): string { return formatApplicationEmoji(cachedHelpBulletEmoji); }'''
+
+          if old not in text:
+              raise SystemExit('Expected helpBulletText line was not found; no changes made.')
+
+          path.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Commit fix and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-help-emoji.yml
+          git add artifacts/discord-bot/src/commands/help.ts
+          git commit -m "Fix Sparxie application emoji rendering"
+          git push
