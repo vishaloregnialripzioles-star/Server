@@ -1,10 +1,4 @@
-import {
-  ActionRowBuilder,
-  EmbedBuilder,
-  SlashCommandBuilder,
-  StringSelectMenuBuilder,
-  type Client,
-} from 'discord.js';
+import { ActionRowBuilder, EmbedBuilder, SlashCommandBuilder, StringSelectMenuBuilder, type Client } from 'discord.js';
 import type { Command } from '../types.js';
 
 export const HELP_SELECT_CUSTOM_ID = 'sparxie_help_category';
@@ -12,13 +6,11 @@ export const HELP_SELECT_CUSTOM_ID = 'sparxie_help_category';
 const FALLBACK_EMOJIS: Record<string, string> = {
   Setup: '⚙️', Moderation: '🔨', Channels: '📢', Restrictions: '🚫', Utility: '🛠️', Leveling: '📈', Tickets: '🎫', Games: '🎮', Fun: '🎉', Giveaways: '🎁', Music: '🎵',
 };
-
 const EMOJI_KEYWORDS: Record<string, string[]> = {
   Setup: ['setup', 'gear', 'config', 'settings', 'wrench'], Moderation: ['mod', 'moderation', 'hammer', 'ban', 'shield'], Channels: ['channel', 'megaphone', 'announce'], Restrictions: ['restrict', 'block', 'ban', 'stop', 'no'], Utility: ['utility', 'tool', 'wrench', 'tools'], Leveling: ['level', 'xp', 'rank', 'chart', 'graph'], Tickets: ['ticket', 'support'], Games: ['game', 'gaming', 'controller'], Fun: ['fun', 'party', 'laugh', 'joy'], Giveaways: ['giveaway', 'gift', 'present'], Music: ['music', 'note', 'song'],
 };
 
 let cachedApplicationEmojis: any[] = [];
-
 function hash(value: string): number { let h = 0; for (let i = 0; i < value.length; i++) h = ((h << 5) - h + value.charCodeAt(i)) | 0; return h; }
 
 export async function getHelpApplicationEmojis(client: Client): Promise<any[]> {
@@ -28,24 +20,12 @@ export async function getHelpApplicationEmojis(client: Client): Promise<any[]> {
     const emojis = await manager.fetch();
     cachedApplicationEmojis = [...emojis.values()].filter(emoji => emoji.animated);
     return cachedApplicationEmojis;
-  } catch {
-    return cachedApplicationEmojis;
-  }
+  } catch { return cachedApplicationEmojis; }
 }
-
-// Prime the application-emoji cache once at startup so prefix commands can use
-// the exact same animated application emojis as slash commands.
-export async function primeHelpApplicationEmojis(client: Client): Promise<void> {
-  await getHelpApplicationEmojis(client);
-}
-
-function resolveApplicationEmojis(applicationEmojis: any[]): any[] {
-  return applicationEmojis.length ? applicationEmojis : cachedApplicationEmojis;
-}
-
+export async function primeHelpApplicationEmojis(client: Client): Promise<void> { await getHelpApplicationEmojis(client); }
+function resolveApplicationEmojis(applicationEmojis: any[]): any[] { return applicationEmojis.length ? applicationEmojis : cachedApplicationEmojis; }
 function getAnimatedEmoji(applicationEmojis: any[], category: string): any {
-  const emojis = resolveApplicationEmojis(applicationEmojis);
-  const fallback = FALLBACK_EMOJIS[category] ?? '✨'; if (!emojis.length) return fallback;
+  const emojis = resolveApplicationEmojis(applicationEmojis); const fallback = FALLBACK_EMOJIS[category] ?? '✨'; if (!emojis.length) return fallback;
   const keywords = EMOJI_KEYWORDS[category] ?? [];
   const matching = emojis.filter(emoji => { const name = (emoji.name ?? '').toLowerCase(); return keywords.some(keyword => name.includes(keyword)); });
   if (matching.length) return matching[Math.abs(hash(category)) % matching.length];
@@ -82,13 +62,9 @@ type HelpCategory = (typeof HELP_CATEGORIES)[number];
 export function findHelpCategory(category?: string | null): HelpCategory | undefined { if (!category || category === 'all') return undefined; return HELP_CATEGORIES.find(c => c.name.toLowerCase() === category.toLowerCase()); }
 export const HELP_COMMAND_COUNT = HELP_CATEGORIES.reduce((total, category) => total + category.commands.length, 0);
 function formatCategoryList(applicationEmojis: any[]): string { return HELP_CATEGORIES.map(c => `${emojiText(applicationEmojis, c.name)} **${c.name}**`).join('\n'); }
+function displayCommandName(name: string, prefix: string): string { if (name.startsWith('/') || name.startsWith('.')) return `${prefix}${name.slice(1)}`; return name; }
 
-function displayCommandName(name: string, prefix: string): string {
-  if (name.startsWith('/') || name.startsWith('.')) return `${prefix}${name.slice(1)}`;
-  return name;
-}
-
-export function buildHelpEmbed(category?: string | null, prefix = '/', applicationEmojis: any[] = []): EmbedBuilder {
+export function buildHelpEmbed(category?: string | null, prefix = '/', applicationEmojis: any[] = cachedApplicationEmojis): EmbedBuilder {
   const selected = findHelpCategory(category); const isGames = selected?.name === 'Games'; const headerEmoji = selected ? emojiText(applicationEmojis, selected.name) : emojiText(applicationEmojis, 'Fun');
   const embed = new EmbedBuilder().setColor(0x12d9d3).setAuthor({ name: `${headerEmoji} Sparxie Help Menu` }).setTitle(selected ? `${headerEmoji} ${selected.name}` : '✨ Welcome to Sparxie!').setDescription(
     selected ? isGames ? `🎮 **Server Games**\nPlay games with other members, win **⚡ sparks**, and use your sparks to unlock server rewards.\n\n🏆 **Win games → earn ⚡ sparks → spend sparks in the server shop → get roles and profile colour customisation.**\n\nGames support different player limits depending on the game, and multiplayer games can be joined by other members. Use **Global** in supported game lobbies to find players from other servers.\n\n**Game commands:**\n\`${prefix}game <game>\` to start a game · \`${prefix}games\` to browse games and rewards\n\n**Sparks & Shop:**\n\`${prefix}coinleaderboard\` to see the richest players · \`${prefix}shop\` to open the shop\n\n**Prefix purchases:** \`${prefix}buy role <name>\` · \`${prefix}buy colour <name>\`` : `Here are the commands in the **${selected.name}** category.\nChoose another category below to explore more.` : `Hello! It's **Sparxie**, your ultimate server management and utility bot.\nEnhance your server's security, management, and entertainment with our comprehensive toolkit.\n\n` + `🔹 **Prefix:** \`${prefix}\`\n` + `🔹 **Total Commands:** \`${HELP_COMMAND_COUNT}\`\n` + `🔹 **Type** \`${prefix}help <category>\` **to view commands by section.**\n\n` + '`<>` — Required  |  `[]` — Optional\n\n' + '**Select a category below to view commands:**\n' + formatCategoryList(applicationEmojis) + '\n\nSupport Server  |  Invite Sparxie').setFooter({ text: 'Sparxie • Fast, friendly, and made for your server' });
@@ -96,7 +72,7 @@ export function buildHelpEmbed(category?: string | null, prefix = '/', applicati
   return embed;
 }
 
-export function buildHelpMenu(category?: string | null, applicationEmojis: any[] = []): ActionRowBuilder<StringSelectMenuBuilder> {
+export function buildHelpMenu(category?: string | null, applicationEmojis: any[] = cachedApplicationEmojis): ActionRowBuilder<StringSelectMenuBuilder> {
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId(HELP_SELECT_CUSTOM_ID).setPlaceholder('Select a category...').addOptions(
     { label: 'All commands', description: 'See every Sparxie command category', value: 'all', default: !category || category === 'all' },
     ...HELP_CATEGORIES.map(c => ({ label: c.name, description: `${c.commands.length} command${c.commands.length === 1 ? '' : 's'}`, value: c.name.toLowerCase(), default: category?.toLowerCase() === c.name.toLowerCase(), emoji: emojiOption(applicationEmojis, c.name) })),
