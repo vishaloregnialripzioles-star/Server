@@ -3,10 +3,76 @@ import {
   EmbedBuilder,
   SlashCommandBuilder,
   StringSelectMenuBuilder,
+  type Guild,
 } from 'discord.js';
 import type { Command } from '../types.js';
 
 export const HELP_SELECT_CUSTOM_ID = 'sparxie_help_category';
+
+const FALLBACK_EMOJIS: Record<string, string> = {
+  Setup: '⚙️',
+  Moderation: '🔨',
+  Channels: '📢',
+  Restrictions: '🚫',
+  Utility: '🛠️',
+  Leveling: '📈',
+  Tickets: '🎫',
+  Games: '🎮',
+  Fun: '🎉',
+  Giveaways: '🎁',
+  Music: '🎵',
+};
+
+const EMOJI_KEYWORDS: Record<string, string[]> = {
+  Setup: ['setup', 'gear', 'config', 'settings'],
+  Moderation: ['mod', 'moderation', 'hammer', 'ban', 'shield'],
+  Channels: ['channel', 'megaphone', 'announce'],
+  Restrictions: ['restrict', 'block', 'ban', 'stop', 'no'],
+  Utility: ['utility', 'tool', 'wrench', 'tools'],
+  Leveling: ['level', 'xp', 'rank', 'chart', 'graph'],
+  Tickets: ['ticket', 'support'],
+  Games: ['game', 'gaming', 'controller'],
+  Fun: ['fun', 'party', 'laugh'],
+  Giveaways: ['giveaway', 'gift', 'present'],
+  Music: ['music', 'note', 'song'],
+};
+
+function hash(value: string): number {
+  let h = 0;
+  for (let i = 0; i < value.length; i++) h = ((h << 5) - h + value.charCodeAt(i)) | 0;
+  return h;
+}
+
+function getAnimatedEmoji(guild: Guild | null | undefined, category: string): any {
+  const fallback = FALLBACK_EMOJIS[category] ?? '✨';
+  const animated = guild?.emojis.cache.filter(emoji => emoji.animated) ?? new Map();
+  const list = [...animated.values()];
+  if (!list.length) return fallback;
+
+  const keywords = EMOJI_KEYWORDS[category] ?? [];
+  const matching = list.filter(emoji => {
+    const name = (emoji.name ?? '').toLowerCase();
+    return keywords.some(keyword => name.includes(keyword));
+  });
+
+  if (matching.length) return matching[Math.abs(hash(category)) % matching.length];
+  return list[Math.abs(hash(`sparxie:${category}`)) % list.length];
+}
+
+function emojiText(guild: Guild | null | undefined, category: string): string {
+  const emoji = getAnimatedEmoji(guild, category);
+  return typeof emoji === 'string' ? emoji : emoji.toString();
+}
+
+function emojiOption(guild: Guild | null | undefined, category: string): any {
+  const emoji = getAnimatedEmoji(guild, category);
+  if (typeof emoji === 'string') return emoji;
+  return {
+    id: emoji.id,
+    name: emoji.name ?? category,
+    animated: emoji.animated ?? true,
+  };
+}
 
 export const HELP_CATEGORIES: {
   name: string;
@@ -41,7 +107,7 @@ export const HELP_CATEGORIES: {
       { name: '/warn', description: 'Issue a warning to a member' },
       { name: '/warnings', description: 'View all warnings for a member' },
       { name: '/clearwarns', description: 'Clear warnings for a member' },
-      { name: '/nick', description: 'Change a member\'s nickname' },
+      { name: '/nick', description: "Change a member's nickname" },
       { name: '/temprole', description: 'Temporarily assign a role with a duration' },
     ],
   },
@@ -51,7 +117,7 @@ export const HELP_CATEGORIES: {
     commands: [
       { name: '/purge', description: 'Bulk-delete messages (up to 100)' },
       { name: '/purgebots', description: 'Delete bot messages from a channel' },
-      { name: '/lock', description: 'Lock a channel so members can\'t send messages' },
+      { name: '/lock', description: "Lock a channel so members can't send messages" },
       { name: '/unlock', description: 'Unlock a previously locked channel' },
       { name: '/slowmode', description: 'Set slowmode delay on a channel' },
     ],
@@ -70,7 +136,7 @@ export const HELP_CATEGORIES: {
     name: 'Utility',
     emoji: '🛠️',
     commands: [
-      { name: '.av [@user]', description: 'Show a user\'s full-size avatar (global + server)' },
+      { name: '.av [@user]', description: "Show a user's full-size avatar (global + server)" },
       { name: '/afk', description: 'Set your AFK status with an optional reason' },
       { name: '/remindme', description: 'Set a reminder for yourself' },
       { name: '/poll', description: 'Create a poll with up to 5 choices' },
@@ -79,7 +145,7 @@ export const HELP_CATEGORIES: {
       { name: '/userinfo', description: 'View detailed info about a member' },
       { name: '/serverinfo', description: 'View info about this server' },
       { name: '/autoresponder', description: 'Manage auto-response triggers' },
-      { name: '/setprefix', description: 'Change the bot\'s prefix command prefix' },
+      { name: '/setprefix', description: "Change the bot's prefix command prefix" },
     ],
   },
   {
@@ -160,17 +226,20 @@ export const HELP_COMMAND_COUNT = HELP_CATEGORIES.reduce(
   0,
 );
 
-function formatCategoryList(): string {
-  return HELP_CATEGORIES.map(c => `${c.emoji} **${c.name}**`).join('\n');
+function formatCategoryList(guild?: Guild | null): string {
+  return HELP_CATEGORIES
+    .map(c => `${emojiText(guild, c.name)} **${c.name}**`)
+    .join('\n');
 }
 
-export function buildHelpEmbed(category?: string | null, prefix = '/'): EmbedBuilder {
+export function buildHelpEmbed(category?: string | null, prefix = '/', guild?: Guild | null): EmbedBuilder {
   const selected = findHelpCategory(category);
   const isGames = selected?.name === 'Games';
+  const headerEmoji = selected ? emojiText(guild, selected.name) : emojiText(guild, 'Fun');
   const embed = new EmbedBuilder()
     .setColor(0x12d9d3)
-    .setAuthor({ name: '❄️ Sparxie Help Menu' })
-    .setTitle(selected ? `${selected.emoji} ${selected.name}` : '✨ Welcome to Sparxie!')
+    .setAuthor({ name: `${headerEmoji} Sparxie Help Menu` })
+    .setTitle(selected ? `${headerEmoji} ${selected.name}` : '✨ Welcome to Sparxie!')
     .setDescription(
       selected
         ? isGames
@@ -182,14 +251,14 @@ export function buildHelpEmbed(category?: string | null, prefix = '/'): EmbedBui
           `🔹 **Type** \`${prefix}help <category>\` **to view commands by section.**\n\n` +
           '`<>` — Required  |  `[]` — Optional\n\n' +
           '**Select a category below to view commands:**\n' +
-          formatCategoryList() +
+          formatCategoryList(guild) +
           '\n\nSupport Server  |  Invite Sparxie',
     )
     .setFooter({ text: 'Sparxie • Fast, friendly, and made for your server' });
 
   if (selected) {
     embed.addFields({
-      name: `${selected.emoji} ${selected.name}`,
+      name: `${headerEmoji} ${selected.name}`,
       value: selected.commands
         .map(cmd => `\`${cmd.name}\` — ${cmd.description}`)
         .join('\n'),
@@ -199,7 +268,7 @@ export function buildHelpEmbed(category?: string | null, prefix = '/'): EmbedBui
   return embed;
 }
 
-export function buildHelpMenu(category?: string | null): ActionRowBuilder<StringSelectMenuBuilder> {
+export function buildHelpMenu(category?: string | null, guild?: Guild | null): ActionRowBuilder<StringSelectMenuBuilder> {
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
     new StringSelectMenuBuilder()
       .setCustomId(HELP_SELECT_CUSTOM_ID)
@@ -216,6 +285,7 @@ export function buildHelpMenu(category?: string | null): ActionRowBuilder<String
           description: `${c.commands.length} command${c.commands.length === 1 ? '' : 's'}`,
           value: c.name.toLowerCase(),
           default: category?.toLowerCase() === c.name.toLowerCase(),
+          emoji: emojiOption(guild, c.name),
         })),
       ),
   );
@@ -243,8 +313,8 @@ export const help: Command = {
     }
 
     await interaction.editReply({
-      embeds: [buildHelpEmbed(filter)],
-      components: [buildHelpMenu(filter)],
+      embeds: [buildHelpEmbed(filter, '/', interaction.guild)],
+      components: [buildHelpMenu(filter, interaction.guild)],
     });
   },
 };
