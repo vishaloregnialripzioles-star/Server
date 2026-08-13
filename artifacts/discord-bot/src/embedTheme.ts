@@ -1,5 +1,5 @@
 import { Message, CommandInteraction, ButtonInteraction, StringSelectMenuInteraction, ModalSubmitInteraction, TextChannel, ThreadChannel, NewsChannel } from 'discord.js';
-const HELP_HEADER_EMOJI = ':Sparxie_help:';
+const HELP_HEADER_EMOJI = String.fromCharCode(60) + 'a:Sparxie_help:1537448493264936992' + String.fromCharCode(62);
 const WRAPPED = Symbol.for('sparxie.helpHeaderEmojiTheme');
 function decorateHelpEmbed(embed: any): any {
   if (!embed) return embed;
