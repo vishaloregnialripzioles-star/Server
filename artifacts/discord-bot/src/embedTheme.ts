@@ -1,5 +1,4 @@
 import {
-  EmbedBuilder,
   Message,
   CommandInteraction,
   ButtonInteraction,
@@ -58,7 +57,7 @@ export function decorateEmbedPayload(payload: any, guild: any): any {
 function wrap(proto: any, method: string): void {
   const original = proto?.[method];
   if (typeof original !== 'function' || original[WRAPPED]) return;
-  const wrapped = function (this: any, payload: any, ...rest: any[]) {
+  const wrapped: any = function (this: any, payload: any, ...rest: any[]) {
     return original.call(this, decorateEmbedPayload(payload, this.guild), ...rest);
   };
   wrapped[WRAPPED] = true;
