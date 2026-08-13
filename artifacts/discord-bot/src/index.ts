@@ -8,7 +8,6 @@ import { allCommands } from './commands/index.js';
 import { registerEvents } from './events/index.js';
 import { startLoops } from './loops.js';
 import { registerGlobalGameEvents } from './globalGameEvents.js';
-import { installAnimatedEmbedTheme } from './embedTheme.js';
 import { primeHelpApplicationEmojis } from './commands/help.js';
 
 const execAsync = promisify(exec);
@@ -78,11 +77,6 @@ for (const command of allCommands) {
 }
 
 client.on('error', err => console.error('[Discord error]', err.message));
-
-// Automatically decorate embeds sent by slash commands, prefix commands,
-// buttons/selects/modals, and normal channel sends with available animated
-// server emojis. Unicode fallbacks are used when a server has no animated emoji.
-installAnimatedEmbedTheme();
 
 registerEvents(client);
 registerGlobalGameEvents(client);
