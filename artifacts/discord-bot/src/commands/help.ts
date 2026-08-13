@@ -62,7 +62,11 @@ function getAnimatedEmoji(applicationEmojis: any[], category: string): any {
 }
 function emojiText(applicationEmojis: any[], category: string): string { const emoji = getAnimatedEmoji(applicationEmojis, category); return typeof emoji === 'string' ? emoji : emoji.toString(); }
 function emojiOption(applicationEmojis: any[], category: string): any { const emoji = getAnimatedEmoji(applicationEmojis, category); if (typeof emoji === 'string') return emoji; return { id: emoji.id, name: emoji.name ?? category, animated: emoji.animated ?? true }; }
-function helpBulletText(): string { return cachedHelpBulletEmoji ? cachedHelpBulletEmoji.toString() : '🔹'; }
+function formatApplicationEmoji(emoji: any): string {
+  if (!emoji?.id || !emoji?.name) return '🔹';
+  return emoji.animated ? `<a:${emoji.name}:${emoji.id}>` : `<:${emoji.name}:${emoji.id}>`;
+}
+function helpBulletText(): string { return formatApplicationEmoji(cachedHelpBulletEmoji); }
 
 export const HELP_CATEGORIES: { name: string; emoji: string; commands: { name: string; description: string }[] }[] = [
   { name: 'Setup', emoji: '⚙️', commands: [
