@@ -1,46 +1,10 @@
-import { Client, GatewayIntentBits, Collection, Partials, REST, Routes } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
 import { createServer } from 'node:http';
-import { existsSync, mkdirSync, chmodSync } from 'node:fs';
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
-
-const execAsync = promisify(exec);
-
-async function ensureYtDlp(): Promise<void> {
-  const candidates = [
-    '/home/runner/.local/bin/yt-dlp',
-    '/home/user/.local/bin/yt-dlp',
-    '/app/.local/bin/yt-dlp',
-    '/tmp/yt-dlp',
-  ];
-  const found = candidates.find(p => existsSync(p));
-  if (found) {
-    console.log(`✅ yt-dlp found at ${found}`);
-    return;
-  }
-  const target = (() => {
-    for (const p of candidates) {
-      try {
-        const dir = p.substring(0, p.lastIndexOf('/'));
-        mkdirSync(dir, { recursive: true });
-        return p;
-      } catch {}
-    }
-    return '/tmp/yt-dlp';
-  })();
-  console.log(`⬇️ Downloading yt-dlp to ${target}...`);
-  try {
-    await execAsync(`curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "${target}"`);
-    chmodSync(target, 0o755);
-    const { stdout } = await execAsync(`"${target}" --version`);
-    console.log(`✅ yt-dlp ${stdout.trim()} installed at ${target}`);
-  } catch (err) {
-    console.error('⚠️ Could not install yt-dlp — music commands will not work:', err);
-  }
-}
 
 const port = process.env.PORT ?? 3000;
-createServer((_, res) => res.end('OK')).listen(port);
+createServer((_, res) => res.end('OK')).listen(port, '0.0.0.0', () => {
+  console.log(`🌐 Health server listening on ${port}`);
+});
 
 const token = process.env.DISCORD_BOT_TOKEN;
 if (!token) throw new Error('DISCORD_BOT_TOKEN is not set');
@@ -60,47 +24,54 @@ const client = new Client({
 });
 
 client.commands = new Collection();
-client.on('error', err => console.error('[Discord error]', err.message));
+client.on('error', err => console.error('[Discord error]', err));
+client.on('warn', msg => console.warn('[Discord warn]', msg));
 
-// CRITICAL: log into Discord before loading command modules. Some music modules
-// perform network work during import, which previously delayed login long enough
-// for Render to replace the instance.
+// Discord login is the first application task. Nothing from the command/music
+// tree is imported until the gateway connection is established.
 try {
   await client.login(token);
-  console.log(`✅ Logged in as ${client.user?.tag}`);
+  console.log(`✅ DISCORD ONLINE: logged in as ${client.user?.tag}`);
 } catch (err) {
   console.error('[Discord login failed]', err);
   process.exit(1);
 }
 
-// Everything below is intentionally loaded only after Discord is online.
-const [{ allCommands }, { registerEvents }, { startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([
-  import('./commands/index.js'),
-  import('./events/index.js'),
-  import('./loops.js'),
-  import('./globalGameEvents.js'),
-  import('./commands/help.js'),
-]);
-
-for (const command of allCommands) client.commands.set(command.data.name, command);
-registerEvents(client);
-registerGlobalGameEvents(client);
-startLoops(client);
-
-void ensureYtDlp();
-void primeHelpApplicationEmojis(client);
-
+// Load the rest only after the bot is online. If an optional command module
+// fails, keep the Discord connection alive instead of killing the whole bot.
 try {
-  const guildId = process.env.DISCORD_GUILD_ID?.trim();
-  const commandData = allCommands.map(command => command.data.toJSON());
-  const rest = new REST({ version: '10' }).setToken(token);
-  if (guildId && /^\d+$/.test(guildId)) {
-    await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), { body: commandData });
-    console.log(`✅ Synced ${commandData.length} slash commands to guild ${guildId}`);
-  } else {
-    await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData });
-    console.log(`✅ Synced ${commandData.length} global slash commands`);
+  const [{ allCommands }, { registerEvents }, { startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([
+    import('./commands/index.js'),
+    import('./events/index.js'),
+    import('./loops.js'),
+    import('./globalGameEvents.js'),
+    import('./commands/help.js'),
+  ]);
+
+  for (const command of allCommands) client.commands.set(command.data.name, command);
+  registerEvents(client);
+  registerGlobalGameEvents(client);
+  startLoops(client);
+  void primeHelpApplicationEmojis(client).catch(err => console.error('[Help emoji cache]', err));
+
+  console.log(`✅ Loaded ${client.commands.size} commands`);
+
+  // Slash sync is deliberately best-effort; a REST/rate-limit failure must not
+  // disconnect an otherwise healthy Discord gateway session.
+  try {
+    const { REST, Routes } = await import('discord.js');
+    const guildId = process.env.DISCORD_GUILD_ID?.trim();
+    const commandData = allCommands.map(command => command.data.toJSON());
+    const rest = new REST({ version: '10' }).setToken(token);
+    if (guildId && /^\d+$/.test(guildId)) {
+      await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), { body: commandData });
+    } else {
+      await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData });
+    }
+    console.log(`✅ Synced ${commandData.length} slash commands`);
+  } catch (err) {
+    console.error('[Slash sync skipped]', err);
   }
 } catch (err) {
-  console.error('[Slash command sync error]', err);
+  console.error('[Command startup failed — Discord will remain online]', err);
 }
