@@ -27,51 +27,54 @@ client.commands = new Collection();
 client.on('error', err => console.error('[Discord error]', err));
 client.on('warn', msg => console.warn('[Discord warn]', msg));
 
-// Discord login is the first application task. Nothing from the command/music
-// tree is imported until the gateway connection is established.
-try {
-  await client.login(token);
+let startupFinished = false;
+
+// Do not await client.login(): Discord's gateway connection is event-driven.
+// Waiting for the login promise can make Render think startup is stuck.
+client.once('ready', async () => {
   console.log(`✅ DISCORD ONLINE: logged in as ${client.user?.tag}`);
-} catch (err) {
-  console.error('[Discord login failed]', err);
-  process.exit(1);
-}
+  if (startupFinished) return;
+  startupFinished = true;
 
-// Load the rest only after the bot is online. If an optional command module
-// fails, keep the Discord connection alive instead of killing the whole bot.
-try {
-  const [{ allCommands }, { registerEvents }, { startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([
-    import('./commands/index.js'),
-    import('./events/index.js'),
-    import('./loops.js'),
-    import('./globalGameEvents.js'),
-    import('./commands/help.js'),
-  ]);
-
-  for (const command of allCommands) client.commands.set(command.data.name, command);
-  registerEvents(client);
-  registerGlobalGameEvents(client);
-  startLoops(client);
-  void primeHelpApplicationEmojis(client).catch(err => console.error('[Help emoji cache]', err));
-
-  console.log(`✅ Loaded ${client.commands.size} commands`);
-
-  // Slash sync is deliberately best-effort; a REST/rate-limit failure must not
-  // disconnect an otherwise healthy Discord gateway session.
+  // Load commands/events only after the gateway is confirmed ready.
   try {
-    const { REST, Routes } = await import('discord.js');
-    const guildId = process.env.DISCORD_GUILD_ID?.trim();
-    const commandData = allCommands.map(command => command.data.toJSON());
-    const rest = new REST({ version: '10' }).setToken(token);
-    if (guildId && /^\d+$/.test(guildId)) {
-      await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), { body: commandData });
-    } else {
-      await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData });
+    const [{ allCommands }, { registerEvents }, { startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([
+      import('./commands/index.js'),
+      import('./events/index.js'),
+      import('./loops.js'),
+      import('./globalGameEvents.js'),
+      import('./commands/help.js'),
+    ]);
+
+    for (const command of allCommands) client.commands.set(command.data.name, command);
+    registerEvents(client);
+    registerGlobalGameEvents(client);
+    startLoops(client);
+    void primeHelpApplicationEmojis(client).catch(err => console.error('[Help emoji cache]', err));
+
+    console.log(`✅ Loaded ${client.commands.size} commands`);
+
+    // Slash sync is best-effort; a REST/rate-limit failure must never disconnect the bot.
+    try {
+      const { REST, Routes } = await import('discord.js');
+      const guildId = process.env.DISCORD_GUILD_ID?.trim();
+      const commandData = allCommands.map(command => command.data.toJSON());
+      const rest = new REST({ version: '10' }).setToken(token);
+      if (guildId && /^\d+$/.test(guildId)) {
+        await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), { body: commandData });
+      } else {
+        await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData });
+      }
+      console.log(`✅ Synced ${commandData.length} slash commands`);
+    } catch (err) {
+      console.error('[Slash sync skipped]', err);
     }
-    console.log(`✅ Synced ${commandData.length} slash commands`);
   } catch (err) {
-    console.error('[Slash sync skipped]', err);
+    console.error('[Command startup failed — Discord remains online]', err);
   }
-} catch (err) {
-  console.error('[Command startup failed — Discord will remain online]', err);
-}
+});
+
+client.login(token).catch(err => {
+  console.error('[Discord login failed]', err);
+  // Keep the Render process alive long enough for the error to be visible.
+});
