@@ -17,18 +17,39 @@ const EMOJI_KEYWORDS: Record<string, string[]> = {
   Setup: ['setup', 'gear', 'config', 'settings', 'wrench'], Moderation: ['mod', 'moderation', 'hammer', 'ban', 'shield'], Channels: ['channel', 'megaphone', 'announce'], Restrictions: ['restrict', 'block', 'ban', 'stop', 'no'], Utility: ['utility', 'tool', 'wrench', 'tools'], Leveling: ['level', 'xp', 'rank', 'chart', 'graph'], Tickets: ['ticket', 'support'], Games: ['game', 'gaming', 'controller'], Fun: ['fun', 'party', 'laugh', 'joy'], Giveaways: ['giveaway', 'gift', 'present'], Music: ['music', 'note', 'song'],
 };
 
+let cachedApplicationEmojis: any[] = [];
+
 function hash(value: string): number { let h = 0; for (let i = 0; i < value.length; i++) h = ((h << 5) - h + value.charCodeAt(i)) | 0; return h; }
 
 export async function getHelpApplicationEmojis(client: Client): Promise<any[]> {
-  try { const manager = client.application?.emojis; if (!manager) return []; const emojis = await manager.fetch(); return [...emojis.values()].filter(emoji => emoji.animated); } catch { return []; }
+  try {
+    const manager = client.application?.emojis;
+    if (!manager) return cachedApplicationEmojis;
+    const emojis = await manager.fetch();
+    cachedApplicationEmojis = [...emojis.values()].filter(emoji => emoji.animated);
+    return cachedApplicationEmojis;
+  } catch {
+    return cachedApplicationEmojis;
+  }
+}
+
+// Prime the application-emoji cache once at startup so prefix commands can use
+// the exact same animated application emojis as slash commands.
+export async function primeHelpApplicationEmojis(client: Client): Promise<void> {
+  await getHelpApplicationEmojis(client);
+}
+
+function resolveApplicationEmojis(applicationEmojis: any[]): any[] {
+  return applicationEmojis.length ? applicationEmojis : cachedApplicationEmojis;
 }
 
 function getAnimatedEmoji(applicationEmojis: any[], category: string): any {
-  const fallback = FALLBACK_EMOJIS[category] ?? '✨'; if (!applicationEmojis.length) return fallback;
+  const emojis = resolveApplicationEmojis(applicationEmojis);
+  const fallback = FALLBACK_EMOJIS[category] ?? '✨'; if (!emojis.length) return fallback;
   const keywords = EMOJI_KEYWORDS[category] ?? [];
-  const matching = applicationEmojis.filter(emoji => { const name = (emoji.name ?? '').toLowerCase(); return keywords.some(keyword => name.includes(keyword)); });
+  const matching = emojis.filter(emoji => { const name = (emoji.name ?? '').toLowerCase(); return keywords.some(keyword => name.includes(keyword)); });
   if (matching.length) return matching[Math.abs(hash(category)) % matching.length];
-  return applicationEmojis[Math.abs(hash(`sparxie:${category}`)) % applicationEmojis.length];
+  return emojis[Math.abs(hash(`sparxie:${category}`)) % emojis.length];
 }
 function emojiText(applicationEmojis: any[], category: string): string { const emoji = getAnimatedEmoji(applicationEmojis, category); return typeof emoji === 'string' ? emoji : emoji.toString(); }
 function emojiOption(applicationEmojis: any[], category: string): any { const emoji = getAnimatedEmoji(applicationEmojis, category); if (typeof emoji === 'string') return emoji; return { id: emoji.id, name: emoji.name ?? category, animated: emoji.animated ?? true }; }
