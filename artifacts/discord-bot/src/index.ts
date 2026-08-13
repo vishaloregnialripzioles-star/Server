@@ -3,16 +3,9 @@ import { createServer } from 'node:http';
 import { existsSync, mkdirSync, chmodSync } from 'node:fs';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { Command } from './types.js';
-import { allCommands } from './commands/index.js';
-import { registerEvents } from './events/index.js';
-import { startLoops } from './loops.js';
-import { registerGlobalGameEvents } from './globalGameEvents.js';
-import { primeHelpApplicationEmojis } from './commands/help.js';
 
 const execAsync = promisify(exec);
 
-// ── Auto-install yt-dlp if missing (needed for music streaming) ──────────────
 async function ensureYtDlp(): Promise<void> {
   const candidates = [
     '/home/runner/.local/bin/yt-dlp',
@@ -31,7 +24,7 @@ async function ensureYtDlp(): Promise<void> {
         const dir = p.substring(0, p.lastIndexOf('/'));
         mkdirSync(dir, { recursive: true });
         return p;
-      } catch { /* try next */ }
+      } catch {}
     }
     return '/tmp/yt-dlp';
   })();
@@ -66,22 +59,36 @@ const client = new Client({
   partials: [Partials.Message, Partials.Reaction, Partials.Channel],
 });
 
-client.commands = new Collection<string, Command>();
-for (const command of allCommands) client.commands.set(command.data.name, command);
-
+client.commands = new Collection();
 client.on('error', err => console.error('[Discord error]', err.message));
+
+// CRITICAL: log into Discord before loading command modules. Some music modules
+// perform network work during import, which previously delayed login long enough
+// for Render to replace the instance.
+try {
+  await client.login(token);
+  console.log(`✅ Logged in as ${client.user?.tag}`);
+} catch (err) {
+  console.error('[Discord login failed]', err);
+  process.exit(1);
+}
+
+// Everything below is intentionally loaded only after Discord is online.
+const [{ allCommands }, { registerEvents }, { startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([
+  import('./commands/index.js'),
+  import('./events/index.js'),
+  import('./loops.js'),
+  import('./globalGameEvents.js'),
+  import('./commands/help.js'),
+]);
+
+for (const command of allCommands) client.commands.set(command.data.name, command);
 registerEvents(client);
 registerGlobalGameEvents(client);
 startLoops(client);
 
-// Log in immediately so Discord presence comes online without waiting for yt-dlp.
-await client.login(token);
-console.log(`✅ Logged in as ${client.user?.tag}`);
-
-// Non-blocking: music dependency can finish installing after the bot is online.
 void ensureYtDlp();
-
-await primeHelpApplicationEmojis(client);
+void primeHelpApplicationEmojis(client);
 
 try {
   const guildId = process.env.DISCORD_GUILD_ID?.trim();
