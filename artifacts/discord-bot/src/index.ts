@@ -9,6 +9,7 @@ import { registerEvents } from './events/index.js';
 import { startLoops } from './loops.js';
 import { registerGlobalGameEvents } from './globalGameEvents.js';
 import { installAnimatedEmbedTheme } from './embedTheme.js';
+import { primeHelpApplicationEmojis } from './commands/help.js';
 
 const execAsync = promisify(exec);
 
@@ -88,6 +89,10 @@ registerGlobalGameEvents(client);
 startLoops(client);
 
 await client.login(token);
+
+// Cache Sparxie's application-owned animated emojis once the client is logged in.
+// Prefix help uses this cache too, so .help and /help render the same emojis.
+await primeHelpApplicationEmojis(client);
 
 try {
   const guildId = process.env.DISCORD_GUILD_ID?.trim();
