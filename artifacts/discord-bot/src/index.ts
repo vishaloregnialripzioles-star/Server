@@ -20,13 +20,11 @@ async function ensureYtDlp(): Promise<void> {
     '/app/.local/bin/yt-dlp',
     '/tmp/yt-dlp',
   ];
-
   const found = candidates.find(p => existsSync(p));
   if (found) {
     console.log(`✅ yt-dlp found at ${found}`);
     return;
   }
-
   const target = (() => {
     for (const p of candidates) {
       try {
@@ -37,15 +35,14 @@ async function ensureYtDlp(): Promise<void> {
     }
     return '/tmp/yt-dlp';
   })();
-
-  console.log(`⬇️  Downloading yt-dlp to ${target}...`);
+  console.log(`⬇️ Downloading yt-dlp to ${target}...`);
   try {
     await execAsync(`curl -sL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o "${target}"`);
     chmodSync(target, 0o755);
     const { stdout } = await execAsync(`"${target}" --version`);
     console.log(`✅ yt-dlp ${stdout.trim()} installed at ${target}`);
   } catch (err) {
-    console.error('⚠️  Could not install yt-dlp — music commands will not work:', err);
+    console.error('⚠️ Could not install yt-dlp — music commands will not work:', err);
   }
 }
 
@@ -54,8 +51,6 @@ createServer((_, res) => res.end('OK')).listen(port);
 
 const token = process.env.DISCORD_BOT_TOKEN;
 if (!token) throw new Error('DISCORD_BOT_TOKEN is not set');
-
-await ensureYtDlp();
 
 const client = new Client({
   intents: [
@@ -72,36 +67,31 @@ const client = new Client({
 });
 
 client.commands = new Collection<string, Command>();
-for (const command of allCommands) {
-  client.commands.set(command.data.name, command);
-}
+for (const command of allCommands) client.commands.set(command.data.name, command);
 
 client.on('error', err => console.error('[Discord error]', err.message));
-
 registerEvents(client);
 registerGlobalGameEvents(client);
 startLoops(client);
 
+// Log in immediately so Discord presence comes online without waiting for yt-dlp.
 await client.login(token);
+console.log(`✅ Logged in as ${client.user?.tag}`);
 
-// Cache Sparxie's application-owned animated emojis once the client is logged in.
-// Prefix help uses this cache too, so .help and /help render the same emojis.
+// Non-blocking: music dependency can finish installing after the bot is online.
+void ensureYtDlp();
+
 await primeHelpApplicationEmojis(client);
 
 try {
   const guildId = process.env.DISCORD_GUILD_ID?.trim();
   const commandData = allCommands.map(command => command.data.toJSON());
   const rest = new REST({ version: '10' }).setToken(token);
-
   if (guildId && /^\d+$/.test(guildId)) {
-    await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), {
-      body: commandData,
-    });
+    await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), { body: commandData });
     console.log(`✅ Synced ${commandData.length} slash commands to guild ${guildId}`);
   } else {
-    await rest.put(Routes.applicationCommands(client.user!.id), {
-      body: commandData,
-    });
+    await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData });
     console.log(`✅ Synced ${commandData.length} global slash commands`);
   }
 } catch (err) {
