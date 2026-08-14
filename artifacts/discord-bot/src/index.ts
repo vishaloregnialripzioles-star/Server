@@ -1,5 +1,6 @@
 import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
 import { createServer } from 'node:http';
+import { registerEvents } from './events/index.js';
 
 const port = Number(process.env.PORT ?? 3000);
 createServer((_, res) => {
@@ -10,9 +11,6 @@ createServer((_, res) => {
 const token = process.env.DISCORD_BOT_TOKEN?.trim();
 if (!token) throw new Error('DISCORD_BOT_TOKEN is not set');
 
-// Keep the gateway client reliable for both slash commands and the existing
-// prefix/message/voice features. The command collection is required by the
-// interaction handler to resolve every slash command.
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -35,27 +33,28 @@ client.on('debug', message => {
   }
 });
 
+// Register Discord event listeners BEFORE login/ready. Previously these were
+// installed inside the ready callback, so any command-module import failure
+// could leave the bot visibly online while slash and prefix commands had no
+// listeners at all.
+registerEvents(client);
+
 client.once('ready', async () => {
   console.log(`✅ DISCORD ONLINE: logged in as ${client.user?.tag}`);
 
-  // Load the command/event modules only after Discord is connected so a bad
-  // optional module cannot prevent the bot from coming online.
   try {
-    const [{ allCommands }, { registerEvents }, { startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([
+    const [{ allCommands }, { startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([
       import('./commands/index.js'),
-      import('./events/index.js'),
       import('./loops.js'),
       import('./globalGameEvents.js'),
       import('./commands/help.js'),
     ]);
 
-    // Restore the command registry used by interactionCreate.ts.
     client.commands.clear();
     for (const command of allCommands) {
       client.commands.set(command.data.name, command);
     }
 
-    registerEvents(client);
     registerGlobalGameEvents(client);
     startLoops(client);
     void primeHelpApplicationEmojis(client).catch(err => console.error('[Help emoji cache]', err));
@@ -75,10 +74,10 @@ client.once('ready', async () => {
         console.log(`✅ Synced ${commandData.length} global slash commands`);
       }
     } catch (err) {
-      console.error('[Slash sync skipped]', err);
+      console.error('[Slash sync failed]', err);
     }
   } catch (err) {
-    console.error('[Command startup failed — Discord remains online]', err);
+    console.error('[Command startup failed — event listeners remain active]', err);
   }
 });
 
@@ -96,6 +95,4 @@ loginPromise
   .catch(err => {
     clearTimeout(timeout);
     console.error('[Discord login failed]', err);
-    // Do not crash Render with an unhandled rejection; the explicit error above
-    // makes the failure visible in logs.
   });
