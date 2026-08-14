@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm dlx tsx src/index.ts",
-    "start": "pnpm dlx tsx src/index.ts",
-    "deploy": "pnpm dlx tsx src/deploy.ts",
-    "typecheck": "pnpm dlx tsc -p tsconfig.json --noEmit"
+    "dev": "pnpm install --filter @workspace/discord-bot... --no-frozen-lockfile && pnpm exec tsx src/index.ts",
+    "start": "pnpm exec tsx src/index.ts",
+    "deploy": "pnpm install --filter @workspace/discord-bot... --no-frozen-lockfile && pnpm exec tsx src/deploy.ts",
+    "typecheck": "pnpm exec tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@discordjs/voice": "^0.19.2",
