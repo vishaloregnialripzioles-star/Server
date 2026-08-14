@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
 import { createServer } from 'node:http';
 
 const port = Number(process.env.PORT ?? 3000);
@@ -10,11 +10,24 @@ createServer((_, res) => {
 const token = process.env.DISCORD_BOT_TOKEN?.trim();
 if (!token) throw new Error('DISCORD_BOT_TOKEN is not set');
 
-// Keep the gateway client minimal during startup. This removes every optional
-// startup dependency so we can establish the Discord connection first.
+// Keep the gateway client reliable for both slash commands and the existing
+// prefix/message/voice features. The command collection is required by the
+// interaction handler to resolve every slash command.
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.DirectMessages,
+  ],
+  partials: [Partials.Message, Partials.Reaction, Partials.Channel],
 });
+
+client.commands = new Collection();
 
 client.on('debug', message => {
   if (/identify|gateway|ready|heartbeat|resume/i.test(message)) {
@@ -25,8 +38,8 @@ client.on('debug', message => {
 client.once('ready', async () => {
   console.log(`✅ DISCORD ONLINE: logged in as ${client.user?.tag}`);
 
-  // Only after Discord is ready do we load the rest of the bot. Any optional
-  // command/module failure is caught so it cannot take the gateway offline.
+  // Load the command/event modules only after Discord is connected so a bad
+  // optional module cannot prevent the bot from coming online.
   try {
     const [{ allCommands }, { registerEvents }, { startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([
       import('./commands/index.js'),
@@ -36,18 +49,18 @@ client.once('ready', async () => {
       import('./commands/help.js'),
     ]);
 
-    // Restore the additional intents required by existing prefix/message and
-    // voice features on the next client connection. Command registration is
-    // still best-effort and cannot disconnect an already-ready client.
+    // Restore the command registry used by interactionCreate.ts.
+    client.commands.clear();
     for (const command of allCommands) {
-      // Commands are registered by the existing event/command infrastructure.
+      client.commands.set(command.data.name, command);
     }
-    registerEvents(client as any);
-    registerGlobalGameEvents(client as any);
-    startLoops(client as any);
-    void primeHelpApplicationEmojis(client as any).catch(err => console.error('[Help emoji cache]', err));
 
-    console.log(`✅ Command modules loaded (${allCommands.length})`);
+    registerEvents(client);
+    registerGlobalGameEvents(client);
+    startLoops(client);
+    void primeHelpApplicationEmojis(client).catch(err => console.error('[Help emoji cache]', err));
+
+    console.log(`✅ Loaded ${client.commands.size} commands`);
 
     try {
       const { REST, Routes } = await import('discord.js');
@@ -56,10 +69,11 @@ client.once('ready', async () => {
       const rest = new REST({ version: '10' }).setToken(token);
       if (guildId && /^\d+$/.test(guildId)) {
         await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), { body: commandData });
+        console.log(`✅ Synced ${commandData.length} slash commands to guild ${guildId}`);
       } else {
         await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData });
+        console.log(`✅ Synced ${commandData.length} global slash commands`);
       }
-      console.log(`✅ Synced ${commandData.length} slash commands`);
     } catch (err) {
       console.error('[Slash sync skipped]', err);
     }
