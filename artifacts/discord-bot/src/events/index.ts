@@ -1,13 +1,5 @@
 import type { Client } from 'discord.js';
 import { Events } from 'discord.js';
-import { handleReady } from './ready.js';
-import { handleInteractionCreate } from './interactionCreate.js';
-import { handleMessageCreate } from './messageCreate.js';
-import { handleMessageDelete } from './messageDelete.js';
-import { handleMessageUpdate } from './messageUpdate.js';
-import { handleMessageReactionAdd } from './messageReactionAdd.js';
-import { handleGuildMemberAdd } from './guildMemberAdd.js';
-import { handleAntiNukeAudit } from './antiNuke.js';
 
 function safe(name: string, fn: (...args: any[]) => any) {
   return (...args: any[]) => {
@@ -19,13 +11,48 @@ function safe(name: string, fn: (...args: any[]) => any) {
   };
 }
 
+// Register the gateway listeners immediately. The actual feature modules are
+// loaded lazily so a bad/optional command module can never prevent Discord
+// events from being received. This also guarantees prefix messages and slash
+// interactions are attached before the first interaction arrives.
 export function registerEvents(client: Client): void {
-  client.once(Events.ClientReady, safe('ready', handleReady));
-  client.on(Events.InteractionCreate, safe('interactionCreate', handleInteractionCreate));
-  client.on(Events.MessageCreate, safe('messageCreate', handleMessageCreate));
-  client.on(Events.MessageDelete, safe('messageDelete', handleMessageDelete));
-  client.on(Events.MessageUpdate, safe('messageUpdate', handleMessageUpdate));
-  client.on(Events.MessageReactionAdd, safe('messageReactionAdd', handleMessageReactionAdd));
-  client.on(Events.GuildMemberAdd, safe('guildMemberAdd', handleGuildMemberAdd));
-  client.on(Events.GuildAuditLogEntryCreate, safe('guildAuditLogEntryCreate', handleAntiNukeAudit));
+  client.once(Events.ClientReady, safe('ready', async (...args: any[]) => {
+    const { handleReady } = await import('./ready.js');
+    return handleReady(...args);
+  }));
+
+  client.on(Events.InteractionCreate, safe('interactionCreate', async (...args: any[]) => {
+    const { handleInteractionCreate } = await import('./interactionCreate.js');
+    return handleInteractionCreate(...args);
+  }));
+
+  client.on(Events.MessageCreate, safe('messageCreate', async (...args: any[]) => {
+    const { handleMessageCreate } = await import('./messageCreate.js');
+    return handleMessageCreate(...args);
+  }));
+
+  client.on(Events.MessageDelete, safe('messageDelete', async (...args: any[]) => {
+    const { handleMessageDelete } = await import('./messageDelete.js');
+    return handleMessageDelete(...args);
+  }));
+
+  client.on(Events.MessageUpdate, safe('messageUpdate', async (...args: any[]) => {
+    const { handleMessageUpdate } = await import('./messageUpdate.js');
+    return handleMessageUpdate(...args);
+  }));
+
+  client.on(Events.MessageReactionAdd, safe('messageReactionAdd', async (...args: any[]) => {
+    const { handleMessageReactionAdd } = await import('./messageReactionAdd.js');
+    return handleMessageReactionAdd(...args);
+  }));
+
+  client.on(Events.GuildMemberAdd, safe('guildMemberAdd', async (...args: any[]) => {
+    const { handleGuildMemberAdd } = await import('./guildMemberAdd.js');
+    return handleGuildMemberAdd(...args);
+  }));
+
+  client.on(Events.GuildAuditLogEntryCreate, safe('guildAuditLogEntryCreate', async (...args: any[]) => {
+    const { handleAntiNukeAudit } = await import('./antiNuke.js');
+    return handleAntiNukeAudit(...args);
+  }));
 }
