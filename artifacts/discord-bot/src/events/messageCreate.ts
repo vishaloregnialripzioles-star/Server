@@ -9,6 +9,18 @@ const XP_COOLDOWN_MS = 60_000;
 const XP_MIN = 15;
 const XP_MAX = 25;
 
+// Match a trigger as a complete word/phrase, not as a substring inside another word.
+// Example: trigger "hi" matches "hi" and "hi how are you", but not "this".
+function containsAutoresponderTrigger(content: string, trigger: string): boolean {
+  const normalizedContent = content.toLocaleLowerCase();
+  const normalizedTrigger = trigger.toLocaleLowerCase().trim();
+  if (!normalizedTrigger) return false;
+
+  const escapedTrigger = normalizedTrigger.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`(^|[^\\p{L}\\p{N}_])${escapedTrigger}($|[^\\p{L}\\p{N}_])`, 'u');
+  return pattern.test(normalizedContent);
+}
+
 export async function handleMessageCreate(message: Message): Promise<void> {
   if (message.author.bot || !message.guild || !message.member) return;
 
@@ -67,9 +79,8 @@ export async function handleMessageCreate(message: Message): Promise<void> {
   // ── Autoresponder ───────────────────────────────────────────────
   const freshData = loadGuild(guildId);
   if (freshData.autoResponders.length > 0) {
-    const lowerContent = message.content.toLowerCase();
     for (const ar of freshData.autoResponders) {
-      if (lowerContent.includes(ar.trigger.toLowerCase())) {
+      if (containsAutoresponderTrigger(message.content, ar.trigger)) {
         await message.reply({ content: ar.response }).catch(() => undefined);
         break;
       }
