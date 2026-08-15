@@ -10,69 +10,41 @@ import type { Command } from '../types.js';
 export const HELP_SELECT_CUSTOM_ID = 'sparxie_help_category';
 
 export const HELP_CATEGORIES = [
-  'Setup',
-  'Moderation',
-  'Channels',
-  'Restrictions',
-  'Utility',
-  'Leveling',
-  'Tickets',
-  'Games',
-  'Fun',
-  'Giveaways',
-  'Music',
+  'Setup', 'Moderation', 'Channels', 'Restrictions', 'Utility', 'Leveling',
+  'Tickets', 'Games', 'Fun', 'Giveaways', 'Music',
 ] as const;
 
 type HelpCategory = typeof HELP_CATEGORIES[number];
 
-// Keep the Sparxie help layout while mapping every command to its category.
 const CATEGORY_BY_COMMAND: Record<string, HelpCategory> = {
   setup: 'Setup', setprefix: 'Setup', welcome: 'Setup', greet: 'Setup',
-  ban: 'Moderation', kick: 'Moderation', mute: 'Moderation', unmute: 'Moderation',
-  timeout: 'Moderation', warn: 'Moderation', warnings: 'Moderation', clearwarns: 'Moderation',
-  purge: 'Moderation', purgebots: 'Moderation', nick: 'Moderation', createrole: 'Moderation',
-  roleassign: 'Moderation', antinuke: 'Moderation', extraowner: 'Moderation', recovery: 'Moderation',
-  lock: 'Restrictions', unlock: 'Restrictions', slowmode: 'Restrictions', chatban: 'Restrictions',
-  unchatban: 'Restrictions', jail: 'Restrictions', unjail: 'Restrictions',
+  ban: 'Moderation', kick: 'Moderation', mute: 'Moderation', unmute: 'Moderation', timeout: 'Moderation',
+  warn: 'Moderation', warnings: 'Moderation', clearwarns: 'Moderation', purge: 'Moderation', purgebots: 'Moderation',
+  nick: 'Moderation', createrole: 'Moderation', roleassign: 'Moderation', antinuke: 'Moderation', extraowner: 'Moderation', recovery: 'Moderation',
+  lock: 'Restrictions', unlock: 'Restrictions', slowmode: 'Restrictions', chatban: 'Restrictions', unchatban: 'Restrictions', jail: 'Restrictions', unjail: 'Restrictions',
   poll: 'Channels', embed: 'Channels',
-  afk: 'Utility', remindme: 'Utility', snipe: 'Utility', editsnipe: 'Utility', userinfo: 'Utility',
-  serverinfo: 'Utility', temprole: 'Utility', autoresponder: 'Utility', help: 'Utility',
+  afk: 'Utility', remindme: 'Utility', snipe: 'Utility', editsnipe: 'Utility', userinfo: 'Utility', serverinfo: 'Utility', temprole: 'Utility', autoresponder: 'Utility', help: 'Utility',
   rank: 'Leveling', leaderboard: 'Leveling', levelconfig: 'Leveling',
   ticket: 'Tickets', closeticket: 'Tickets', ticketpanel: 'Tickets',
-  gamepolicy: 'Games', 'game-policy': 'Games', games: 'Games', sparks: 'Games',
-  coinleaderboard: 'Games', shop: 'Games',
+  gamepolicy: 'Games', 'game-policy': 'Games', games: 'Games', sparks: 'Games', coinleaderboard: 'Games', shop: 'Games',
   roast: 'Fun', gay: 'Fun', pro: 'Fun', noob: 'Fun', ship: 'Fun',
   giveaway: 'Giveaways', music: 'Music',
 };
 
 const FALLBACK_EMOJIS: Record<HelpCategory, string> = {
-  Setup: '⚙️', Moderation: '🔨', Channels: '📢', Restrictions: '🚫', Utility: '🛠️',
-  Leveling: '📈', Tickets: '🎫', Games: '🎮', Fun: '🎉', Giveaways: '🎁', Music: '🎵',
+  Setup: '⚙️', Moderation: '🔨', Channels: '📢', Restrictions: '🚫', Utility: '🛠️', Leveling: '📈',
+  Tickets: '🎫', Games: '🎮', Fun: '🎉', Giveaways: '🎁', Music: '🎵',
 };
 
-// These are the animated emojis uploaded to the Sparxie application.
-// Matching is case-insensitive so names such as "sparxie_mod" work too.
+// Primary names. The resolver also accepts the "sparkxie_" spelling used by the uploaded emoji names.
 const APPLICATION_EMOJI_NAMES: Record<HelpCategory, string> = {
-  Setup: 'sparxie_setup',
-  Moderation: 'sparxie_mod',
-  Channels: 'sparxie_channels',
-  Restrictions: 'sparxie_restrictions',
-  Utility: 'sparxie_utility',
-  Leveling: 'sparxie_level',
-  Tickets: 'sparxie_ticket',
-  Games: 'sparxie_games',
-  Fun: 'sparxie_fun',
-  Giveaways: 'sparxie_giveaway',
-  Music: 'sparxie_music',
+  Setup: 'sparxie_setup', Moderation: 'sparxie_mod', Channels: 'sparxie_channels', Restrictions: 'sparxie_restrictions',
+  Utility: 'sparxie_utility', Leveling: 'sparxie_level', Tickets: 'sparxie_ticket', Games: 'sparxie_games',
+  Fun: 'sparxie_fun', Giveaways: 'sparxie_giveaway', Music: 'sparxie_music',
 };
 
 const HELP_BULLET_EMOJI_NAME = 'sparxie_help';
 
-/**
- * Application emojis are not guaranteed to be in the cache after login.
- * Fetch them once during startup so the help embed and select menu can use
- * the actual uploaded animated emojis instead of falling back to Unicode.
- */
 export async function primeHelpApplicationEmojis(client: Client): Promise<void> {
   if (!client.application?.emojis) return;
   try {
@@ -83,26 +55,26 @@ export async function primeHelpApplicationEmojis(client: Client): Promise<void> 
   }
 }
 
+function normalizeEmojiName(value: string): string {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 function findApplicationEmoji(client: Client, name: string): string | null {
   const emojis = client.application?.emojis?.cache;
   if (!emojis) return null;
-  const wanted = name.trim().toLowerCase();
-  const emoji = emojis.find(e => e.name?.trim().toLowerCase() === wanted);
+  const wanted = normalizeEmojiName(name);
+  const aliases = new Set([wanted, wanted.replace(/^sparxie/, 'sparkxie'), wanted.replace(/^sparkxie/, 'sparxie')]);
+  const emoji = emojis.find(e => e.name ? aliases.has(normalizeEmojiName(e.name)) : false);
   if (!emoji?.id || !emoji.name) return null;
   return `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>`;
 }
 
 export function getHelpEmoji(client?: Client): string {
-  if (client) return findApplicationEmoji(client, HELP_BULLET_EMOJI_NAME) ?? '✨';
-  return '✨';
+  return client ? findApplicationEmoji(client, HELP_BULLET_EMOJI_NAME) ?? '✨' : '✨';
 }
 
 export function getCategoryEmoji(category: HelpCategory, client?: Client): string {
-  if (client) {
-    const emoji = findApplicationEmoji(client, APPLICATION_EMOJI_NAMES[category]);
-    if (emoji) return emoji;
-  }
-  return FALLBACK_EMOJIS[category];
+  return client ? findApplicationEmoji(client, APPLICATION_EMOJI_NAMES[category]) ?? FALLBACK_EMOJIS[category] : FALLBACK_EMOJIS[category];
 }
 
 export function findHelpCategory(value: string): HelpCategory | null {
@@ -110,57 +82,35 @@ export function findHelpCategory(value: string): HelpCategory | null {
   return HELP_CATEGORIES.find(category => category.toLowerCase() === normalized) ?? null;
 }
 
-function commandJson(command: Command): any {
-  return command.data.toJSON();
-}
+function commandJson(command: Command): any { return command.data.toJSON(); }
 
 function collectCommandEntries(client?: Client): Array<{ category: HelpCategory; name: string; description: string }> {
   if (!client?.commands) return [];
-
   const entries: Array<{ category: HelpCategory; name: string; description: string }> = [];
-
   for (const command of client.commands.values()) {
     const json = commandJson(command);
     const commandName = String(json.name ?? '').trim();
     if (!commandName) continue;
-
     const category = CATEGORY_BY_COMMAND[commandName.toLowerCase()] ?? 'Utility';
     const description = String(json.description ?? '').trim() || 'No description provided.';
-
     entries.push({ category, name: `.${commandName}`, description });
-
     const walkOptions = (options: any[], prefix: string): void => {
       for (const option of options ?? []) {
-        if (option.type === 1) {
-          entries.push({
-            category,
-            name: `.${prefix} ${option.name}`,
-            description: String(option.description ?? description),
-          });
-        } else if (option.type === 2) {
-          walkOptions(option.options ?? [], `${prefix} ${option.name}`);
-        }
+        if (option.type === 1) entries.push({ category, name: `.${prefix} ${option.name}`, description: String(option.description ?? description) });
+        else if (option.type === 2) walkOptions(option.options ?? [], `${prefix} ${option.name}`);
       }
     };
-
     walkOptions(json.options ?? [], commandName);
   }
-
   return entries.sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function formatEntries(entries: Array<{ name: string; description: string }>): string[] {
-  const lines = entries.map(entry => `\`${entry.name}\` — ${entry.description}`);
   const chunks: string[] = [];
   let current = '';
-
-  for (const line of lines) {
-    if (!current || (current.length + line.length + 1) <= 1024) {
-      current = current ? `${current}\n${line}` : line;
-    } else {
-      chunks.push(current);
-      current = line;
-    }
+  for (const line of entries.map(entry => `\`${entry.name}\` — ${entry.description}`)) {
+    if (!current || current.length + line.length + 1 <= 1024) current = current ? `${current}\n${line}` : line;
+    else { chunks.push(current); current = line; }
   }
   if (current) chunks.push(current);
   return chunks;
@@ -168,14 +118,11 @@ function formatEntries(entries: Array<{ name: string; description: string }>): s
 
 export function buildHelpEmbed(category: string = 'all', client?: Client): EmbedBuilder {
   const selected = category.toLowerCase() === 'all' ? 'all' : findHelpCategory(category);
-  const helpEmoji = getHelpEmoji(client);
   const entries = collectCommandEntries(client);
-
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
-    .setTitle(`${helpEmoji} Sparxie Help Menu`)
+    .setTitle(`${getHelpEmoji(client)} Sparxie Help Menu`)
     .setDescription(
-      `Welcome to **Sparxie**!\n\n` +
       `Hello! It's **Sparxie**, your ultimate server management and utility bot.\n` +
       `Enhance your server's security, management, and entertainment with our comprehensive toolkit.\n\n` +
       `🔹 **Prefix:** \`.\`\n` +
@@ -185,66 +132,29 @@ export function buildHelpEmbed(category: string = 'all', client?: Client): Embed
       `**Select a category below to view commands:**\n` +
       HELP_CATEGORIES.map(cat => `${getCategoryEmoji(cat, client)} **${cat}**`).join('\n'),
     );
-
   if (selected !== 'all' && selected) {
-    const categoryEntries = entries.filter(e => e.category === selected);
-    const chunks = formatEntries(categoryEntries.map(e => ({ name: e.name, description: e.description })));
+    const chunks = formatEntries(entries.filter(e => e.category === selected));
     embed.setTitle(`${getCategoryEmoji(selected, client)} ${selected} Commands`);
-    embed.setDescription(
-      chunks.length
-        ? `Prefix: \`.\`\n\n${chunks.join('\n\n')}`
-        : 'No commands are currently registered in this category.',
-    );
-  } else if (selected !== 'all') {
-    embed.setDescription('❌ Unknown help category. Use the menu below to choose a valid category.');
-  }
-
-  embed.setFooter({ text: 'Sparxie • Fast, friendly, and made for your server' });
-  return embed;
+    embed.setDescription(chunks.length ? `Prefix: \`.\`\n\n${chunks.join('\n\n')}` : 'No commands are currently registered in this category.');
+  } else if (selected !== 'all') embed.setDescription('❌ Unknown help category. Use the menu below to choose a valid category.');
+  return embed.setFooter({ text: 'Sparxie • Fast, friendly, and made for your server' });
 }
 
 export function buildHelpMenu(selected: string = 'all', client?: Client): ActionRowBuilder<StringSelectMenuBuilder> {
   const menu = new StringSelectMenuBuilder()
     .setCustomId(HELP_SELECT_CUSTOM_ID)
     .setPlaceholder('Select a category to view commands')
-    .addOptions({
-      label: 'All Commands',
-      value: 'all',
-      description: 'View every Sparxie command',
-      emoji: '📚',
-      default: selected.toLowerCase() === 'all',
-    }, ...HELP_CATEGORIES.map(category => ({
-      label: category,
-      value: category,
-      description: `View all ${category.toLowerCase()} commands`,
-      emoji: getCategoryEmoji(category, client),
-      default: category.toLowerCase() === selected.toLowerCase(),
-    })));
-
+    .addOptions(
+      { label: 'All Commands', value: 'all', description: 'View every Sparxie command', emoji: '📚', default: selected.toLowerCase() === 'all' },
+      ...HELP_CATEGORIES.map(category => ({ label: category, value: category, description: `View all ${category.toLowerCase()} commands`, emoji: getCategoryEmoji(category, client), default: category.toLowerCase() === selected.toLowerCase() })),
+    );
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
 }
 
 export const help: Command = {
-  data: new SlashCommandBuilder()
-    .setName('help')
-    .setDescription('View all Sparxie commands by category')
-    .addStringOption(option =>
-      option
-        .setName('category')
-        .setDescription('Choose a command category')
-        .setRequired(false)
-        .addChoices(
-          { name: 'All Commands', value: 'all' },
-          ...HELP_CATEGORIES.map(category => ({ name: category, value: category })),
-        ),
-    ),
-
+  data: new SlashCommandBuilder().setName('help').setDescription('View all Sparxie commands by category').addStringOption(option => option.setName('category').setDescription('Choose a command category').setRequired(false).addChoices({ name: 'All Commands', value: 'all' }, ...HELP_CATEGORIES.map(category => ({ name: category, value: category })))),
   async execute(interaction) {
     const category = interaction.options.getString('category') ?? 'all';
-    const client = interaction.client;
-    await interaction.reply({
-      embeds: [buildHelpEmbed(category, client)],
-      components: [buildHelpMenu(category, client)],
-    });
+    await interaction.reply({ embeds: [buildHelpEmbed(category, interaction.client)], components: [buildHelpMenu(category, interaction.client)] });
   },
 };
