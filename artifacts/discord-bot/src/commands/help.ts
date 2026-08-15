@@ -1,125 +1,306 @@
-import { ActionRowBuilder, EmbedBuilder, SlashCommandBuilder, StringSelectMenuBuilder, type Client } from 'discord.js';
+import {
+  ActionRowBuilder,
+  EmbedBuilder,
+  SlashCommandBuilder,
+  StringSelectMenuBuilder,
+  type Client,
+} from 'discord.js';
 import type { Command } from '../types.js';
 
 export const HELP_SELECT_CUSTOM_ID = 'sparxie_help_category';
 
-const FALLBACK_EMOJIS: Record<string, string> = {
-  Setup: '⚙️', Moderation: '🔨', Channels: '📢', Restrictions: '🚫', Utility: '🛠️', Leveling: '📈', Tickets: '🎫', Games: '🎮', Fun: '🎉', Giveaways: '🎁', Music: '🎵',
+export const HELP_CATEGORIES = [
+  'Setup',
+  'Moderation',
+  'Channels',
+  'Restrictions',
+  'Utility',
+  'Leveling',
+  'Tickets',
+  'Games',
+  'Fun',
+  'Giveaways',
+  'Music',
+] as const;
+
+type HelpCategory = typeof HELP_CATEGORIES[number];
+
+// Every currently registered top-level command is assigned to exactly one help category.
+// Subcommands are discovered automatically from the command's SlashCommandBuilder,
+// so newly-added subcommands also appear in help without another hard-coded entry.
+const CATEGORY_BY_COMMAND: Record<string, HelpCategory> = {
+  setup: 'Setup',
+  setprefix: 'Setup',
+  welcome: 'Setup',
+  greet: 'Setup',
+
+  ban: 'Moderation',
+  kick: 'Moderation',
+  mute: 'Moderation',
+  unmute: 'Moderation',
+  timeout: 'Moderation',
+  warn: 'Moderation',
+  warnings: 'Moderation',
+  clearwarns: 'Moderation',
+  purge: 'Moderation',
+  purgebots: 'Moderation',
+  nick: 'Moderation',
+  createrole: 'Moderation',
+  roleassign: 'Moderation',
+  antinuke: 'Moderation',
+  extraowner: 'Moderation',
+  recovery: 'Moderation',
+
+  lock: 'Restrictions',
+  unlock: 'Restrictions',
+  slowmode: 'Restrictions',
+  chatban: 'Restrictions',
+  unchatban: 'Restrictions',
+  jail: 'Restrictions',
+  unjail: 'Restrictions',
+
+  poll: 'Channels',
+  embed: 'Channels',
+
+  afk: 'Utility',
+  remindme: 'Utility',
+  snipe: 'Utility',
+  editsnipe: 'Utility',
+  userinfo: 'Utility',
+  serverinfo: 'Utility',
+  temprole: 'Utility',
+  autoresponder: 'Utility',
+  help: 'Utility',
+
+  rank: 'Leveling',
+  leaderboard: 'Leveling',
+  levelconfig: 'Leveling',
+
+  ticket: 'Tickets',
+  closeticket: 'Tickets',
+  ticketpanel: 'Tickets',
+
+  gamePolicy: 'Games',
+  games: 'Games',
+  sparks: 'Games',
+  shop: 'Games',
+
+  roast: 'Fun',
+  gay: 'Fun',
+  pro: 'Fun',
+  noob: 'Fun',
+  ship: 'Fun',
+
+  giveaway: 'Giveaways',
+  music: 'Music',
 };
-const EMOJI_KEYWORDS: Record<string, string[]> = {
-  Setup: ['setup', 'gear', 'config', 'settings', 'wrench'], Moderation: ['mod', 'moderation', 'hammer', 'ban', 'shield'], Channels: ['channel', 'megaphone', 'announce'], Restrictions: ['restrict', 'block', 'ban', 'stop', 'no'], Utility: ['utility', 'tool', 'wrench', 'tools'], Leveling: ['level', 'xp', 'rank', 'chart', 'graph'], Tickets: ['ticket', 'support'], Games: ['game', 'gaming', 'controller'], Fun: ['fun', 'party', 'laugh', 'joy'], Giveaways: ['giveaway', 'gift', 'present'], Music: ['music', 'note', 'song'],
+
+const FALLBACK_EMOJIS: Record<HelpCategory, string> = {
+  Setup: '⚙️',
+  Moderation: '🔨',
+  Channels: '📢',
+  Restrictions: '🚫',
+  Utility: '🛠️',
+  Leveling: '📈',
+  Tickets: '🎫',
+  Games: '🎮',
+  Fun: '🎉',
+  Giveaways: '🎁',
+  Music: '🎵',
+};
+
+// These are the exact Application Emoji names configured for Sparxie.
+// Matching is case-insensitive, and the actual Discord emoji mention is returned,
+// so Discord renders the emoji instead of displaying :emoji_name: as plain text.
+const APPLICATION_EMOJI_NAMES: Record<HelpCategory, string> = {
+  Setup: 'Sparxie_setup',
+  Moderation: 'Sparxie_mod',
+  Channels: 'Sparxie_Channels',
+  Restrictions: 'Sparxie_Restrictions',
+  Utility: 'Sparxie_Utility',
+  Leveling: 'Sparxie_Level',
+  Tickets: 'Sparxie_ticket',
+  Games: 'Sparxie_games',
+  Fun: 'Sparxie_fun',
+  Giveaways: 'Sparxie_giveaway',
+  Music: 'Sparxie_music',
 };
 
 const HELP_BULLET_EMOJI_NAME = 'Sparxie_help';
-const HELP_BULLET_GIF_BASE64 = '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';
 
-let cachedApplicationEmojis: any[] = [];
-let cachedHelpBulletEmoji: any | null = null;
-function hash(value: string): number { let h = 0; for (let i = 0; i < value.length; i++) h = ((h << 5) - h + value.charCodeAt(i)) | 0; return h; }
-
-export async function getHelpApplicationEmojis(client: Client): Promise<any[]> {
-  try {
-    const manager = client.application?.emojis;
-    if (!manager) return cachedApplicationEmojis;
-    const emojis = await manager.fetch();
-    cachedApplicationEmojis = [...emojis.values()].filter(emoji => emoji.animated);
-    return cachedApplicationEmojis;
-  } catch { return cachedApplicationEmojis; }
+function findApplicationEmoji(client: Client, name: string): string | null {
+  const emojis = client.application?.emojis?.cache;
+  if (!emojis) return null;
+  const emoji = emojis.find(e => e.name?.toLowerCase() === name.toLowerCase());
+  if (!emoji?.id || !emoji.name) return null;
+  return `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>`;
 }
 
-export async function ensureHelpBulletEmoji(client: Client): Promise<any | null> {
-  try {
-    const manager = client.application?.emojis;
-    if (!manager) return cachedHelpBulletEmoji;
-    const emojis = await manager.fetch();
-    const existing = [...emojis.values()].find(emoji => emoji.animated && (emoji.name ?? '').toLowerCase() === HELP_BULLET_EMOJI_NAME.toLowerCase());
-    if (existing) {
-      cachedHelpBulletEmoji = existing;
-      if (!cachedApplicationEmojis.some(emoji => emoji.id === existing.id)) cachedApplicationEmojis.push(existing);
-      return existing;
-    }
-    const created = await manager.create({ attachment: Buffer.from(HELP_BULLET_GIF_BASE64, 'base64'), name: HELP_BULLET_EMOJI_NAME });
-    cachedHelpBulletEmoji = created;
-    cachedApplicationEmojis.push(created);
-    return created;
-  } catch (error) {
-    console.error('[help emoji] Could not create/fetch Sparxie_help:', error);
-    return cachedHelpBulletEmoji;
+export function getHelpEmoji(client?: Client): string {
+  if (client) return findApplicationEmoji(client, HELP_BULLET_EMOJI_NAME) ?? '✨';
+  return '✨';
+}
+
+export function getCategoryEmoji(category: HelpCategory, client?: Client): string {
+  if (client) {
+    const emoji = findApplicationEmoji(client, APPLICATION_EMOJI_NAMES[category]);
+    if (emoji) return emoji;
   }
+  return FALLBACK_EMOJIS[category];
 }
 
-export async function primeHelpApplicationEmojis(client: Client): Promise<void> {
-  await getHelpApplicationEmojis(client);
-  await ensureHelpBulletEmoji(client);
+export function findHelpCategory(value: string): HelpCategory | null {
+  const normalized = value.trim().toLowerCase();
+  return HELP_CATEGORIES.find(category => category.toLowerCase() === normalized) ?? null;
 }
-function resolveApplicationEmojis(applicationEmojis: any[]): any[] { return applicationEmojis.length ? applicationEmojis : cachedApplicationEmojis; }
-function getAnimatedEmoji(applicationEmojis: any[], category: string): any {
-  const emojis = resolveApplicationEmojis(applicationEmojis); const fallback = FALLBACK_EMOJIS[category] ?? '✨'; if (!emojis.length) return fallback;
-  const keywords = EMOJI_KEYWORDS[category] ?? [];
-  const matching = emojis.filter(emoji => { const name = (emoji.name ?? '').toLowerCase(); return keywords.some(keyword => name.includes(keyword)); });
-  if (matching.length) return matching[Math.abs(hash(category)) % matching.length];
-  return emojis[Math.abs(hash(`sparxie:${category}`)) % emojis.length];
+
+function commandJson(command: Command): any {
+  return command.data.toJSON();
 }
-function emojiText(applicationEmojis: any[], category: string): string { const emoji = getAnimatedEmoji(applicationEmojis, category); return typeof emoji === 'string' ? emoji : emoji.toString(); }
-function emojiOption(applicationEmojis: any[], category: string): any { const emoji = getAnimatedEmoji(applicationEmojis, category); if (typeof emoji === 'string') return emoji; return { id: emoji.id, name: emoji.name ?? category, animated: emoji.animated ?? true }; }
-function formatApplicationEmoji(emoji: any): string {
-  if (!emoji?.id || !emoji?.name) return '🔹';
-  return emoji.animated ? `<a:${emoji.name}:${emoji.id}>` : `<:${emoji.name}:${emoji.id}>`;
+
+function collectCommandEntries(client?: Client): Array<{ category: HelpCategory; name: string; description: string }> {
+  if (!client?.commands) return [];
+
+  const entries: Array<{ category: HelpCategory; name: string; description: string }> = [];
+
+  for (const command of client.commands.values()) {
+    const json = commandJson(command);
+    const commandName = String(json.name ?? '').trim();
+    if (!commandName) continue;
+
+    const category = CATEGORY_BY_COMMAND[commandName] ?? 'Utility';
+    const description = String(json.description ?? '').trim() || 'No description provided.';
+
+    // Include the top-level command itself.
+    entries.push({ category, name: `.${commandName}`, description });
+
+    // Include every subcommand and nested subcommand group.
+    const walkOptions = (options: any[], prefix: string): void => {
+      for (const option of options ?? []) {
+        if (option.type === 1) {
+          entries.push({
+            category,
+            name: `.${prefix} ${option.name}`,
+            description: String(option.description ?? description),
+          });
+        } else if (option.type === 2) {
+          walkOptions(option.options ?? [], `${prefix} ${option.name}`);
+        }
+      }
+    };
+
+    walkOptions(json.options ?? [], commandName);
+  }
+
+  return entries.sort((a, b) => a.name.localeCompare(b.name));
 }
-function helpBulletText(): string { return formatApplicationEmoji(cachedHelpBulletEmoji); }
 
-export const HELP_CATEGORIES: { name: string; emoji: string; commands: { name: string; description: string }[] }[] = [
-  { name: 'Setup', emoji: '⚙️', commands: [
-    { name: '/setup logs', description: 'Set moderation log channel' }, { name: '/setup muterole', description: 'Set the Muted role' }, { name: '/setup jailrole', description: 'Set the Jail role' }, { name: '/setup chatbanrole', description: 'Set the Chat Ban role' }, { name: '/setup ticketcategory', description: 'Set ticket category ID' }, { name: '/setup starboard', description: 'Set starboard channel' }, { name: '/setup levelchannel', description: 'Set level-up announcement channel' }, { name: '/setup snipe', description: 'Enable or disable snipe' }, { name: '/setup view', description: 'View current server config' }, { name: '/levelconfig', description: 'Customise the level-up embed (admin only)' },
-  ]},
-  { name: 'Moderation', emoji: '🔨', commands: [
-    { name: '/ban', description: 'Permanently ban a member' }, { name: '/kick', description: 'Kick a member from the server' }, { name: '/mute', description: 'Mute a member for a set duration (s/m/h/d)' }, { name: '/unmute', description: 'Remove mute from a member' }, { name: '/timeout', description: 'Apply a Discord timeout (up to 28 days)' }, { name: '/warn', description: 'Issue a warning to a member' }, { name: '/warnings', description: 'View all warnings for a member' }, { name: '/clearwarns', description: 'Clear warnings for a member' }, { name: '/nick', description: "Change a member's nickname" }, { name: '/temprole', description: 'Temporarily assign a role with a duration' },
-  ]},
-  { name: 'Channels', emoji: '📢', commands: [
-    { name: '/purge', description: 'Bulk-delete messages (up to 100)' }, { name: '/purgebots', description: 'Delete bot messages from a channel' }, { name: '/lock', description: "Lock a channel so members can't send messages" }, { name: '/unlock', description: 'Unlock a previously locked channel' }, { name: '/slowmode', description: 'Set slowmode delay on a channel' },
-  ]},
-  { name: 'Restrictions', emoji: '🚫', commands: [
-    { name: '/chatban', description: 'Prevent a member from sending messages' }, { name: '/unchatban', description: 'Remove a chat ban' }, { name: '/jail', description: 'Move a member to the jail role' }, { name: '/unjail', description: 'Release a member from jail' },
-  ]},
-  { name: 'Utility', emoji: '🛠️', commands: [
-    { name: '.av [@user]', description: "Show a user's full-size avatar (global + server)" }, { name: '/afk', description: 'Set your AFK status with an optional reason' }, { name: '/remindme', description: 'Set a reminder for yourself' }, { name: '/poll', description: 'Create a poll with up to 5 choices' }, { name: '/snipe', description: 'Show the last deleted message in a channel' }, { name: '/editsnipe', description: 'Show the last edited message in a channel' }, { name: '/userinfo', description: 'View detailed info about a member' }, { name: '/serverinfo', description: 'View info about this server' }, { name: '/autoresponder', description: 'Manage auto-response triggers' }, { name: '/setprefix', description: "Change the bot's prefix command prefix" },
-  ]},
-  { name: 'Leveling', emoji: '📈', commands: [{ name: '/rank', description: 'View your level, XP, and server rank' }, { name: '/leaderboard', description: 'Show the top members by XP and level' }]},
-  { name: 'Tickets', emoji: '🎫', commands: [{ name: '/ticket', description: 'Open a support ticket' }, { name: '/closeticket', description: 'Close a ticket channel' }, { name: '/ticketpanel', description: 'Post a ticket creation panel in a channel' }]},
-  { name: 'Games', emoji: '🎮', commands: [{ name: '/game <game>', description: 'Start a server game and play with other members' }, { name: '/games', description: 'View the available games, player limits, and rewards' }, { name: '/coinleaderboard', description: 'View the ⚡ sparks leaderboard' }, { name: '/shop', description: 'Open the server shop and spend ⚡ sparks on roles and colour customisation' }, { name: '.buy role <name>', description: 'Buy a configured shop role using ⚡ sparks' }, { name: '.buy colour <name>', description: 'Buy a configured colour role using ⚡ sparks' }]},
-  { name: 'Fun', emoji: '🎉', commands: [{ name: '/roast', description: 'Roast a member with a random burn' }, { name: '/gay', description: 'Rate how gay someone is' }, { name: '/pro', description: 'Rate how pro someone is at something' }, { name: '/noob', description: 'Rate how much of a noob someone is' }, { name: '/ship', description: 'Ship two users together' }]},
-  { name: 'Giveaways', emoji: '🎁', commands: [{ name: '/giveaway create', description: 'Create a giveaway panel with Enter button (Admin)' }, { name: '/giveaway end', description: 'Force-end an active giveaway immediately (Admin)' }, { name: '/giveaway reroll', description: 'Pick a new winner for an ended giveaway (Admin)' }, { name: '/giveaway leave', description: 'Leave a giveaway you have entered' }, { name: '/giveaway participants', description: 'View all participants of a giveaway' }, { name: '/giveaway remove', description: 'Remove a participant from a giveaway (Admin)' }]},
-  { name: 'Music', emoji: '🎵', commands: [{ name: '.music play', description: 'Play a song by name or URL (prefix command)' }, { name: '.music skip', description: 'Skip the current song' }, { name: '.music stop', description: 'Stop music and disconnect' }, { name: '.music pause / resume', description: 'Pause or resume playback' }, { name: '.music queue', description: 'View the current queue' }, { name: '.music nowplaying', description: 'Show the currently playing track' }]},
-];
+function formatEntries(entries: Array<{ name: string; description: string }>): string[] {
+  const lines = entries.map(entry => `\`${entry.name}\` — ${entry.description}`);
+  const chunks: string[] = [];
+  let current = '';
 
-type HelpCategory = (typeof HELP_CATEGORIES)[number];
-export function findHelpCategory(category?: string | null): HelpCategory | undefined { if (!category || category === 'all') return undefined; return HELP_CATEGORIES.find(c => c.name.toLowerCase() === category.toLowerCase()); }
-export const HELP_COMMAND_COUNT = HELP_CATEGORIES.reduce((total, category) => total + category.commands.length, 0);
-function formatCategoryList(applicationEmojis: any[]): string { return HELP_CATEGORIES.map(c => `${emojiText(applicationEmojis, c.name)} **${c.name}**`).join('\n'); }
-function displayCommandName(name: string, prefix: string): string { if (name.startsWith('/') || name.startsWith('.')) return `${prefix}${name.slice(1)}`; return name; }
+  for (const line of lines) {
+    if (!current || (current.length + line.length + 1) <= 1024) {
+      current = current ? `${current}\n${line}` : line;
+    } else {
+      chunks.push(current);
+      current = line;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
 
-export function buildHelpEmbed(category?: string | null, prefix = '/', applicationEmojis: any[] = cachedApplicationEmojis): EmbedBuilder {
-  const selected = findHelpCategory(category); const isGames = selected?.name === 'Games'; const headerEmoji = selected ? emojiText(applicationEmojis, selected.name) : emojiText(applicationEmojis, 'Fun');
-  const bullet = helpBulletText();
-  const embed = new EmbedBuilder().setColor(0x12d9d3).setAuthor({ name: 'Sparxie Help Menu' }).setTitle(selected ? `${headerEmoji} ${selected.name}` : '✨ Welcome to Sparxie!').setDescription(
-    selected ? isGames ? `🎮 **Server Games**\nPlay games with other members, win **⚡ sparks**, and use your sparks to unlock server rewards.\n\n🏆 **Win games → earn ⚡ sparks → spend sparks in the server shop → get roles and profile colour customisation.**\n\nGames support different player limits depending on the game, and multiplayer games can be joined by other members. Use **Global** in supported game lobbies to find players from other servers.\n\n**Game commands:**\n\`${prefix}game <game>\` to start a game · \`${prefix}games\` to browse games and rewards\n\n**Sparks & Shop:**\n\`${prefix}coinleaderboard\` to see the richest players · \`${prefix}shop\` to open the shop\n\n**Prefix purchases:** \`${prefix}buy role <name>\` · \`${prefix}buy colour <name>\`` : `Here are the commands in the **${selected.name}** category.\nChoose another category below to explore more.` : `Hello! It's **Sparxie**, your ultimate server management and utility bot.\nEnhance your server's security, management, and entertainment with our comprehensive toolkit.\n\n` + `${bullet} **Prefix:** \`${prefix}\`\n` + `${bullet} **Total Commands:** \`${HELP_COMMAND_COUNT}\`\n` + `${bullet} **Type** \`${prefix}help <category>\` **to view commands by section.**\n\n` + '`<>` — Required  |  `[]` — Optional\n\n' + '**Select a category below to view commands:**\n' + formatCategoryList(applicationEmojis) + '\n\nSupport Server  |  Invite Sparxie').setFooter({ text: 'Sparxie • Fast, friendly, and made for your server' });
-  if (selected) embed.addFields({ name: `${headerEmoji} ${selected.name}`, value: selected.commands.map(cmd => `\`${displayCommandName(cmd.name, prefix)}\` — ${cmd.description}`).join('\n') });
+export function buildHelpEmbed(category: string = 'all', client?: Client): EmbedBuilder {
+  const selected = category.toLowerCase() === 'all' ? 'all' : findHelpCategory(category);
+  const helpEmoji = getHelpEmoji(client);
+  const entries = collectCommandEntries(client);
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle(`${helpEmoji} Sparxie Help Menu`)
+    .setDescription(
+      `Welcome to **Sparxie**!\n\n` +
+      `Use the menu below to browse **every registered command** by category.\n` +
+      `Prefix: \`.\` • Total top-level commands: **${client?.commands?.size ?? 0}**`,
+    );
+
+  if (selected === 'all') {
+    for (const cat of HELP_CATEGORIES) {
+      const categoryEntries = entries.filter(e => e.category === cat);
+      const lines = categoryEntries.map(e => `\`${e.name}\``);
+      const chunks = formatEntries(categoryEntries.map(e => ({ name: e.name, description: e.description })));
+      if (chunks.length === 0) {
+        embed.addFields({ name: `${getCategoryEmoji(cat, client)} ${cat}`, value: '*No commands currently registered.*' });
+      } else {
+        // Keep each category together when possible while respecting Discord's field limit.
+        const value = chunks.map(chunk => chunk.replace(/ — .*?(?=\n|$)/g, '')).join('\n');
+        embed.addFields({
+          name: `${getCategoryEmoji(cat, client)} ${cat} (${categoryEntries.length})`,
+          value: value || lines.join('\n'),
+        });
+      }
+    }
+  } else if (selected) {
+    const categoryEntries = entries.filter(e => e.category === selected);
+    const chunks = formatEntries(categoryEntries.map(e => ({ name: e.name, description: e.description })));
+    embed.setTitle(`${getCategoryEmoji(selected, client)} ${selected} Commands`);
+    if (chunks.length === 0) {
+      embed.setDescription('No commands are currently registered in this category.');
+    } else {
+      embed.setDescription(`Prefix: \`.\`\n\n${chunks.join('\n\n')}`);
+    }
+  } else {
+    embed.setDescription('❌ Unknown help category. Use the menu below to choose a valid category.');
+  }
+
+  embed.setFooter({ text: 'Sparxie • Fast, friendly, and made for your server' });
   return embed;
 }
 
-export function buildHelpMenu(category?: string | null, applicationEmojis: any[] = cachedApplicationEmojis): ActionRowBuilder<StringSelectMenuBuilder> {
-  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId(HELP_SELECT_CUSTOM_ID).setPlaceholder('Select a category...').addOptions(
-    { label: 'All commands', description: 'See every Sparxie command category', value: 'all', default: !category || category === 'all' },
-    ...HELP_CATEGORIES.map(c => ({ label: c.name, description: `${c.commands.length} command${c.commands.length === 1 ? '' : 's'}`, value: c.name.toLowerCase(), default: category?.toLowerCase() === c.name.toLowerCase(), emoji: emojiOption(applicationEmojis, c.name) })),
-  ));
+export function buildHelpMenu(selected: string = 'all', client?: Client): ActionRowBuilder<StringSelectMenuBuilder> {
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(HELP_SELECT_CUSTOM_ID)
+    .setPlaceholder('Select a category to view commands')
+    .addOptions({
+      label: 'All Commands',
+      value: 'all',
+      description: 'View every Sparxie command',
+      emoji: '📚',
+      default: selected.toLowerCase() === 'all',
+    }, ...HELP_CATEGORIES.map(category => ({
+      label: category,
+      value: category,
+      description: `View all ${category.toLowerCase()} commands`,
+      emoji: getCategoryEmoji(category, client),
+      default: category.toLowerCase() === selected.toLowerCase(),
+    })));
+
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
 }
 
 export const help: Command = {
-  data: new SlashCommandBuilder().setName('help').setDescription('List all bot commands organised by category').addStringOption(o => o.setName('category').setDescription('Show commands for a specific category only').addChoices(...HELP_CATEGORIES.map(c => ({ name: `${c.emoji} ${c.name}`, value: c.name.toLowerCase() })))),
+  data: new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('View all Sparxie commands by category')
+    .addStringOption(option =>
+      option
+        .setName('category')
+        .setDescription('Choose a command category')
+        .setRequired(false)
+        .addChoices(
+          { name: 'All Commands', value: 'all' },
+          ...HELP_CATEGORIES.map(category => ({ name: category, value: category })),
+        ),
+    ),
+
   async execute(interaction) {
-    await interaction.deferReply(); const filter = interaction.options.getString('category'); if (filter && !findHelpCategory(filter)) { await interaction.editReply('❌ Unknown category.'); return; }
-    const applicationEmojis = await getHelpApplicationEmojis(interaction.client);
-    await ensureHelpBulletEmoji(interaction.client);
-    await interaction.editReply({ embeds: [buildHelpEmbed(filter, '/', applicationEmojis)], components: [buildHelpMenu(filter, applicationEmojis)] });
+    const category = interaction.options.getString('category') ?? 'all';
+    const client = interaction.client;
+    await interaction.reply({
+      embeds: [buildHelpEmbed(category, client)],
+      components: [buildHelpMenu(category, client)],
+    });
   },
 };
