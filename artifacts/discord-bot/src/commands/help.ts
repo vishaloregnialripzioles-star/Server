@@ -25,112 +25,69 @@ export const HELP_CATEGORIES = [
 
 type HelpCategory = typeof HELP_CATEGORIES[number];
 
-// Keep the original Sparxie help layout, while mapping every command to its category.
+// Keep the Sparxie help layout while mapping every command to its category.
 const CATEGORY_BY_COMMAND: Record<string, HelpCategory> = {
-  setup: 'Setup',
-  setprefix: 'Setup',
-  welcome: 'Setup',
-  greet: 'Setup',
-
-  ban: 'Moderation',
-  kick: 'Moderation',
-  mute: 'Moderation',
-  unmute: 'Moderation',
-  timeout: 'Moderation',
-  warn: 'Moderation',
-  warnings: 'Moderation',
-  clearwarns: 'Moderation',
-  purge: 'Moderation',
-  purgebots: 'Moderation',
-  nick: 'Moderation',
-  createrole: 'Moderation',
-  roleassign: 'Moderation',
-  antinuke: 'Moderation',
-  extraowner: 'Moderation',
-  recovery: 'Moderation',
-
-  lock: 'Restrictions',
-  unlock: 'Restrictions',
-  slowmode: 'Restrictions',
-  chatban: 'Restrictions',
-  unchatban: 'Restrictions',
-  jail: 'Restrictions',
-  unjail: 'Restrictions',
-
-  poll: 'Channels',
-  embed: 'Channels',
-
-  afk: 'Utility',
-  remindme: 'Utility',
-  snipe: 'Utility',
-  editsnipe: 'Utility',
-  userinfo: 'Utility',
-  serverinfo: 'Utility',
-  temprole: 'Utility',
-  autoresponder: 'Utility',
-  help: 'Utility',
-
-  rank: 'Leveling',
-  leaderboard: 'Leveling',
-  levelconfig: 'Leveling',
-
-  ticket: 'Tickets',
-  closeticket: 'Tickets',
-  ticketpanel: 'Tickets',
-
-  gamepolicy: 'Games',
-  'game-policy': 'Games',
-  games: 'Games',
-  sparks: 'Games',
-  coinleaderboard: 'Games',
-  shop: 'Games',
-
-  roast: 'Fun',
-  gay: 'Fun',
-  pro: 'Fun',
-  noob: 'Fun',
-  ship: 'Fun',
-
-  giveaway: 'Giveaways',
-  music: 'Music',
+  setup: 'Setup', setprefix: 'Setup', welcome: 'Setup', greet: 'Setup',
+  ban: 'Moderation', kick: 'Moderation', mute: 'Moderation', unmute: 'Moderation',
+  timeout: 'Moderation', warn: 'Moderation', warnings: 'Moderation', clearwarns: 'Moderation',
+  purge: 'Moderation', purgebots: 'Moderation', nick: 'Moderation', createrole: 'Moderation',
+  roleassign: 'Moderation', antinuke: 'Moderation', extraowner: 'Moderation', recovery: 'Moderation',
+  lock: 'Restrictions', unlock: 'Restrictions', slowmode: 'Restrictions', chatban: 'Restrictions',
+  unchatban: 'Restrictions', jail: 'Restrictions', unjail: 'Restrictions',
+  poll: 'Channels', embed: 'Channels',
+  afk: 'Utility', remindme: 'Utility', snipe: 'Utility', editsnipe: 'Utility', userinfo: 'Utility',
+  serverinfo: 'Utility', temprole: 'Utility', autoresponder: 'Utility', help: 'Utility',
+  rank: 'Leveling', leaderboard: 'Leveling', levelconfig: 'Leveling',
+  ticket: 'Tickets', closeticket: 'Tickets', ticketpanel: 'Tickets',
+  gamepolicy: 'Games', 'game-policy': 'Games', games: 'Games', sparks: 'Games',
+  coinleaderboard: 'Games', shop: 'Games',
+  roast: 'Fun', gay: 'Fun', pro: 'Fun', noob: 'Fun', ship: 'Fun',
+  giveaway: 'Giveaways', music: 'Music',
 };
 
 const FALLBACK_EMOJIS: Record<HelpCategory, string> = {
-  Setup: '⚙️',
-  Moderation: '🔨',
-  Channels: '📢',
-  Restrictions: '🚫',
-  Utility: '🛠️',
-  Leveling: '📈',
-  Tickets: '🎫',
-  Games: '🎮',
-  Fun: '🎉',
-  Giveaways: '🎁',
-  Music: '🎵',
+  Setup: '⚙️', Moderation: '🔨', Channels: '📢', Restrictions: '🚫', Utility: '🛠️',
+  Leveling: '📈', Tickets: '🎫', Games: '🎮', Fun: '🎉', Giveaways: '🎁', Music: '🎵',
 };
 
-// Exact Application Emoji names uploaded to the Sparxie application.
-// These are resolved to real Discord emoji mentions, including animated emojis.
+// These are the animated emojis uploaded to the Sparxie application.
+// Matching is case-insensitive so names such as "sparxie_mod" work too.
 const APPLICATION_EMOJI_NAMES: Record<HelpCategory, string> = {
-  Setup: 'Sparxie_setup',
-  Moderation: 'Sparxie_mod',
-  Channels: 'Sparxie_Channels',
-  Restrictions: 'Sparxie_Restrictions',
-  Utility: 'Sparxie_Utility',
-  Leveling: 'Sparxie_Level',
-  Tickets: 'Sparxie_ticket',
-  Games: 'Sparxie_games',
-  Fun: 'Sparxie_fun',
-  Giveaways: 'Sparxie_giveaway',
-  Music: 'Sparxie_music',
+  Setup: 'sparxie_setup',
+  Moderation: 'sparxie_mod',
+  Channels: 'sparxie_channels',
+  Restrictions: 'sparxie_restrictions',
+  Utility: 'sparxie_utility',
+  Leveling: 'sparxie_level',
+  Tickets: 'sparxie_ticket',
+  Games: 'sparxie_games',
+  Fun: 'sparxie_fun',
+  Giveaways: 'sparxie_giveaway',
+  Music: 'sparxie_music',
 };
 
-const HELP_BULLET_EMOJI_NAME = 'Sparxie_help';
+const HELP_BULLET_EMOJI_NAME = 'sparxie_help';
+
+/**
+ * Application emojis are not guaranteed to be in the cache after login.
+ * Fetch them once during startup so the help embed and select menu can use
+ * the actual uploaded animated emojis instead of falling back to Unicode.
+ */
+export async function primeHelpApplicationEmojis(client: Client): Promise<void> {
+  if (!client.application?.emojis) return;
+  try {
+    await client.application.emojis.fetch();
+    console.log(`✅ Loaded ${client.application.emojis.cache.size} application emojis for help`);
+  } catch (error) {
+    console.error('[Help application emojis]', error);
+  }
+}
 
 function findApplicationEmoji(client: Client, name: string): string | null {
   const emojis = client.application?.emojis?.cache;
   if (!emojis) return null;
-  const emoji = emojis.find(e => e.name?.toLowerCase() === name.toLowerCase());
+  const wanted = name.trim().toLowerCase();
+  const emoji = emojis.find(e => e.name?.trim().toLowerCase() === wanted);
   if (!emoji?.id || !emoji.name) return null;
   return `<${emoji.animated ? 'a' : ''}:${emoji.name}:${emoji.id}>`;
 }
