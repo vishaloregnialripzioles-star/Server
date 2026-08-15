@@ -25,9 +25,7 @@ export const HELP_CATEGORIES = [
 
 type HelpCategory = typeof HELP_CATEGORIES[number];
 
-// Every currently registered top-level command is assigned to exactly one help category.
-// Subcommands are discovered automatically from the command's SlashCommandBuilder,
-// so newly-added subcommands also appear in help without another hard-coded entry.
+// Keep the original Sparxie help layout, while mapping every command to its category.
 const CATEGORY_BY_COMMAND: Record<string, HelpCategory> = {
   setup: 'Setup',
   setprefix: 'Setup',
@@ -80,9 +78,11 @@ const CATEGORY_BY_COMMAND: Record<string, HelpCategory> = {
   closeticket: 'Tickets',
   ticketpanel: 'Tickets',
 
-  gamePolicy: 'Games',
+  gamepolicy: 'Games',
+  'game-policy': 'Games',
   games: 'Games',
   sparks: 'Games',
+  coinleaderboard: 'Games',
   shop: 'Games',
 
   roast: 'Fun',
@@ -109,9 +109,8 @@ const FALLBACK_EMOJIS: Record<HelpCategory, string> = {
   Music: '🎵',
 };
 
-// These are the exact Application Emoji names configured for Sparxie.
-// Matching is case-insensitive, and the actual Discord emoji mention is returned,
-// so Discord renders the emoji instead of displaying :emoji_name: as plain text.
+// Exact Application Emoji names uploaded to the Sparxie application.
+// These are resolved to real Discord emoji mentions, including animated emojis.
 const APPLICATION_EMOJI_NAMES: Record<HelpCategory, string> = {
   Setup: 'Sparxie_setup',
   Moderation: 'Sparxie_mod',
@@ -168,13 +167,11 @@ function collectCommandEntries(client?: Client): Array<{ category: HelpCategory;
     const commandName = String(json.name ?? '').trim();
     if (!commandName) continue;
 
-    const category = CATEGORY_BY_COMMAND[commandName] ?? 'Utility';
+    const category = CATEGORY_BY_COMMAND[commandName.toLowerCase()] ?? 'Utility';
     const description = String(json.description ?? '').trim() || 'No description provided.';
 
-    // Include the top-level command itself.
     entries.push({ category, name: `.${commandName}`, description });
 
-    // Include every subcommand and nested subcommand group.
     const walkOptions = (options: any[], prefix: string): void => {
       for (const option of options ?? []) {
         if (option.type === 1) {
@@ -222,36 +219,26 @@ export function buildHelpEmbed(category: string = 'all', client?: Client): Embed
     .setTitle(`${helpEmoji} Sparxie Help Menu`)
     .setDescription(
       `Welcome to **Sparxie**!\n\n` +
-      `Use the menu below to browse **every registered command** by category.\n` +
-      `Prefix: \`.\` • Total top-level commands: **${client?.commands?.size ?? 0}**`,
+      `Hello! It's **Sparxie**, your ultimate server management and utility bot.\n` +
+      `Enhance your server's security, management, and entertainment with our comprehensive toolkit.\n\n` +
+      `🔹 **Prefix:** \`.\`\n` +
+      `🔹 **Total Commands:** **${entries.length}**\n` +
+      `🔹 **Type** \`.help <category>\` **to view commands by section.**\n\n` +
+      `\`<>\` — Required | \`[]\` — Optional\n\n` +
+      `**Select a category below to view commands:**\n` +
+      HELP_CATEGORIES.map(cat => `${getCategoryEmoji(cat, client)} **${cat}**`).join('\n'),
     );
 
-  if (selected === 'all') {
-    for (const cat of HELP_CATEGORIES) {
-      const categoryEntries = entries.filter(e => e.category === cat);
-      const lines = categoryEntries.map(e => `\`${e.name}\``);
-      const chunks = formatEntries(categoryEntries.map(e => ({ name: e.name, description: e.description })));
-      if (chunks.length === 0) {
-        embed.addFields({ name: `${getCategoryEmoji(cat, client)} ${cat}`, value: '*No commands currently registered.*' });
-      } else {
-        // Keep each category together when possible while respecting Discord's field limit.
-        const value = chunks.map(chunk => chunk.replace(/ — .*?(?=\n|$)/g, '')).join('\n');
-        embed.addFields({
-          name: `${getCategoryEmoji(cat, client)} ${cat} (${categoryEntries.length})`,
-          value: value || lines.join('\n'),
-        });
-      }
-    }
-  } else if (selected) {
+  if (selected !== 'all' && selected) {
     const categoryEntries = entries.filter(e => e.category === selected);
     const chunks = formatEntries(categoryEntries.map(e => ({ name: e.name, description: e.description })));
     embed.setTitle(`${getCategoryEmoji(selected, client)} ${selected} Commands`);
-    if (chunks.length === 0) {
-      embed.setDescription('No commands are currently registered in this category.');
-    } else {
-      embed.setDescription(`Prefix: \`.\`\n\n${chunks.join('\n\n')}`);
-    }
-  } else {
+    embed.setDescription(
+      chunks.length
+        ? `Prefix: \`.\`\n\n${chunks.join('\n\n')}`
+        : 'No commands are currently registered in this category.',
+    );
+  } else if (selected !== 'all') {
     embed.setDescription('❌ Unknown help category. Use the menu below to choose a valid category.');
   }
 
