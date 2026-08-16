@@ -1,9 +1,11 @@
 import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
 import { createServer } from 'node:http';
 import { registerEvents } from './events/index.js';
+import { handleDashboardApi } from './dashboardApi.js';
 
 const port = Number(process.env.PORT ?? 3000);
-createServer((_, res) => {
+createServer(async (req, res) => {
+  if (await handleDashboardApi(req, res)) return;
   res.writeHead(200, { 'content-type': 'text/plain' });
   res.end('Sparxie bot is running');
 }).listen(port, '0.0.0.0', () => console.log(`🌐 Health server listening on ${port}`));
