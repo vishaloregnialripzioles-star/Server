@@ -6,168 +6,25 @@ import { handlePrefixCommand, getGuildPrefix } from '../prefixHandler.js';
 import { handleMissingPrefixCommand } from '../prefixBridge.js';
 import { buildLevelUpEmbed } from '../commands/levelconfig.js';
 
-const XP_COOLDOWN_MS = 60_000;
-const XP_MIN = 15;
-const XP_MAX = 25;
-const spamTracker = new Map<string, number[]>();
+const XP_COOLDOWN_MS=60_000, XP_MIN=15, XP_MAX=25;
+const spamTracker=new Map<string,number[]>();
+const mentionTracker=new Map<string,number[]>();
+const spaceTracker=new Map<string,number[]>();
+function containsAutoresponderTrigger(content:string,trigger:string):boolean{const c=content.toLocaleLowerCase(),t=trigger.toLocaleLowerCase().trim();if(!t)return false;const e=t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');return new RegExp(`(^|[^\\p{L}\\p{N}_])${e}($|[^\\p{L}\\p{N}_])`,'u').test(c);}
+function escapeRegex(value:string):string{return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+function matchesWords(content:string,words:string[]):string|undefined{const n=content.toLocaleLowerCase();for(const word of words){const w=word.trim().toLocaleLowerCase();if(!w)continue;const re=new RegExp(`(^|[^\\p{L}\\p{N}_])${escapeRegex(w)}($|[^\\p{L}\\p{N}_])`,'u');if(re.test(n))return w;}return undefined;}
+function immune(message:Message):boolean{if(!message.guild||!message.member)return true;const d=loadGuild(message.guild.id);if(message.author.id===message.guild.ownerId)return true;if((d.extraOwners??[]).includes(message.author.id))return true;if((d.antiNuke?.whitelist??[]).includes(message.author.id))return true;return false;}
+function pushWindow(map:Map<string,number[]>,key:string,seconds:number):number[]{const now=Date.now(),windowMs=Math.max(1,seconds||5)*1000;const h=(map.get(key)??[]).filter(t=>now-t<windowMs);h.push(now);map.set(key,h);return h;}
+async function punish(message:Message,reason:string,rule:any):Promise<void>{const action=rule?.action??loadGuild(message.guild!.id).config.automod?.action??'delete_timeout';const d=loadGuild(message.guild!.id);const template=rule?.templateId?(d.config.moderationTemplates??[]).find(x=>x.id===rule.templateId):undefined;if(action==='delete'||action==='delete_timeout'||action==='dm_warn')await message.delete().catch(()=>undefined);if(action==='warn'||action==='dm_warn'){const text=template?.message??`⚠️ Your message was removed by AutoMod: **${reason}**`;if(action==='dm_warn')await message.author.send(text).catch(()=>undefined);else await message.reply(text).catch(()=>undefined);}if(action==='timeout'||action==='delete_timeout')await message.member?.timeout(10*60*1000,`AutoMod: ${reason}`).catch(()=>undefined);}
+async function runAutoMod(message:Message):Promise<boolean>{if(!message.guild||!message.member||message.author.bot||immune(message))return false;const d=loadGuild(message.guild.id),cfg=d.config.automod;if(!cfg?.enabled)return false;if(message.member.permissions.has(PermissionFlagsBits.Administrator)||message.member.permissions.has(PermissionFlagsBits.ManageGuild))return false;let reason:string|undefined;let rule:any;
+const banned=matchesWords(message.content,cfg.bannedWords??[]);if(banned){reason=`banned word: ${banned}`;rule=cfg.bannedWordsRule;}
+if(!reason&&cfg.antiScam){const scam=matchesWords(message.content,cfg.antiScamWords??[]);if(scam){reason=`anti-scam word: ${scam}`;rule=cfg.antiScamRule;}}
+if(!reason&&cfg.suspiciousLinks&&/https?:\/\/(?:discord\.gift|discordgift|free[-_ ]?nitro|nitro[-_ ]?gift|steamcommunitty|discorcl|discordapp\.gift)/i.test(message.content)){reason='suspicious link';rule=cfg.suspiciousLinksRule;}
+const mentionCount=message.mentions.users.size+message.mentions.roles.size;if(!reason&&cfg.massMentions&&mentionCount>0){const r=cfg.mentions??{windowSeconds:5,maxCount:3};const h=pushWindow(mentionTracker,`${message.guild.id}:${message.author.id}`,r.windowSeconds??5);if(h.length>=(r.maxCount??3)||mentionCount>=(r.maxCount??3)){reason='mention spam';rule=r;}}
+if(!reason&&cfg.antiSpam){const r=cfg.spam??{windowSeconds:5,maxCount:6};const h=pushWindow(spamTracker,`${message.guild.id}:${message.author.id}`,r.windowSeconds??5);if(h.length>=(r.maxCount??6)){reason='message spam';rule=r;}}
+if(!reason&&cfg.spaceSpam){const lines=message.content.split(/\r?\n/);const blank=lines.filter(x=>!x.trim()).length;const r=cfg.space??{windowSeconds:5,maxCount:5};const h=blank>0?pushWindow(spaceTracker,`${message.guild.id}:${message.author.id}`,r.windowSeconds??5):[];if(blank>=(r.maxCount??5)||h.length>=(r.maxCount??5)){reason='space/dot spam';rule=r;}}
+if(!reason)return false;await punish(message,reason,rule);return true;}
 
-function containsAutoresponderTrigger(content: string, trigger: string): boolean {
-  const normalizedContent = content.toLocaleLowerCase();
-  const normalizedTrigger = trigger.toLocaleLowerCase().trim();
-  if (!normalizedTrigger) return false;
-  const escapedTrigger = normalizedTrigger.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`(^|[^\\p{L}\\p{N}_])${escapedTrigger}($|[^\\p{L}\\p{N}_])`, 'u');
-  return pattern.test(normalizedContent);
-}
-function escapeRegex(value: string): string { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-function matchesBannedWord(content: string, words: string[]): string | undefined {
-  const normalized = content.toLocaleLowerCase();
-  for (const word of words) {
-    const w = word.trim().toLocaleLowerCase();
-    if (!w) continue;
-    const re = new RegExp(`(^|[^\\p{L}\\p{N}_])${escapeRegex(w)}($|[^\\p{L}\\p{N}_])`, 'u');
-    if (re.test(normalized)) return w;
-  }
-  return undefined;
-}
-
-function isAutoModImmune(message: Message): boolean {
-  if (!message.guild || !message.member) return true;
-  const data = loadGuild(message.guild.id);
-  const userId = message.author.id;
-
-  // Always exempt the Discord server owner.
-  if (userId === message.guild.ownerId) return true;
-
-  // Exempt configured extra owners and the existing AutoMod/anti-nuke whitelist.
-  if ((data.extraOwners ?? []).includes(userId)) return true;
-  if ((data.antiNuke?.whitelist ?? []).includes(userId)) return true;
-
-  return false;
-}
-
-async function runAutoMod(message: Message): Promise<boolean> {
-  if (!message.guild || !message.member || message.author.bot) return false;
-  if (isAutoModImmune(message)) return false;
-
-  const cfg = loadGuild(message.guild.id).config.automod;
-  if (!cfg?.enabled) return false;
-  if (message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.permissions.has(PermissionFlagsBits.ManageGuild)) return false;
-
-  let reason: string | undefined;
-  const banned = matchesBannedWord(message.content, cfg.bannedWords ?? []);
-  if (banned) reason = `banned word: ${banned}`;
-
-  if (!reason && cfg.massMentions && message.mentions.users.size + message.mentions.roles.size >= 6) reason = 'mass mentions';
-
-  if (!reason && cfg.suspiciousLinks && /https?:\/\/(?:discord\.gift|discordgift|free[-_ ]?nitro|nitro[-_ ]?gift|steamcommunitty|discorcl|discordapp\.gift)/i.test(message.content)) reason = 'suspicious link';
-
-  const key = `${message.guild.id}:${message.author.id}`;
-  if (!reason && cfg.antiSpam) {
-    const now = Date.now();
-    const history = (spamTracker.get(key) ?? []).filter(t => now - t < 8000);
-    history.push(now);
-    spamTracker.set(key, history);
-    if (history.length >= 6) reason = 'spam';
-  }
-
-  if (!reason) return false;
-
-  const action = cfg.action ?? 'delete_timeout';
-  if (action === 'delete' || action === 'delete_timeout') await message.delete().catch(() => undefined);
-  if (action === 'warn') {
-    await message.reply(`⚠️ <@${message.author.id}> your message was flagged by AutoMod (**${reason}**).`).catch(() => undefined);
-  }
-  if (action === 'timeout' || action === 'delete_timeout') {
-    await message.member.timeout(10 * 60 * 1000, `AutoMod: ${reason}`).catch(() => undefined);
-  }
-  return true;
-}
-
-export async function handleMessageCreate(message: Message): Promise<void> {
-  if (message.author.bot || !message.guild || !message.member) return;
-  if (await runAutoMod(message)) return;
-
-  const restricted = loadGuild(message.guild.id);
-  const { chatBanRole, jailRole } = restricted.config;
-  const memberRoles = message.member.roles.cache;
-  if ((chatBanRole && memberRoles.has(chatBanRole)) || (jailRole && memberRoles.has(jailRole))) {
-    await message.delete().catch(() => undefined);
-    return;
-  }
-
-  const bridged = await handleMissingPrefixCommand(message);
-  if (!bridged) await handlePrefixCommand(message);
-
-  const guildId = message.guild.id;
-  const userId = message.author.id;
-  const data = loadGuild(guildId);
-  const prefix = getGuildPrefix(guildId);
-  const trimmed = message.content.trim().toLowerCase();
-  const isSettingAfk = trimmed === `${prefix}afk` || trimmed.startsWith(`${prefix}afk `);
-
-  if (data.afk[userId] && !isSettingAfk) {
-    const member = message.member as GuildMember;
-    if (member.nickname?.startsWith('[AFK] ')) {
-      const original = member.nickname.slice(6);
-      await member.setNickname(original || null).catch(() => undefined);
-    }
-    updateGuild(guildId, d => { delete d.afk[userId]; });
-    await message.reply({ content: '👋 Welcome back! I removed your AFK status.' }).catch(() => undefined);
-  }
-
-  for (const mentioned of message.mentions.users.values()) {
-    if (mentioned.id === userId) continue;
-    const freshData = loadGuild(guildId);
-    const afkEntry = freshData.afk[mentioned.id];
-    if (afkEntry) {
-      const since = Math.floor(afkEntry.timestamp / 1000);
-      await message.reply({ content: `💤 **${mentioned.username}** is AFK since <t:${since}:R>: ${afkEntry.reason}` }).catch(() => undefined);
-    }
-  }
-
-  const freshData = loadGuild(guildId);
-  if (freshData.autoResponders.length > 0) {
-    for (const ar of freshData.autoResponders) {
-      if (containsAutoresponderTrigger(message.content, ar.trigger)) {
-        await message.reply({ content: ar.response }).catch(() => undefined);
-        break;
-      }
-    }
-  }
-
-  const now = Date.now();
-  const levelData = freshData.levels[userId] ?? { xp: 0, level: 0, lastMessage: 0 };
-  if (now - levelData.lastMessage >= XP_COOLDOWN_MS) {
-    const xpGain = Math.floor(Math.random() * (XP_MAX - XP_MIN + 1)) + XP_MIN;
-    const oldLevel = levelData.level;
-    levelData.xp += xpGain;
-    levelData.level = levelFromXp(levelData.xp);
-    levelData.lastMessage = now;
-    updateGuild(guildId, d => { d.levels[userId] = levelData; });
-
-    if (levelData.level > oldLevel) {
-      const guildData = loadGuild(guildId);
-      const announceCh = guildData.config.levelChannel ?? message.channelId;
-      const levelRoleId = guildData.config.levelRoles?.[String(levelData.level)];
-      let roleName: string | undefined;
-      if (levelRoleId) {
-        const guildMember = await message.guild.members.fetch(userId).catch(() => null);
-        if (guildMember) {
-          await guildMember.roles.add(levelRoleId).catch(() => undefined);
-          const role = await message.guild.roles.fetch(levelRoleId).catch(() => null);
-          roleName = role?.name;
-        }
-      }
-      try {
-        const ch = await message.guild.channels.fetch(announceCh);
-        if (ch?.isTextBased()) {
-          const cfg = guildData.config.levelUpMessage;
-          const embed = buildLevelUpEmbed(`<@${userId}>`, levelData.level, levelData.xp, message.author.displayAvatarURL(), cfg?.title, cfg?.description, cfg?.imageUrl);
-          if (roleName) embed.addFields({ name: '🎖️ Role Unlocked', value: roleName, inline: true });
-          await (ch as BaseGuildTextChannel).send({ embeds: [embed], allowedMentions: { users: [userId], roles: [] } });
-        }
-      } catch { /* channel inaccessible */ }
-    }
-  }
-}
+export async function handleMessageCreate(message:Message):Promise<void>{if(message.author.bot||!message.guild||!message.member)return;if(await runAutoMod(message))return;const restricted=loadGuild(message.guild.id),{chatBanRole,jailRole}=restricted.config,memberRoles=message.member.roles.cache;if((chatBanRole&&memberRoles.has(chatBanRole))||(jailRole&&memberRoles.has(jailRole))){await message.delete().catch(()=>undefined);return;}const bridged=await handleMissingPrefixCommand(message);if(!bridged)await handlePrefixCommand(message);const guildId=message.guild.id,userId=message.author.id,data=loadGuild(guildId),prefix=getGuildPrefix(guildId),trimmed=message.content.trim().toLowerCase(),isSettingAfk=trimmed===`${prefix}afk`||trimmed.startsWith(`${prefix}afk `);if(data.afk[userId]&&!isSettingAfk){const member=message.member as GuildMember;if(member.nickname?.startsWith('[AFK] '))await member.setNickname(member.nickname.slice(6)||null).catch(()=>undefined);updateGuild(guildId,d=>{delete d.afk[userId];});await message.reply({content:'👋 Welcome back! I removed your AFK status.'}).catch(()=>undefined);}for(const mentioned of message.mentions.users.values()){if(mentioned.id===userId)continue;const freshData=loadGuild(guildId),afkEntry=freshData.afk[mentioned.id];if(afkEntry){const since=Math.floor(afkEntry.timestamp/1000);await message.reply({content:`💤 **${mentioned.username}** is AFK since <t:${since}:R>: ${afkEntry.reason}`}).catch(()=>undefined);}}
+const freshData=loadGuild(guildId);for(const ar of freshData.autoResponders){if(containsAutoresponderTrigger(message.content,ar.trigger)){await message.reply({content:ar.response}).catch(()=>undefined);break;}}
+const now=Date.now(),levelData=freshData.levels[userId]??{xp:0,level:0,lastMessage:0};if(now-levelData.lastMessage>=XP_COOLDOWN_MS){const xpGain=Math.floor(Math.random()*(XP_MAX-XP_MIN+1))+XP_MIN,oldLevel=levelData.level;levelData.xp+=xpGain;levelData.level=levelFromXp(levelData.xp);levelData.lastMessage=now;updateGuild(guildId,d=>{d.levels[userId]=levelData;});if(levelData.level>oldLevel){const guildData=loadGuild(guildId),announceCh=guildData.config.levelChannel??message.channelId,levelRoleId=guildData.config.levelRoles?.[String(levelData.level)];let roleName:string|undefined;if(levelRoleId){const gm=await message.guild.members.fetch(userId).catch(()=>null);if(gm){await gm.roles.add(levelRoleId).catch(()=>undefined);const role=await message.guild.roles.fetch(levelRoleId).catch(()=>null);roleName=role?.name;}}try{const ch=await message.guild.channels.fetch(announceCh);if(ch?.isTextBased()){const cfg=guildData.config.levelUpMessage,embed=buildLevelUpEmbed(`<@${userId}>`,levelData.level,levelData.xp,message.author.displayAvatarURL(),cfg?.title,cfg?.description,cfg?.imageUrl);if(roleName)embed.addFields({name:'🎖️ Role Unlocked',value:roleName,inline:true});await(ch as BaseGuildTextChannel).send({embeds:[embed],allowedMentions:{users:[userId],roles:[]}});}}catch{}}}}
