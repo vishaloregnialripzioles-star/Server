@@ -8,25 +8,14 @@ import type {
 
 export interface Command { data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder | Omit<SlashCommandBuilder, 'addSubcommand' | 'addSubcommandGroup'>; execute(interaction: ChatInputCommandInteraction): Promise<void>; }
 declare module 'discord.js' { interface Client { commands: Collection<string, Command>; } }
-
 export type AutoModAction = 'delete' | 'warn' | 'timeout' | 'delete_timeout' | 'dm_warn';
 export interface AutoModRule { enabled?: boolean; windowSeconds?: number; maxCount?: number; action?: AutoModAction; templateId?: string; }
 export interface AutoModConfig { enabled: boolean; antiSpam?: boolean; antiScam?: boolean; massMentions?: boolean; suspiciousLinks?: boolean; spaceSpam?: boolean; bannedWords: string[]; antiScamWords?: string[]; action: AutoModAction; spam?: AutoModRule; mentions?: AutoModRule; space?: AutoModRule; bannedWordsRule?: AutoModRule; antiScamRule?: AutoModRule; suspiciousLinksRule?: AutoModRule; }
 export interface ModerationTemplate { id: string; name: string; message: string; }
-
-/** Logging categories may be enabled with true (use the main log channel), false (disabled), or a channel ID (send that category to its own channel). */
 export type LoggingCategorySetting = boolean | string;
 export interface LoggingConfig { enabled?: boolean; channelId?: string; categories?: Record<string, LoggingCategorySetting>; }
-
 export interface GiveawayDailyConfig { enabled: boolean; channelId?: string; message?: string; }
-export interface Config {
-  logChannel?: string; muteRole?: string; jailRole?: string; chatBanRole?: string; ticketCategory?: string; ticketSupportRole?: string;
-  starboardChannel?: string; starboardThreshold: number; levelChannel?: string; snipeEnabled: boolean; prefix?: string;
-  levelRoles?: Record<string, string>; inviteRoles?: Record<string, string>;
-  levelUpMessage?: { title?: string; description?: string; imageUrl?: string; };
-  automod?: AutoModConfig; moderationTemplates?: ModerationTemplate[]; logging?: LoggingConfig;
-  giveawayDaily?: GiveawayDailyConfig;
-}
+export interface Config { logChannel?: string; muteRole?: string; jailRole?: string; chatBanRole?: string; ticketCategory?: string; ticketSupportRole?: string; starboardChannel?: string; starboardThreshold: number; levelChannel?: string; snipeEnabled: boolean; prefix?: string; levelRoles?: Record<string, string>; inviteRoles?: Record<string, string>; levelUpMessage?: { title?: string; description?: string; imageUrl?: string; }; automod?: AutoModConfig; moderationTemplates?: ModerationTemplate[]; logging?: LoggingConfig; giveawayDaily?: GiveawayDailyConfig; }
 export interface AntiNukeConfig { enabled: boolean; whitelist: string[]; }
 export interface AfkEntry { reason: string; timestamp: number; }
 export interface LevelEntry { xp: number; level: number; lastMessage: number; }
@@ -53,4 +42,4 @@ export interface RecoveryChannel { id: string; name: string; type: number; posit
 export interface RecoveryEmoji { id: string; name: string; url: string; animated: boolean; roles: string[]; }
 export interface RecoveryGuildSettings { name: string; iconUrl?: string; verificationLevel: number; explicitContentFilter: number; defaultMessageNotifications: number; afkTimeout: number; systemChannelId?: string; rulesChannelId?: string; publicUpdatesChannelId?: string; safetyAlertsChannelId?: string; afkChannelId?: string; }
 export interface RecoveryBackup { id: string; name: string; createdAt: number; guild: RecoveryGuildSettings; roles: RecoveryRole[]; channels: RecoveryChannel[]; emojis: RecoveryEmoji[]; }
-export interface GuildData { config: Config; antiNuke: AntiNukeConfig; extraOwners: string[]; afk: Record<string, AfkEntry>; levels: Record<string, LevelEntry>; sparks: Record<string, number>; warnings: Record<string, Warning[]>; reminders: Reminder[]; starboard: Record<string, StarboardEntry>; lastDeleted: Record<string, SnipedMessage[]>; lastEdited: Record<string, SnipedMessage[]>; tempRoles: TempRole[]; tickets: Record<string, Ticket>; autoResponders: AutoResponder[]; giveaways: Giveaway[]; savedEmbeds: Record<string, SavedEmbed>; welcome?: WelcomeConfig; shop: ShopConfig; recoveryBackups: RecoveryBackup[]; }
+export interface GuildData { config: Config; antiNuke: AntiNukeConfig; extraOwners: string[]; afk: Record<string, AfkEntry>; levels: Record<string, LevelEntry>; sparks: Record<string, number>; invites: Record<string, number>; warnings: Record<string, Warning[]>; reminders: Reminder[]; starboard: Record<string, StarboardEntry>; lastDeleted: Record<string, SnipedMessage[]>; lastEdited: Record<string, SnipedMessage[]>; tempRoles: TempRole[]; tickets: Record<string, Ticket>; autoResponders: AutoResponder[]; giveaways: Giveaway[]; savedEmbeds: Record<string, SavedEmbed>; welcome?: WelcomeConfig; shop: ShopConfig; recoveryBackups: RecoveryBackup[]; }
