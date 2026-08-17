@@ -37,6 +37,7 @@ export interface Config {
   logChannel?: string; muteRole?: string; jailRole?: string; chatBanRole?: string; ticketCategory?: string; ticketSupportRole?: string;
   starboardChannel?: string; starboardThreshold: number; levelChannel?: string; snipeEnabled: boolean; prefix?: string;
   levelRoles?: Record<string, string>;
+  inviteRoles?: Record<string, string>;
   levelUpMessage?: { title?: string; description?: string; imageUrl?: string; };
   automod?: AutoModConfig;
   giveawayDaily?: GiveawayDailyConfig;
