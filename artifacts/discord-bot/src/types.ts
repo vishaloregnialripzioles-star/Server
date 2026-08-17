@@ -10,36 +10,14 @@ export interface Command { data: SlashCommandBuilder | SlashCommandOptionsOnlyBu
 declare module 'discord.js' { interface Client { commands: Collection<string, Command>; } }
 
 export type AutoModAction = 'delete' | 'warn' | 'timeout' | 'delete_timeout' | 'dm_warn';
-export interface AutoModRule {
-  enabled?: boolean;
-  windowSeconds?: number;
-  maxCount?: number;
-  action?: AutoModAction;
-  templateId?: string;
-}
-export interface AutoModConfig {
-  enabled: boolean;
-  antiSpam?: boolean;
-  antiScam?: boolean;
-  massMentions?: boolean;
-  suspiciousLinks?: boolean;
-  spaceSpam?: boolean;
-  bannedWords: string[];
-  antiScamWords?: string[];
-  action: AutoModAction;
-  spam?: AutoModRule;
-  mentions?: AutoModRule;
-  space?: AutoModRule;
-  bannedWordsRule?: AutoModRule;
-  antiScamRule?: AutoModRule;
-  suspiciousLinksRule?: AutoModRule;
-}
+export interface AutoModRule { enabled?: boolean; windowSeconds?: number; maxCount?: number; action?: AutoModAction; templateId?: string; }
+export interface AutoModConfig { enabled: boolean; antiSpam?: boolean; antiScam?: boolean; massMentions?: boolean; suspiciousLinks?: boolean; spaceSpam?: boolean; bannedWords: string[]; antiScamWords?: string[]; action: AutoModAction; spam?: AutoModRule; mentions?: AutoModRule; space?: AutoModRule; bannedWordsRule?: AutoModRule; antiScamRule?: AutoModRule; suspiciousLinksRule?: AutoModRule; }
 export interface ModerationTemplate { id: string; name: string; message: string; }
-export interface LoggingConfig {
-  enabled?: boolean;
-  channelId?: string;
-  categories?: Record<string, boolean>;
-}
+
+/** Logging categories may be enabled with true (use the main log channel), false (disabled), or a channel ID (send that category to its own channel). */
+export type LoggingCategorySetting = boolean | string;
+export interface LoggingConfig { enabled?: boolean; channelId?: string; categories?: Record<string, LoggingCategorySetting>; }
+
 export interface GiveawayDailyConfig { enabled: boolean; channelId?: string; message?: string; }
 export interface Config {
   logChannel?: string; muteRole?: string; jailRole?: string; chatBanRole?: string; ticketCategory?: string; ticketSupportRole?: string;
