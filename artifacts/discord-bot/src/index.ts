@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
 import { createServer } from 'node:http';
 import { registerEvents } from './events/index.js';
 import { handleDashboardApi } from './dashboardApi.js';
+import { initStorage } from './storage.js';
 
 const port = Number(process.env.PORT ?? 3000);
 const token = process.env.DISCORD_BOT_TOKEN?.trim();
@@ -30,9 +31,7 @@ createServer(async (req, res) => {
 client.commands = new Collection();
 
 client.on('debug', message => {
-  if (/identify|gateway|ready|heartbeat|resume/i.test(message)) {
-    console.log(`[Discord] ${message}`);
-  }
+  if (/identify|gateway|ready|heartbeat|resume/i.test(message)) console.log(`[Discord] ${message}`);
 });
 
 // Register Discord event listeners BEFORE login/ready.
@@ -40,7 +39,6 @@ registerEvents(client);
 
 client.once('ready', async () => {
   console.log(`✅ DISCORD ONLINE: logged in as ${client.user?.tag}`);
-
   try {
     const [{ allCommands }, { startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([
       import('./commands/index.js'),
@@ -48,18 +46,12 @@ client.once('ready', async () => {
       import('./globalGameEvents.js'),
       import('./commands/help.js'),
     ]);
-
     client.commands.clear();
-    for (const command of allCommands) {
-      client.commands.set(command.data.name, command);
-    }
-
+    for (const command of allCommands) client.commands.set(command.data.name, command);
     registerGlobalGameEvents(client);
     startLoops(client);
     void primeHelpApplicationEmojis(client).catch(err => console.error('[Help emoji cache]', err));
-
     console.log(`✅ Loaded ${client.commands.size} commands`);
-
     try {
       const { REST, Routes } = await import('discord.js');
       const guildId = process.env.DISCORD_GUILD_ID?.trim();
@@ -72,26 +64,20 @@ client.once('ready', async () => {
         await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData });
         console.log(`✅ Synced ${commandData.length} global slash commands`);
       }
-    } catch (err) {
-      console.error('[Slash sync failed]', err);
-    }
-  } catch (err) {
-    console.error('[Command startup failed — event listeners remain active]', err);
-  }
+    } catch (err) { console.error('[Slash sync failed]', err); }
+  } catch (err) { console.error('[Command startup failed — event listeners remain active]', err); }
 });
 
 client.on('error', err => console.error('[Discord error]', err));
 client.on('warn', message => console.warn('[Discord warn]', message));
 
 console.log('🔌 Connecting to Discord gateway...');
+
+// Load durable guild progression before the gateway can deliver events.
+await initStorage();
+
 const loginPromise = client.login(token);
 const timeout = setTimeout(() => {
   console.error('❌ Discord gateway did not become ready within 30 seconds. Check the bot token and Discord gateway connectivity.');
 }, 30_000);
-
-loginPromise
-  .then(() => clearTimeout(timeout))
-  .catch(err => {
-    clearTimeout(timeout);
-    console.error('[Discord login failed]', err);
-  });
+loginPromise.then(() => clearTimeout(timeout)).catch(err => { clearTimeout(timeout); console.error('[Discord login failed]', err); });
