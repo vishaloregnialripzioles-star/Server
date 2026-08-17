@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Client } from 'discord.js';
+import { PermissionFlagsBits } from 'discord.js';
 import { loadGuild, saveGuild } from './storage.js';
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -19,8 +20,6 @@ async function readBody(req: IncomingMessage): Promise<string> {
 export async function handleDashboardApi(req: IncomingMessage, res: ServerResponse, client: Client): Promise<boolean> {
   const url = new URL(req.url ?? '/', 'http://localhost');
 
-  // Used by the website server-selector to determine whether THIS bot is in a guild.
-  // This intentionally exposes only presence, not bot token or guild data.
   const presenceMatch = url.pathname.match(/^\/dashboard\/bot-status\/(\d+)$/);
   if (presenceMatch) {
     const guildId = presenceMatch[1];
@@ -38,14 +37,25 @@ export async function handleDashboardApi(req: IncomingMessage, res: ServerRespon
     return true;
   }
 
-  const expectedSecret = process.env.DASHBOARD_API_SECRET?.trim();
-  const suppliedSecret = String(req.headers['x-dashboard-secret'] ?? '');
-  if (expectedSecret && suppliedSecret !== expectedSecret) {
-    json(res, 401, { error: 'Invalid dashboard secret' });
+  const guildId = match[1];
+  const dashboardUserId = String(req.headers['x-dashboard-user'] ?? '').trim();
+  if (!/^\d+$/.test(dashboardUserId)) {
+    json(res, 401, { error: 'Dashboard user is required' });
     return true;
   }
 
-  const guildId = match[1];
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) {
+    json(res, 404, { error: 'Bot is not installed in this server' });
+    return true;
+  }
+
+  const member = await guild.members.fetch(dashboardUserId).catch(() => null);
+  if (!member || (!member.permissions.has(PermissionFlagsBits.ManageGuild) && !member.permissions.has(PermissionFlagsBits.Administrator))) {
+    json(res, 403, { error: 'You need Manage Server permission for this server' });
+    return true;
+  }
+
   try {
     const data = loadGuild(guildId);
     if (req.method === 'GET') {
