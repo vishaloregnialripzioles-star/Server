@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { GuildData, SnipedMessage } from './types.js';
+import { neon } from '@neondatabase/serverless';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, '..', 'data');
@@ -10,6 +11,61 @@ function defaultGuildData(): GuildData { return { config: { starboardThreshold:3
 function ensureDir():void{if(!existsSync(DATA_DIR))mkdirSync(DATA_DIR,{recursive:true});}
 function getFilePath(guildId:string):string{return join(DATA_DIR,`${guildId}.json`);}
 function migrateSnipeField(field:Record<string,SnipedMessage|SnipedMessage[]|unknown>):Record<string,SnipedMessage[]>{const result:Record<string,SnipedMessage[]>={};for(const [channelId,value] of Object.entries(field)){if(Array.isArray(value))result[channelId]=value as SnipedMessage[];else if(value&&typeof value==='object'&&'authorId' in value)result[channelId]=[value as SnipedMessage];}return result;}
-export function loadGuild(guildId:string):GuildData{ensureDir();const path=getFilePath(guildId);if(!existsSync(path))return defaultGuildData();try{const parsed=JSON.parse(readFileSync(path,'utf-8')) as Partial<GuildData>;const defaults=defaultGuildData();const old=parsed.config?.automod as any;const automod={...defaults.config.automod,...(old??{}),bannedWords:old?.bannedWords??[],antiScamWords:old?.antiScamWords??[]};const data:GuildData={...defaults,...parsed,config:{...defaults.config,...parsed.config,levelRoles:parsed.config?.levelRoles??{},inviteRoles:parsed.config?.inviteRoles??{},automod,moderationTemplates:parsed.config?.moderationTemplates??[],logging:{...defaults.config.logging,...(parsed.config?.logging??{}),categories:{...defaultCategories,...(parsed.config?.logging?.categories??{})}},giveawayDaily:{...defaults.config.giveawayDaily,...(parsed.config?.giveawayDaily??{})}},antiNuke:{...defaults.antiNuke,...(parsed.antiNuke??{}),whitelist:parsed.antiNuke?.whitelist??[]},extraOwners:parsed.extraOwners??[],sparks:parsed.sparks??{},autoResponders:parsed.autoResponders??[],giveaways:parsed.giveaways??[],savedEmbeds:parsed.savedEmbeds??{},shop:{...defaults.shop,...(parsed.shop??{}),roles:parsed.shop?.roles??[],colours:parsed.shop?.colours??[],customRoles:parsed.shop?.customRoles??[]},recoveryBackups:parsed.recoveryBackups??[]};if(parsed.lastDeleted)data.lastDeleted=migrateSnipeField(parsed.lastDeleted as any);if(parsed.lastEdited)data.lastEdited=migrateSnipeField(parsed.lastEdited as any);return data;}catch{return defaultGuildData();}}
-export function saveGuild(guildId:string,data:GuildData):void{ensureDir();writeFileSync(getFilePath(guildId),JSON.stringify(data,null,2),'utf-8');}
+
+const cache = new Map<string, GuildData>();
+const databaseUrl = process.env.DATABASE_URL?.trim();
+const sql = databaseUrl ? neon(databaseUrl) : null;
+let databaseReady = false;
+
+/** Load all durable guild progression before the Discord bot starts handling events. */
+export async function initStorage():Promise<void>{
+  ensureDir();
+  if(!sql){console.warn('[Storage] DATABASE_URL is not configured; using local filesystem storage only.');return;}
+  try{
+    await sql`CREATE TABLE IF NOT EXISTS guild_progression (guild_id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`;
+    const rows = await sql`SELECT guild_id, data FROM guild_progression`;
+    for(const row of rows as any[]){
+      const guildId=String(row.guild_id); cache.set(guildId, hydrateGuild(row.data));
+    }
+    databaseReady=true;
+    console.log(`[Storage] Neon persistence ready; loaded ${cache.size} guilds.`);
+  }catch(error){
+    console.error('[Storage] Neon initialization failed; continuing with local storage:',error);
+  }
+}
+
+function hydrateGuild(parsed:unknown):GuildData{
+  const defaults=defaultGuildData();
+  const value=(parsed&&typeof parsed==='object'?parsed:{}) as Partial<GuildData>;
+  const old=value.config?.automod as any;
+  const automod={...defaults.config.automod,...(old??{}),bannedWords:old?.bannedWords??[],antiScamWords:old?.antiScamWords??[]};
+  const data:GuildData={...defaults,...value,config:{...defaults.config,...value.config,levelRoles:value.config?.levelRoles??{},inviteRoles:value.config?.inviteRoles??{},automod,moderationTemplates:value.config?.moderationTemplates??[],logging:{...defaults.config.logging,...(value.config?.logging??{}),categories:{...defaultCategories,...(value.config?.logging?.categories??{})}},giveawayDaily:{...defaults.config.giveawayDaily,...(value.config?.giveawayDaily??{})}},antiNuke:{...defaults.antiNuke,...(value.antiNuke??{}),whitelist:value.antiNuke?.whitelist??[]},extraOwners:value.extraOwners??[],sparks:value.sparks??{},autoResponders:value.autoResponders??[],giveaways:value.giveaways??[],savedEmbeds:value.savedEmbeds??{},shop:{...defaults.shop,...(value.shop??{}),roles:value.shop?.roles??[],colours:value.shop?.colours??[],customRoles:value.shop?.customRoles??[]},recoveryBackups:value.recoveryBackups??[]};
+  if(value.lastDeleted)data.lastDeleted=migrateSnipeField(value.lastDeleted as any);
+  if(value.lastEdited)data.lastEdited=migrateSnipeField(value.lastEdited as any);
+  return data;
+}
+
+export function loadGuild(guildId:string):GuildData{
+  const cached=cache.get(guildId); if(cached)return cached;
+  ensureDir(); const path=getFilePath(guildId);
+  if(!existsSync(path)){const fresh=defaultGuildData();cache.set(guildId,fresh);return fresh;}
+  try{const data=hydrateGuild(JSON.parse(readFileSync(path,'utf-8')));cache.set(guildId,data);return data;}catch{const fresh=defaultGuildData();cache.set(guildId,fresh);return fresh;}
+}
+
+export function saveGuild(guildId:string,data:GuildData):void{
+  cache.set(guildId,data);
+  ensureDir();
+  try{writeFileSync(getFilePath(guildId),JSON.stringify(data,null,2),'utf-8');}catch(error){console.error('[Storage] Local save failed:',error);}
+  if(sql && databaseReady){
+    void sql`INSERT INTO guild_progression (guild_id,data,updated_at) VALUES (${guildId},${JSON.stringify(data)}::jsonb,NOW()) ON CONFLICT (guild_id) DO UPDATE SET data=EXCLUDED.data,updated_at=NOW()`
+      .catch(error=>console.error(`[Storage] Database save failed for ${guildId}:`,error));
+  }
+}
+
+export async function deleteGuild(guildId:string):Promise<void>{
+  cache.delete(guildId);
+  try{const path=getFilePath(guildId);if(existsSync(path)){const{unlinkSync}=await import('node:fs');unlinkSync(path);}}catch(error){console.error('[Storage] Local delete failed:',error);}
+  if(sql && databaseReady){try{await sql`DELETE FROM guild_progression WHERE guild_id=${guildId}`;}catch(error){console.error(`[Storage] Database delete failed for ${guildId}:`,error);}}
+}
+
 export function updateGuild(guildId:string,updater:(data:GuildData)=>void):void{const data=loadGuild(guildId);updater(data);saveGuild(guildId,data);}
