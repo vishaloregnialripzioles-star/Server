@@ -4,12 +4,6 @@ import { registerEvents } from './events/index.js';
 import { handleDashboardApi } from './dashboardApi.js';
 
 const port = Number(process.env.PORT ?? 3000);
-createServer(async (req, res) => {
-  if (await handleDashboardApi(req, res)) return;
-  res.writeHead(200, { 'content-type': 'text/plain' });
-  res.end('Sparxie bot is running');
-}).listen(port, '0.0.0.0', () => console.log(`🌐 Health server listening on ${port}`));
-
 const token = process.env.DISCORD_BOT_TOKEN?.trim();
 if (!token) throw new Error('DISCORD_BOT_TOKEN is not set');
 
@@ -27,6 +21,12 @@ const client = new Client({
   partials: [Partials.Message, Partials.Reaction, Partials.Channel],
 });
 
+createServer(async (req, res) => {
+  if (await handleDashboardApi(req, res, client)) return;
+  res.writeHead(200, { 'content-type': 'text/plain' });
+  res.end('Sparxie bot is running');
+}).listen(port, '0.0.0.0', () => console.log(`🌐 Health server listening on ${port}`));
+
 client.commands = new Collection();
 
 client.on('debug', message => {
@@ -35,10 +35,7 @@ client.on('debug', message => {
   }
 });
 
-// Register Discord event listeners BEFORE login/ready. Previously these were
-// installed inside the ready callback, so any command-module import failure
-// could leave the bot visibly online while slash and prefix commands had no
-// listeners at all.
+// Register Discord event listeners BEFORE login/ready.
 registerEvents(client);
 
 client.once('ready', async () => {
