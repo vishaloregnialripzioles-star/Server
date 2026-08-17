@@ -43,6 +43,8 @@ import { levelconfig } from './levelconfig.js';
 import { createrole } from './createrole.js';
 import { roleassign } from './roleassign.js';
 import { giveaway } from './giveaway.js';
+import { giveawayDaily } from './giveawaydaily.js';
+import { automod } from './automod.js';
 import { music } from './music.js';
 import { embedCmd } from './embed.js';
 import { welcome } from './welcome.js';
@@ -77,7 +79,7 @@ export const allCommands: Command[] = [
   levelconfig,
   createrole,
   roleassign,
-  giveaway,
+  giveaway, giveawayDaily, automod,
   music,
   embedCmd,
   welcome,
