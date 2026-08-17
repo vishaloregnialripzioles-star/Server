@@ -31,8 +31,25 @@ function matchesBannedWord(content: string, words: string[]): string | undefined
   return undefined;
 }
 
+function isAutoModImmune(message: Message): boolean {
+  if (!message.guild || !message.member) return true;
+  const data = loadGuild(message.guild.id);
+  const userId = message.author.id;
+
+  // Always exempt the Discord server owner.
+  if (userId === message.guild.ownerId) return true;
+
+  // Exempt configured extra owners and the existing AutoMod/anti-nuke whitelist.
+  if ((data.extraOwners ?? []).includes(userId)) return true;
+  if ((data.antiNuke?.whitelist ?? []).includes(userId)) return true;
+
+  return false;
+}
+
 async function runAutoMod(message: Message): Promise<boolean> {
   if (!message.guild || !message.member || message.author.bot) return false;
+  if (isAutoModImmune(message)) return false;
+
   const cfg = loadGuild(message.guild.id).config.automod;
   if (!cfg?.enabled) return false;
   if (message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.permissions.has(PermissionFlagsBits.ManageGuild)) return false;
