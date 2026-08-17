@@ -11,6 +11,8 @@ function defaultGuildData(): GuildData {
     config: {
       starboardThreshold: 3,
       snipeEnabled: true,
+      levelRoles: {},
+      inviteRoles: {},
       automod: { enabled: false, antiSpam: false, antiScam: false, massMentions: false, suspiciousLinks: false, bannedWords: [], action: 'delete_timeout' },
       giveawayDaily: { enabled: false, message: '🎁 Don’t forget to enter our active giveaway!' },
     },
@@ -43,6 +45,8 @@ export function loadGuild(guildId: string): GuildData {
     const data: GuildData = {
       ...defaults, ...parsed,
       config: { ...defaults.config, ...parsed.config,
+        levelRoles: parsed.config?.levelRoles ?? {},
+        inviteRoles: parsed.config?.inviteRoles ?? {},
         automod: { ...defaults.config.automod!, ...(parsed.config?.automod ?? {}), bannedWords: parsed.config?.automod?.bannedWords ?? [] },
         giveawayDaily: { ...defaults.config.giveawayDaily!, ...(parsed.config?.giveawayDaily ?? {}) },
       },
