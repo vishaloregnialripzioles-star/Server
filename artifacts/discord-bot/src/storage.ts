@@ -12,7 +12,7 @@ function defaultGuildData(): GuildData {
       starboardThreshold: 3,
       snipeEnabled: true,
       automod: { enabled: false, antiSpam: false, antiScam: false, massMentions: false, suspiciousLinks: false, bannedWords: [], action: 'delete_timeout' },
-      giveawayDaily: { enabled: false, channelId: undefined, message: '🎁 Don’t forget to enter our active giveaway!' },
+      giveawayDaily: { enabled: false, message: '🎁 Don’t forget to enter our active giveaway!' },
     },
     antiNuke: { enabled: false, whitelist: [] }, extraOwners: [],
     afk: {}, levels: {}, sparks: {}, warnings: {}, reminders: [], starboard: {}, lastDeleted: {}, lastEdited: {},
@@ -48,7 +48,7 @@ export function loadGuild(guildId: string): GuildData {
       },
       antiNuke: { ...defaults.antiNuke, ...(parsed.antiNuke ?? {}), whitelist: parsed.antiNuke?.whitelist ?? [] },
       extraOwners: parsed.extraOwners ?? [], sparks: parsed.sparks ?? {},
-      autoResponders: parsed.autoResponders ?? [], giveaways: parsed.giveaways ?? [], savedEmbeds: parsed.savedEmbeds ?? [], welcome: parsed.welcome,
+      autoResponders: parsed.autoResponders ?? [], giveaways: parsed.giveaways ?? [], savedEmbeds: parsed.savedEmbeds ?? {}, welcome: parsed.welcome,
       shop: { ...defaults.shop, ...(parsed.shop ?? {}), roles: parsed.shop?.roles ?? [], colours: parsed.shop?.colours ?? [], customRoles: parsed.shop?.customRoles ?? [] },
       recoveryBackups: parsed.recoveryBackups ?? [],
     };
