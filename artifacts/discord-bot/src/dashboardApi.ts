@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { Client } from 'discord.js';
 import { loadGuild, saveGuild } from './storage.js';
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -15,8 +16,20 @@ async function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-export async function handleDashboardApi(req: IncomingMessage, res: ServerResponse): Promise<boolean> {
-  const match = new URL(req.url ?? '/', 'http://localhost').pathname.match(/^\/dashboard\/api\/guild\/(\d+)\/config$/);
+export async function handleDashboardApi(req: IncomingMessage, res: ServerResponse, client: Client): Promise<boolean> {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+
+  // Used by the website server-selector to determine whether THIS bot is in a guild.
+  // This intentionally exposes only presence, not bot token or guild data.
+  const presenceMatch = url.pathname.match(/^\/dashboard\/bot-status\/(\d+)$/);
+  if (presenceMatch) {
+    const guildId = presenceMatch[1];
+    const present = client.guilds.cache.has(guildId);
+    json(res, 200, { present, guildId });
+    return true;
+  }
+
+  const match = url.pathname.match(/^\/dashboard\/api\/guild\/(\d+)\/config$/);
   if (!match) return false;
 
   if (req.method === 'OPTIONS') {
