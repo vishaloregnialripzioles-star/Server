@@ -8,6 +8,7 @@ import { timeoutCommand } from './timeout.js';
 import { warn } from './warn.js';
 import { warnings } from './warnings.js';
 import { clearwarns } from './clearwarns.js';
+import { warnsLeaderboard } from './warnsleaderboard.js';
 import { purge } from './purge.js';
 import { purgebots } from './purgebots.js';
 import { lock } from './lock.js';
@@ -60,7 +61,7 @@ import { recovery } from './recovery.js';
 export const allCommands: Command[] = [
   setup,
   ban, kick, mute, unmute, timeoutCommand,
-  warn, warnings, clearwarns,
+  warn, warnings, clearwarns, warnsLeaderboard,
   purge, purgebots,
   lock, unlock, slowmode,
   chatban, unchatban,
