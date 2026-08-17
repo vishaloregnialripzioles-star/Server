@@ -1,8 +1,11 @@
 import type { GuildMember, TextChannel } from 'discord.js';
 import { loadGuild } from '../storage.js';
 import { resolveWelcomeSend } from '../welcomeUtils.js';
+import { handleInviteRole } from '../inviteRoles.js';
 
 export async function handleGuildMemberAdd(member: GuildMember): Promise<void> {
+  await handleInviteRole(member);
+
   const data = loadGuild(member.guild.id);
   const w = data.welcome;
 
