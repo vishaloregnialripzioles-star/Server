@@ -17,11 +17,29 @@ export interface Command {
 
 declare module 'discord.js' { interface Client { commands: Collection<string, Command>; } }
 
+export interface AutoModConfig {
+  enabled: boolean;
+  antiSpam?: boolean;
+  antiScam?: boolean;
+  massMentions?: boolean;
+  suspiciousLinks?: boolean;
+  bannedWords: string[];
+  action: 'delete' | 'warn' | 'timeout' | 'delete_timeout';
+}
+
+export interface GiveawayDailyConfig {
+  enabled: boolean;
+  channelId?: string;
+  message?: string;
+}
+
 export interface Config {
   logChannel?: string; muteRole?: string; jailRole?: string; chatBanRole?: string; ticketCategory?: string; ticketSupportRole?: string;
   starboardChannel?: string; starboardThreshold: number; levelChannel?: string; snipeEnabled: boolean; prefix?: string;
   levelRoles?: Record<string, string>;
   levelUpMessage?: { title?: string; description?: string; imageUrl?: string; };
+  automod?: AutoModConfig;
+  giveawayDaily?: GiveawayDailyConfig;
 }
 export interface AntiNukeConfig { enabled: boolean; whitelist: string[]; }
 export interface AfkEntry { reason: string; timestamp: number; }
@@ -44,39 +62,19 @@ export interface Giveaway {
   entries: string[]; requiredRoleId?: string; blacklistRoleId?: string; extraEntryRoles?: ExtraEntryRole[]; imageUrl?: string; ended: boolean; winnerId?: string;
 }
 export interface ShopRoleItem { id: string; name: string; roleId: string; position: number; price: number; }
-/** A colour is a reusable shop cosmetic, not a Discord role. */
-export interface ShopColourItem { id: string; name: string; color?: number; price: number; /** legacy field from the old colour-role implementation */ roleId?: string; }
-/** Tracks the per-member role clone created when a purchased shop role is coloured. */
+export interface ShopColourItem { id: string; name: string; color?: number; price: number; roleId?: string; }
 export interface ShopCustomRole { id: string; userId: string; shopRoleId: string; roleId: string; }
 export interface ShopConfig { roles: ShopRoleItem[]; colours: ShopColourItem[]; customRoles: ShopCustomRole[]; }
-
-export interface RecoveryRole {
-  id: string; name: string; color: number; hoist: boolean; mentionable: boolean; permissions: string; position: number;
-}
+export interface RecoveryRole { id: string; name: string; color: number; hoist: boolean; mentionable: boolean; permissions: string; position: number; }
 export interface RecoveryOverwrite { id: string; type: number; allow: string; deny: string; }
-export interface RecoveryChannel {
-  id: string; name: string; type: number; position: number; parentId?: string;
-  topic?: string; nsfw?: boolean; rateLimitPerUser?: number; bitrate?: number; userLimit?: number;
-  rtcRegion?: string | null; videoQualityMode?: number; defaultAutoArchiveDuration?: number;
-  defaultThreadRateLimitPerUser?: number; defaultForumLayout?: number; defaultSortOrder?: number;
-  permissionOverwrites: RecoveryOverwrite[];
-}
+export interface RecoveryChannel { id: string; name: string; type: number; position: number; parentId?: string; topic?: string; nsfw?: boolean; rateLimitPerUser?: number; bitrate?: number; userLimit?: number; rtcRegion?: string | null; videoQualityMode?: number; defaultAutoArchiveDuration?: number; defaultThreadRateLimitPerUser?: number; defaultForumLayout?: number; defaultSortOrder?: number; permissionOverwrites: RecoveryOverwrite[]; }
 export interface RecoveryEmoji { id: string; name: string; url: string; animated: boolean; roles: string[]; }
-export interface RecoveryGuildSettings {
-  name: string; iconUrl?: string; verificationLevel: number; explicitContentFilter: number;
-  defaultMessageNotifications: number; afkTimeout: number; systemChannelId?: string;
-  rulesChannelId?: string; publicUpdatesChannelId?: string; safetyAlertsChannelId?: string; afkChannelId?: string;
-}
-export interface RecoveryBackup {
-  id: string; name: string; createdAt: number; guild: RecoveryGuildSettings;
-  roles: RecoveryRole[]; channels: RecoveryChannel[]; emojis: RecoveryEmoji[];
-}
+export interface RecoveryGuildSettings { name: string; iconUrl?: string; verificationLevel: number; explicitContentFilter: number; defaultMessageNotifications: number; afkTimeout: number; systemChannelId?: string; rulesChannelId?: string; publicUpdatesChannelId?: string; safetyAlertsChannelId?: string; afkChannelId?: string; }
+export interface RecoveryBackup { id: string; name: string; createdAt: number; guild: RecoveryGuildSettings; roles: RecoveryRole[]; channels: RecoveryChannel[]; emojis: RecoveryEmoji[]; }
 
 export interface GuildData {
   config: Config; antiNuke: AntiNukeConfig; extraOwners: string[];
-  afk: Record<string, AfkEntry>; levels: Record<string, LevelEntry>;
-  /** ⚡ sparks balance per member */
-  sparks: Record<string, number>;
+  afk: Record<string, AfkEntry>; levels: Record<string, LevelEntry>; sparks: Record<string, number>;
   warnings: Record<string, Warning[]>; reminders: Reminder[]; starboard: Record<string, StarboardEntry>;
   lastDeleted: Record<string, SnipedMessage[]>; lastEdited: Record<string, SnipedMessage[]>; tempRoles: TempRole[];
   tickets: Record<string, Ticket>; autoResponders: AutoResponder[]; giveaways: Giveaway[]; savedEmbeds: Record<string, SavedEmbed>; welcome?: WelcomeConfig;
