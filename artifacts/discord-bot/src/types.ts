@@ -36,7 +36,7 @@ export interface ShopRoleItem { id: string; name: string; roleId: string; positi
 export interface ShopColourItem { id: string; name: string; color?: number; price: number; roleId?: string; }
 export interface ShopCustomRole { id: string; userId: string; shopRoleId: string; roleId: string; }
 export interface ShopConfig { roles: ShopRoleItem[]; colours: ShopColourItem[]; customRoles: ShopCustomRole[]; }
-export interface RecoveryRole { id: string; name: string; color: number; hoist: boolean; mentionable: boolean; permissions: string; }
+export interface RecoveryRole { id: string; name: string; color: number; hoist: boolean; mentionable: boolean; permissions: string; position: number; }
 export interface RecoveryOverwrite { id: string; type: number; allow: string; deny: string; }
 export interface RecoveryChannel { id: string; name: string; type: number; position: number; parentId?: string; topic?: string; nsfw?: boolean; permissionOverwrites: RecoveryOverwrite[]; }
 export interface RecoveryEmoji { id: string; name: string; url: string; animated: boolean; roles: string[]; }
