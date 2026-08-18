@@ -9,8 +9,8 @@ const CATEGORY_COLORS:Record<LogCategory,number>={messageDelete:0xED4245,message
 
 function enabled(setting:LoggingCategorySetting|undefined, global:boolean|undefined):boolean {
   if(setting===false)return false;
-  if(typeof setting==='string')return /^\d{15,25}$/.test(setting);
   if(setting===true)return true;
+  if(typeof setting==='string')return /^\d{15,25}$/.test(setting);
   return global===true;
 }
 
@@ -18,7 +18,7 @@ export async function auditLog(guild:Guild,category:LogCategory,title:string,des
   const data=loadGuild(guild.id); const cfg=data.config.logging;
   const setting=cfg?.categories?.[category];
   if(!enabled(setting,cfg?.enabled))return;
-  const channelId=typeof setting==='string' ? setting : (cfg?.channelId||data.config.logChannel);
+  const channelId=(cfg?.channels?.[category]||'').trim() || (typeof setting==='string' ? setting : (cfg?.channelId||data.config.logChannel));
   if(!channelId)return;
   const ch=await guild.channels.fetch(channelId).catch(()=>null);
   if(!ch?.isTextBased() || !('send' in ch))return;
