@@ -13,7 +13,7 @@ export interface AutoModRule { enabled?: boolean; windowSeconds?: number; maxCou
 export interface AutoModConfig { enabled: boolean; antiSpam?: boolean; antiScam?: boolean; massMentions?: boolean; suspiciousLinks?: boolean; spaceSpam?: boolean; bannedWords: string[]; antiScamWords?: string[]; action: AutoModAction; spam?: AutoModRule; mentions?: AutoModRule; space?: AutoModRule; bannedWordsRule?: AutoModRule; antiScamRule?: AutoModRule; suspiciousLinksRule?: AutoModRule; }
 export interface ModerationTemplate { id: string; name: string; message: string; }
 export type LoggingCategorySetting = boolean | string;
-export interface LoggingConfig { enabled?: boolean; channelId?: string; categories?: Record<string, LoggingCategorySetting>; }
+export interface LoggingConfig { enabled?: boolean; channelId?: string; categories?: Record<string, LoggingCategorySetting>; channels?: Record<string, string>; }
 export interface GiveawayDailyConfig { enabled: boolean; channelId?: string; message?: string; }
 export interface Config { logChannel?: string; muteRole?: string; jailRole?: string; chatBanRole?: string; ticketCategory?: string; ticketSupportRole?: string; starboardChannel?: string; starboardThreshold: number; levelChannel?: string; snipeEnabled: boolean; prefix?: string; levelRoles?: Record<string, string>; inviteRoles?: Record<string, string>; levelUpMessage?: { title?: string; description?: string; imageUrl?: string; }; automod?: AutoModConfig; moderationTemplates?: ModerationTemplate[]; logging?: LoggingConfig; giveawayDaily?: GiveawayDailyConfig; }
 export interface AntiNukeConfig { enabled: boolean; whitelist: string[]; }
@@ -36,7 +36,7 @@ export interface ShopRoleItem { id: string; name: string; roleId: string; positi
 export interface ShopColourItem { id: string; name: string; color?: number; price: number; roleId?: string; }
 export interface ShopCustomRole { id: string; userId: string; shopRoleId: string; roleId: string; }
 export interface ShopConfig { roles: ShopRoleItem[]; colours: ShopColourItem[]; customRoles: ShopCustomRole[]; }
-export interface RecoveryRole { id: string; name: string; color: number; hoist: boolean; mentionable: boolean; permissions: string; position: number; }
+export interface RecoveryRole { id: string; name: string; color: number; hoist: boolean; mentionable: boolean; permissions: string; }
 export interface RecoveryOverwrite { id: string; type: number; allow: string; deny: string; }
 export interface RecoveryChannel { id: string; name: string; type: number; position: number; parentId?: string; topic?: string; nsfw?: boolean; permissionOverwrites: RecoveryOverwrite[]; }
 export interface RecoveryEmoji { id: string; name: string; url: string; animated: boolean; roles: string[]; }
