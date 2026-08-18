@@ -1,11 +1,4 @@
-import type {
-  ChatInputCommandInteraction,
-  SlashCommandBuilder,
-  SlashCommandOptionsOnlyBuilder,
-  SlashCommandSubcommandsOnlyBuilder,
-  Collection,
-} from 'discord.js';
-
+import type { ChatInputCommandInteraction, SlashCommandBuilder, SlashCommandOptionsOnlyBuilder, SlashCommandSubcommandsOnlyBuilder, Collection } from 'discord.js';
 export interface Command { data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder | Omit<SlashCommandBuilder, 'addSubcommand' | 'addSubcommandGroup'>; execute(interaction: ChatInputCommandInteraction): Promise<void>; }
 declare module 'discord.js' { interface Client { commands: Collection<string, Command>; } }
 export type AutoModAction = 'delete' | 'warn' | 'timeout' | 'delete_timeout' | 'dm_warn';
@@ -15,7 +8,11 @@ export interface ModerationTemplate { id: string; name: string; message: string;
 export type LoggingCategorySetting = boolean | string;
 export interface LoggingConfig { enabled?: boolean; channelId?: string; categories?: Record<string, LoggingCategorySetting>; channels?: Record<string, string>; }
 export interface GiveawayDailyConfig { enabled: boolean; channelId?: string; message?: string; }
-export interface Config { logChannel?: string; muteRole?: string; jailRole?: string; chatBanRole?: string; ticketCategory?: string; ticketSupportRole?: string; starboardChannel?: string; starboardThreshold: number; levelChannel?: string; snipeEnabled: boolean; prefix?: string; levelRoles?: Record<string, string>; inviteRoles?: Record<string, string>; levelUpMessage?: { title?: string; description?: string; imageUrl?: string; }; automod?: AutoModConfig; moderationTemplates?: ModerationTemplate[]; logging?: LoggingConfig; giveawayDaily?: GiveawayDailyConfig; }
+export interface JoinRoleConfig { enabled: boolean; roleId?: string; }
+export interface SocialNotificationConfig { enabled: boolean; platform?: string; channelId?: string; message?: string; }
+export interface ReactionRoleConfig { [messageId: string]: Record<string, string>; }
+export interface RoleConnectionConfig { enabled: boolean; channelId?: string; roleId?: string; message?: string; }
+export interface Config { logChannel?: string; muteRole?: string; jailRole?: string; chatBanRole?: string; ticketCategory?: string; ticketSupportRole?: string; starboardChannel?: string; starboardThreshold: number; levelChannel?: string; snipeEnabled: boolean; prefix?: string; levelRoles?: Record<string, string>; inviteRoles?: Record<string, string>; levelUpMessage?: { title?: string; description?: string; imageUrl?: string; }; automod?: AutoModConfig; moderationTemplates?: ModerationTemplate[]; logging?: LoggingConfig; giveawayDaily?: GiveawayDailyConfig; joinRole?: JoinRoleConfig; socialNotifications?: SocialNotificationConfig; reactionRoles?: ReactionRoleConfig; roleConnections?: RoleConnectionConfig; }
 export interface AntiNukeConfig { enabled: boolean; whitelist: string[]; }
 export interface AfkEntry { reason: string; timestamp: number; }
 export interface LevelEntry { xp: number; level: number; lastMessage: number; }
