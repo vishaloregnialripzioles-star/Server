@@ -1,0 +1,67 @@
+import {
+  ActionRowBuilder,
+  PermissionFlagsBits,
+  UserSelectMenuBuilder,
+  type ButtonInteraction,
+  type UserSelectMenuInteraction,
+} from 'discord.js';
+import { pendingGiveaways, preselectedGiveawayWinners, buildConfigEmbed, buildConfigRows } from '../giveawaySetup.js';
+
+function allowed(interaction: ButtonInteraction | UserSelectMenuInteraction): boolean {
+  return !!interaction.guild && (interaction.guild.ownerId === interaction.user.id || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) === true);
+}
+
+export async function handleGiveawayPreselectButton(interaction: ButtonInteraction): Promise<void> {
+  if (!interaction.customId.startsWith('gwcfg_selectwinner:') || !interaction.guild) return;
+  if (!allowed(interaction)) {
+    await interaction.reply({ content: '❌ Only the server owner or an Administrator can select a winner.', ephemeral: true });
+    return;
+  }
+  const userId = interaction.customId.slice('gwcfg_selectwinner:'.length);
+  if (interaction.user.id !== userId) {
+    await interaction.reply({ content: '❌ This is not your giveaway setup panel.', ephemeral: true });
+    return;
+  }
+  if (!pendingGiveaways.has(userId)) {
+    await interaction.reply({ content: '❌ Setup session expired. Run `/giveaway create` again.', ephemeral: true });
+    return;
+  }
+  const row = new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(
+    new UserSelectMenuBuilder()
+      .setCustomId(`gwcfg_selectwinner_user:${userId}`)
+      .setPlaceholder('👤 Select the member to guarantee if they enter')
+      .setMinValues(1)
+      .setMaxValues(1),
+  );
+  await interaction.reply({ content: '🎯 **Pre-select a winner**\nIf this member enters the giveaway, they will be the winner. If they do not enter, the winner will be random.', components: [row], ephemeral: true });
+}
+
+export async function handleGiveawayPreselectUser(interaction: UserSelectMenuInteraction): Promise<void> {
+  if (!interaction.customId.startsWith('gwcfg_selectwinner_user:') || !interaction.guild) return;
+  if (!allowed(interaction)) {
+    await interaction.reply({ content: '❌ Only the server owner or an Administrator can select a winner.', ephemeral: true });
+    return;
+  }
+  const userId = interaction.customId.slice('gwcfg_selectwinner_user:'.length);
+  if (interaction.user.id !== userId) {
+    await interaction.reply({ content: '❌ This is not your giveaway setup panel.', ephemeral: true });
+    return;
+  }
+  const pending = pendingGiveaways.get(userId);
+  if (!pending) {
+    await interaction.update({ content: '❌ Setup session expired. Run `/giveaway create` again.', components: [] });
+    return;
+  }
+  const selectedId = interaction.values[0];
+  const member = await interaction.guild.members.fetch(selectedId).catch(() => null);
+  if (!member) {
+    await interaction.update({ content: '❌ That member could not be found in this server.', components: [] });
+    return;
+  }
+  preselectedGiveawayWinners.set(userId, selectedId);
+  const canSelectWinner = interaction.guild.ownerId === interaction.user.id || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) === true;
+  await interaction.update({ content: `✅ Pre-selected **${member.user.tag}**.\nIf they enter, they will win. If they do not enter, the giveaway will choose a random winner.`, components: [] });
+  // The setup panel itself is a separate ephemeral message; Discord does not expose it by ID here.
+  // The selected member is also shown in the setup embed the next time its controls are refreshed.
+  void canSelectWinner;
+}
