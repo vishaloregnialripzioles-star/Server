@@ -25,6 +25,9 @@ export interface PendingGiveaway {
 
 export const pendingGiveaways = new Map<string, PendingGiveaway>();
 
+// Selected before the giveaway starts. Keyed by giveaway host/setup user.
+export const preselectedGiveawayWinners = new Map<string, string>();
+
 export function buildConfigEmbed(pending: PendingGiveaway): EmbedBuilder {
   const typeLabel = pending.type === 'drop' ? '⚡ Drop Giveaway' : pending.type === 'lottery' ? '🎰 Lottery' : '🎉 New Giveaway';
   const lines: string[] = [
@@ -34,6 +37,8 @@ export function buildConfigEmbed(pending: PendingGiveaway): EmbedBuilder {
     `**Winners:** ${pending.winnerCount}`,
     `**Duration:** ${pending.durationStr}`,
   ];
+  const selected = preselectedGiveawayWinners.get(pending.hostId);
+  if (selected) lines.push(`**🎯 Selected Winner:** <@${selected}>`);
   if (pending.donorId) lines.push(`**Donor:** <@${pending.donorId}>`);
   if (pending.customMessage) lines.push(`**Message:** ${pending.customMessage}`);
   if (pending.pingRoleId) lines.push(`**Ping:** ${pending.pingRoleId === 'everyone' ? '@everyone' : `<@&${pending.pingRoleId}>`}`);
@@ -45,7 +50,7 @@ export function buildConfigEmbed(pending: PendingGiveaway): EmbedBuilder {
   return new EmbedBuilder().setColor(0x57F287).setTitle(typeLabel).setDescription(lines.join('\n')).setFooter({ text: 'Click ✅ Done when you are ready to start the giveaway.' });
 }
 
-export function buildConfigRows(userId: string, canSelectWinner = true): ActionRowBuilder<ButtonBuilder>[] {
+export function buildConfigRows(userId: string, canSelectWinner = false): ActionRowBuilder<ButtonBuilder>[] {
   const btn = (id: string, label: string, style: ButtonStyle = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(`gwcfg_${id}:${userId}`).setLabel(label).setStyle(style);
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(btn('done', '✅ Done', ButtonStyle.Success), btn('limiters', 'Limiters & Requirements', ButtonStyle.Primary), btn('multipliers', 'Multipliers', ButtonStyle.Primary), btn('prize', 'Prize', ButtonStyle.Primary));
   const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btn('winners', 'Winners'), btn('donor', 'Donor'), btn('message', 'Message'), btn('pingrole', 'Ping Role'), btn('channel', 'Channel'));
