@@ -21,11 +21,11 @@ function safeApiError(status: number, body: string): string {
     const parsed = JSON.parse(body) as { error?: { message?: string; status?: string } };
     const detail = parsed.error?.status || parsed.error?.message || 'unknown error';
     console.error(`[AI] Gemini API ${status}:`, detail);
-    if (status === 400) return `⚠️ Gemini request was rejected (**${detail}**). Check the Gemini model/API key.`;
+    if (status === 400) return `⚠️ Gemini request was rejected (**${detail}**).`;
     if (status === 401 || status === 403) return '🔑 Gemini API key is invalid or not authorized. Check **GEMINI_API_KEY** in Render.';
     if (status === 429) return '⏳ Gemini free-tier rate limit reached. Wait a little and try again.';
     if (status === 404) return `🤖 Gemini model/endpoint unavailable (**${detail}**).`;
-    if (status >= 500) return '☁️ Gemini is having a temporary server problem. Try again shortly.';
+    if (status >= 500) return `☁️ Gemini returned server error **${status}** (**${detail}**). Try again shortly.`;
     return `⚠️ Gemini API error **${status}** (${detail}). Check Render logs.`;
   } catch {
     console.error(`[AI] Gemini API ${status}:`, body.slice(0, 1000));
@@ -44,12 +44,12 @@ export async function askAI(guildId: string, userId: string, message: string): P
     ...history.slice(-8).map(h => ({ role: h.role, parts: [{ text: h.content }] })),
     { role: 'user', parts: [{ text: `${system}\n\nUser: ${message}` }] },
   ];
-  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-3.1-flash-lite';
+  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite';
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ contents, generationConfig: { temperature: 0.9, maxOutputTokens: 500 } }),
+      body: JSON.stringify({ contents, generationConfig: { maxOutputTokens: 500 } }),
     });
     if (!response.ok) return safeApiError(response.status, await response.text());
     const body = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
