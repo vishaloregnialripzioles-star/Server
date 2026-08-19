@@ -5,6 +5,7 @@ import { deleteGuild } from '../storage.js';
 function safe(name:string,fn:(...args:any[])=>any){return(...args:any[])=>{try{Promise.resolve(fn(...args)).catch((err:unknown)=>console.error(`[${name}]`,err));}catch(err){console.error(`[${name}]`,err);}};}
 export function registerEvents(client:Client):void{
 client.once(Events.ClientReady,safe('ready',async(...args:any[])=>{const{handleReady}=await import('./ready.js');return handleReady(...args);}));
+client.on(Events.InteractionCreate,safe('giveawayWinnerButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('giveaway_select_winner:')){const{handleGiveawayWinnerButton}=await import('./giveawayWinnerButton.js');return handleGiveawayWinnerButton(interaction);}}));
 client.on(Events.InteractionCreate,safe('interactionCreate',async(...args:any[])=>{const{handleInteractionCreate}=await import('./interactionCreate.js');return handleInteractionCreate(...args);}));
 client.on(Events.MessageCreate,safe('messageCreate',async(...args:any[])=>{const{handleMessageCreate}=await import('./messageCreate.js');return handleMessageCreate(...args);}));
 client.on(Events.MessageCreate,safe('hinglishCursedWords',async(...args:any[])=>{const{handleHinglishCursedWords}=await import('./hinglishCursedWords.js');return handleHinglishCursedWords(...args);}));
