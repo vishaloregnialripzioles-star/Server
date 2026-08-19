@@ -71,7 +71,7 @@ export const automod: Command = {
     }
 
     if (sub === 'hinglish') {
-      const words = (interaction.options.getString('words', true).split(/[\n,]+/).map(x => x.trim().toLocaleLowerCase()).filter(Boolean)).slice(0, limit);
+      const words = interaction.options.getString('words', true).split(/[\n,]+/).map(x => x.trim().toLocaleLowerCase()).filter(Boolean).slice(0, limit);
       const selectedAction = interaction.options.getString('action', true) as any;
       updateGuild(interaction.guild.id, d => {
         const a = d.config.automod ?? { enabled: true, bannedWords: [], action: 'delete_timeout' as const };
