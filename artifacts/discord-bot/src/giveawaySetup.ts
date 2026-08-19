@@ -65,7 +65,7 @@ export function buildConfigEmbed(pending: PendingGiveaway): EmbedBuilder {
     .setFooter({ text: 'Click ✅ Done when you are ready to start the giveaway.' });
 }
 
-export function buildConfigRows(userId: string): ActionRowBuilder<ButtonBuilder>[] {
+export function buildConfigRows(userId: string, canSelectWinner = false): ActionRowBuilder<ButtonBuilder>[] {
   const btn = (id: string, label: string, style: ButtonStyle = ButtonStyle.Secondary) =>
     new ButtonBuilder()
       .setCustomId(`gwcfg_${id}:${userId}`)
@@ -90,6 +90,10 @@ export function buildConfigRows(userId: string): ActionRowBuilder<ButtonBuilder>
     btn('duration', 'Duration'),
     btn('hide', 'Hide Entry Count'),
   );
+
+  if (canSelectWinner) {
+    row3.addComponents(btn('selectwinner', '🎯 Select Winner', ButtonStyle.Danger));
+  }
 
   return [row1, row2, row3];
 }
