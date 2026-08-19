@@ -39,10 +39,12 @@ export function buildGiveawayEmbed(giveaway: Giveaway): EmbedBuilder {
   if (giveaway.imageUrl) embed.setImage(giveaway.imageUrl); return embed;
 }
 
-export function buildGiveawayRow(giveawayId: string, entryCount = 0, hideCount = false, includeWinnerButton = true): ActionRowBuilder<ButtonBuilder> {
-  const label = hideCount ? '🎉' : `🎉 ${entryCount}`; const row = new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`giveaway_enter:${giveawayId}`).setLabel(label).setStyle(ButtonStyle.Success));
-  if (includeWinnerButton) row.addComponents(new ButtonBuilder().setCustomId(`giveaway_select_winner:${giveawayId}`).setLabel('🎯 Select Winner').setStyle(ButtonStyle.Primary));
-  return row;
+// Public giveaway message: only the Join button is shown. Winner selection is available only in the private setup panel before launch.
+export function buildGiveawayRow(giveawayId: string, entryCount = 0, hideCount = false): ActionRowBuilder<ButtonBuilder> {
+  const label = hideCount ? '🎉' : `🎉 ${entryCount}`;
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId(`giveaway_enter:${giveawayId}`).setLabel(label).setStyle(ButtonStyle.Success),
+  );
 }
 
 export function buildGiveawayEndedEmbed(giveaway: Giveaway): EmbedBuilder {
@@ -75,13 +77,10 @@ export async function endGiveaway(guild: Guild, giveaway: Giveaway): Promise<voi
   const count = giveaway.winnerCount ?? 1;
   const preselectedId = preselectedGiveawayWinners.get(giveaway.hostId);
   const lockedPreselected = preselectedId && giveaway.entries.includes(preselectedId) ? preselectedId : undefined;
-  const lockedWinnerIds = lockedPreselected
-    ? [lockedPreselected]
-    : [...new Set(giveaway.winnerIds ?? (giveaway.winnerId ? [giveaway.winnerId] : []))].filter(id => giveaway.entries.includes(id));
+  const lockedWinnerIds = lockedPreselected ? [lockedPreselected] : [...new Set(giveaway.winnerIds ?? (giveaway.winnerId ? [giveaway.winnerId] : []))].filter(id => giveaway.entries.includes(id));
   const remainingCount = lockedPreselected ? 0 : Math.max(0, count - lockedWinnerIds.length);
   const additionalWinnerIds = remainingCount > 0 ? await pickWinners(guild, giveaway, remainingCount, lockedWinnerIds) : [];
   const winnerIds = [...lockedWinnerIds, ...additionalWinnerIds];
-
   updateGuild(guild.id, data => { const g = data.giveaways.find(g => g.id === giveaway.id); if (g) { g.ended = true; g.winnerIds = winnerIds; g.winnerId = winnerIds[0]; } });
   preselectedGiveawayWinners.delete(giveaway.hostId);
   try {
