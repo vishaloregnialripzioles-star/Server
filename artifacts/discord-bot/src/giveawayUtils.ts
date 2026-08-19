@@ -50,6 +50,10 @@ export function buildGiveawayEmbed(giveaway: Giveaway): EmbedBuilder {
   desc += `Hosted by: <@${giveaway.hostId}>`;
   if (giveaway.donorId) desc += `\nDonor: <@${giveaway.donorId}>`;
   desc += `\n👥 **${entryCount}** participant${entryCount !== 1 ? 's' : ''} entered`;
+  const selectedWinnerIds = [...new Set(giveaway.winnerIds ?? (giveaway.winnerId ? [giveaway.winnerId] : []))];
+  if (!giveaway.ended && selectedWinnerIds.length > 0) {
+    desc += `\n🎯 **Selected winner${selectedWinnerIds.length !== 1 ? 's' : ''}:** ${selectedWinnerIds.map(id => `<@${id}>`).join(', ')} (locked in)`;
+  }
   if (giveaway.requiredRoleId) desc += `\n\n**Required:** <@&${giveaway.requiredRoleId}>`;
   if (giveaway.blacklistRoleId) desc += `\n**Excluded:** <@&${giveaway.blacklistRoleId}>`;
   if (giveaway.extraEntryRoles && giveaway.extraEntryRoles.length > 0) {
@@ -125,7 +129,9 @@ export function buildAdminPanelEmbed(giveaway: Giveaway): EmbedBuilder {
   const unixTs = Math.floor(giveaway.endsAt / 1000);
   const status = giveaway.ended ? '🔴 Ended' : `🟢 Active — ends <t:${unixTs}:R>`;
   const winnerCount = giveaway.winnerCount ?? 1;
-  return new EmbedBuilder().setColor(0x5865F2).setTitle(`⚙️ Managing: ${giveaway.prize}`).setDescription(`**Status:** ${status}\n**Participants:** ${giveaway.entries.length}\n**Winners:** ${winnerCount}\n**Hosted by:** <@${giveaway.hostId}>\n**ID:** \`${giveaway.id}\``);
+  const selectedWinnerIds = [...new Set(giveaway.winnerIds ?? (giveaway.winnerId ? [giveaway.winnerId] : []))];
+  const selected = selectedWinnerIds.length > 0 ? `\n**Selected winners:** ${selectedWinnerIds.map(id => `<@${id}>`).join(', ')}` : '';
+  return new EmbedBuilder().setColor(0x5865F2).setTitle(`⚙️ Managing: ${giveaway.prize}`).setDescription(`**Status:** ${status}\n**Participants:** ${giveaway.entries.length}\n**Winners:** ${winnerCount}${selected}\n**Hosted by:** <@${giveaway.hostId}>\n**ID:** \`${giveaway.id}\``);
 }
 
 export function buildAdminPanelRows(giveawayId: string, ended: boolean): ActionRowBuilder<ButtonBuilder>[] {
@@ -148,7 +154,14 @@ export async function pickWinner(guild: Guild, giveaway: Giveaway): Promise<stri
 
 export async function endGiveaway(guild: Guild, giveaway: Giveaway): Promise<void> {
   const count = giveaway.winnerCount ?? 1;
-  const winnerIds = await pickWinners(guild, giveaway, count);
+  const lockedWinnerIds = [...new Set(giveaway.winnerIds ?? (giveaway.winnerId ? [giveaway.winnerId] : []))]
+    .filter(id => giveaway.entries.includes(id));
+  const remainingCount = Math.max(0, count - lockedWinnerIds.length);
+  const additionalWinnerIds = remainingCount > 0
+    ? await pickWinners(guild, giveaway, remainingCount, lockedWinnerIds)
+    : [];
+  const winnerIds = [...lockedWinnerIds, ...additionalWinnerIds];
+
   updateGuild(guild.id, data => {
     const g = data.giveaways.find(g => g.id === giveaway.id);
     if (g) { g.ended = true; g.winnerIds = winnerIds; g.winnerId = winnerIds[0]; }
