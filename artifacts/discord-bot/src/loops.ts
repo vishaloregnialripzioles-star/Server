@@ -1,15 +1,39 @@
 import type { Client, BaseGuildTextChannel } from 'discord.js';
 import { loadGuild, saveGuild } from './storage.js';
-import { endGiveaway } from './giveawayUtils.js';
+import { endGiveaway, buildGiveawayRow } from './giveawayUtils.js';
 
 const DAILY_MS = 24 * 60 * 60 * 1000;
 
 export function startLoops(client: Client): void {
+  void syncActiveGiveawayButtons(client);
   setInterval(() => {
     void checkReminders(client);
     void checkTempRoles(client);
     void checkGiveaways(client);
   }, 30_000);
+}
+
+async function syncActiveGiveawayButtons(client: Client): Promise<void> {
+  for (const guild of client.guilds.cache.values()) {
+    const data = loadGuild(guild.id);
+    for (const giveaway of data.giveaways) {
+      if (giveaway.ended || giveaway.endsAt <= Date.now()) continue;
+      try {
+        const channel = await guild.channels.fetch(giveaway.channelId);
+        if (!channel?.isTextBased()) continue;
+        const message = await (channel as BaseGuildTextChannel).messages.fetch(giveaway.messageId);
+        const hasWinnerButton = message.components.some(row =>
+          row.components.some(component => component.customId === `giveaway_select_winner:${giveaway.id}`),
+        );
+        if (!hasWinnerButton) {
+          await message.edit({ components: [buildGiveawayRow(giveaway.id, giveaway.entries.length, Boolean(giveaway.hideEntryCount), true)] });
+          console.log(`[Giveaway] Added Select Winner button to ${giveaway.id}`);
+        }
+      } catch (err) {
+        console.warn(`[Giveaway] Could not sync button for ${giveaway.id}:`, err instanceof Error ? err.message : err);
+      }
+    }
+  }
 }
 
 async function checkReminders(client: Client): Promise<void> {
