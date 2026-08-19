@@ -1,17 +1,17 @@
 import type { ButtonInteraction } from 'discord.js';
+import { PermissionFlagsBits } from 'discord.js';
 import { loadGuild, updateGuild } from '../storage.js';
 import { pickWinners, buildGiveawayEmbed, buildGiveawayRow } from '../giveawayUtils.js';
 import type { Giveaway } from '../types.js';
-
-const ALLOWED_USERNAMES = new Set(['vishal.lost_1', 'karan.ghost_']);
 
 export async function handleGiveawayWinnerButton(interaction: ButtonInteraction): Promise<void> {
   if (!interaction.customId.startsWith('giveaway_select_winner:') || !interaction.guild) return;
 
   const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-  const allowed = interaction.user.id === interaction.guild.ownerId || ALLOWED_USERNAMES.has(interaction.user.username);
+  const allowed = interaction.user.id === interaction.guild.ownerId ||
+    Boolean(member?.permissions.has(PermissionFlagsBits.Administrator));
   if (!allowed) {
-    await interaction.reply({ content: '❌ You are not allowed to select a giveaway winner.', ephemeral: true });
+    await interaction.reply({ content: '❌ Only the server owner or an Administrator can select a giveaway winner.', ephemeral: true });
     return;
   }
   if (!member) {
@@ -41,10 +41,7 @@ export async function handleGiveawayWinnerButton(interaction: ButtonInteraction)
 
   if (needed === 0) {
     const mentions = existingWinners.map(id => `<@${id}>`).join(', ');
-    await interaction.reply({
-      content: `🎯 Winner${existingWinners.length !== 1 ? 's' : ''} already selected: ${mentions}\nThese winner${existingWinners.length !== 1 ? 's' : ''} are locked in.`,
-      ephemeral: true,
-    });
+    await interaction.reply({ content: `🎯 Winner${existingWinners.length !== 1 ? 's' : ''} already selected: ${mentions}\nThese winners are locked in.`, ephemeral: true });
     return;
   }
 
@@ -64,24 +61,15 @@ export async function handleGiveawayWinnerButton(interaction: ButtonInteraction)
   });
 
   const mentions = winnerIds.map(id => `<@${id}>`).join(', ');
-  await interaction.reply({
-    content: `🎯 **Winner${winnerIds.length !== 1 ? 's' : ''} selected:** ${mentions}\n**Giveaway:** ${giveaway.prize}\n\nThese winner${winnerIds.length !== 1 ? 's are' : ' is'} now locked in. Other members can still join, but they will not win unless a **reroll** is done after the giveaway ends.`,
-    ephemeral: true,
-  });
+  await interaction.reply({ content: `🎯 **Winner${winnerIds.length !== 1 ? 's' : ''} selected:** ${mentions}\n**Giveaway:** ${giveaway.prize}\n\nThese winner${winnerIds.length !== 1 ? 's are' : ' is'} now locked in.`, ephemeral: true });
 
   const channel = await interaction.guild.channels.fetch(giveaway.channelId).catch(() => null);
   if (channel?.isTextBased()) {
     const msg = await channel.messages.fetch(giveaway.messageId).catch(() => null);
     const updatedGiveaway = loadGuild(interaction.guild.id).giveaways.find(g => g.id === giveawayId) ?? giveaway;
     if (msg) {
-      await msg.edit({
-        embeds: [buildGiveawayEmbed(updatedGiveaway)],
-        components: [buildGiveawayRow(updatedGiveaway.id, updatedGiveaway.entries.length, updatedGiveaway.hideEntryCount)],
-      }).catch(() => undefined);
+      await msg.edit({ embeds: [buildGiveawayEmbed(updatedGiveaway)], components: [buildGiveawayRow(updatedGiveaway.id, updatedGiveaway.entries.length, updatedGiveaway.hideEntryCount)] }).catch(() => undefined);
     }
-    await channel.send({
-      content: `🎯 **Winner${winnerIds.length !== 1 ? 's' : ''} selected:** ${mentions} — locked in! 🎉\n*The giveaway is still active and can continue accepting entries. Any later reroll can replace the winner after the giveaway ends.*`,
-      allowedMentions: { users: winnerIds },
-    }).catch(() => undefined);
+    await channel.send({ content: `🎯 **Winner${winnerIds.length !== 1 ? 's' : ''} selected:** ${mentions} — locked in! 🎉`, allowedMentions: { users: winnerIds }}).catch(() => undefined);
   }
 }
