@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import type { Command } from '../types.js';
 import { loadGuild, updateGuild } from '../storage.js';
+import { syncAllInviteRoles } from '../inviteRoles.js';
 
 export const inviterole: Command = {
   data: new SlashCommandBuilder().setName('inviterole').setDescription('Manage automatic roles for valid invite milestones')
@@ -12,8 +13,8 @@ export const inviterole: Command = {
       .addIntegerOption(o => o.setName('invites').setDescription('Invite milestone').setMinValue(1).setMaxValue(100000).setRequired(true)))
     .addSubcommand(s => s.setName('list').setDescription('Show configured invite roles')),
   async execute(interaction) {
-    if (!interaction.guildId) { await interaction.reply({ content: '❌ Server only.', ephemeral: true }); return; }
-    if (interaction.guild?.ownerId !== interaction.user.id && !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    if (!interaction.guildId || !interaction.guild) { await interaction.reply({ content: '❌ Server only.', ephemeral: true }); return; }
+    if (interaction.guild.ownerId !== interaction.user.id && !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
       await interaction.reply({ content: '❌ Only the server owner or an Administrator can manage invite roles.', ephemeral: true }); return;
     }
     const sub = interaction.options.getSubcommand();
@@ -22,12 +23,14 @@ export const inviterole: Command = {
       const role = interaction.options.getRole('role', true);
       if (role.managed) { await interaction.reply({ content: '❌ A managed/integration role cannot be assigned by the bot.', ephemeral: true }); return; }
       updateGuild(interaction.guildId, d => { d.config.inviteRoles ??= {}; d.config.inviteRoles[String(invites)] = role.id; });
-      await interaction.reply(`✅ **${invites} valid invites** → ${role}.\nThe bot will automatically give this role when the member reaches the milestone.`);
+      await syncAllInviteRoles(interaction.guild);
+      await interaction.reply(`✅ **${invites} valid invites** → ${role}.\nExisting members were synced too.`);
       return;
     }
     if (sub === 'remove') {
       const invites = interaction.options.getInteger('invites', true);
       updateGuild(interaction.guildId, d => { if (d.config.inviteRoles) delete d.config.inviteRoles[String(invites)]; });
+      await syncAllInviteRoles(interaction.guild);
       await interaction.reply(`✅ Removed the **${invites}-invite** role milestone.`);
       return;
     }
