@@ -2,12 +2,7 @@
  * Pending giveaway state management and config panel builder.
  * State is keyed by userId and lives in memory during the setup flow.
  */
-import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  EmbedBuilder,
-} from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import type { ExtraEntryRole } from './types.js';
 
 export interface PendingGiveaway {
@@ -28,15 +23,10 @@ export interface PendingGiveaway {
   hideEntryCount: boolean;
 }
 
-/** Keyed by userId */
 export const pendingGiveaways = new Map<string, PendingGiveaway>();
 
 export function buildConfigEmbed(pending: PendingGiveaway): EmbedBuilder {
-  const typeLabel =
-    pending.type === 'drop' ? '⚡ Drop Giveaway'
-    : pending.type === 'lottery' ? '🎰 Lottery'
-    : '🎉 New Giveaway';
-
+  const typeLabel = pending.type === 'drop' ? '⚡ Drop Giveaway' : pending.type === 'lottery' ? '🎰 Lottery' : '🎉 New Giveaway';
   const lines: string[] = [
     `**Prize:** ${pending.prize}`,
     `**Channel:** ${pending.channelId ? `<#${pending.channelId}>` : '⚠️ *Not set — click Channel*'}`,
@@ -44,56 +34,23 @@ export function buildConfigEmbed(pending: PendingGiveaway): EmbedBuilder {
     `**Winners:** ${pending.winnerCount}`,
     `**Duration:** ${pending.durationStr}`,
   ];
-
   if (pending.donorId) lines.push(`**Donor:** <@${pending.donorId}>`);
   if (pending.customMessage) lines.push(`**Message:** ${pending.customMessage}`);
-  if (pending.pingRoleId) {
-    lines.push(`**Ping:** ${pending.pingRoleId === 'everyone' ? '@everyone' : `<@&${pending.pingRoleId}>`}`);
-  }
+  if (pending.pingRoleId) lines.push(`**Ping:** ${pending.pingRoleId === 'everyone' ? '@everyone' : `<@&${pending.pingRoleId}>`}`);
   if (pending.requiredRoleId) lines.push(`**Required Role:** <@&${pending.requiredRoleId}>`);
   if (pending.blacklistRoleId) lines.push(`**Blacklisted Role:** <@&${pending.blacklistRoleId}>`);
-  if (pending.extraEntryRoles.length > 0) {
-    lines.push(`**Multipliers:** ${pending.extraEntryRoles.map(r => `<@&${r.roleId}>: +${r.entries}`).join(', ')}`);
-  }
+  if (pending.extraEntryRoles.length > 0) lines.push(`**Multipliers:** ${pending.extraEntryRoles.map(r => `<@&${r.roleId}>: +${r.entries}`).join(', ')}`);
   if (pending.imageUrl) lines.push(`**Image:** ✅ set`);
   if (pending.hideEntryCount) lines.push(`**Hide Entry Count:** Yes`);
-
-  return new EmbedBuilder()
-    .setColor(0x57F287)
-    .setTitle(typeLabel)
-    .setDescription(lines.join('\n'))
-    .setFooter({ text: 'Click ✅ Done when you are ready to start the giveaway.' });
+  return new EmbedBuilder().setColor(0x57F287).setTitle(typeLabel).setDescription(lines.join('\n')).setFooter({ text: 'Click ✅ Done when you are ready to start the giveaway.' });
 }
 
-export function buildConfigRows(userId: string, canSelectWinner = false): ActionRowBuilder<ButtonBuilder>[] {
-  const btn = (id: string, label: string, style: ButtonStyle = ButtonStyle.Secondary) =>
-    new ButtonBuilder()
-      .setCustomId(`gwcfg_${id}:${userId}`)
-      .setLabel(label)
-      .setStyle(style);
-
-  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    btn('done', '✅ Done', ButtonStyle.Success),
-    btn('limiters', 'Limiters & Requirements', ButtonStyle.Primary),
-    btn('multipliers', 'Multipliers', ButtonStyle.Primary),
-    btn('prize', 'Prize', ButtonStyle.Primary),
-  );
-  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    btn('winners', 'Winners'),
-    btn('donor', 'Donor'),
-    btn('message', 'Message'),
-    btn('pingrole', 'Ping Role'),
-    btn('channel', 'Channel'),
-  );
-  const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    btn('image', 'Image'),
-    btn('duration', 'Duration'),
-    btn('hide', 'Hide Entry Count'),
-  );
-
-  if (canSelectWinner) {
-    row3.addComponents(btn('selectwinner', '🎯 Select Winner', ButtonStyle.Danger));
-  }
-
-  return [row1, row2, row3];
+export function buildConfigRows(userId: string, canSelectWinner = true): ActionRowBuilder<ButtonBuilder>[] {
+  const btn = (id: string, label: string, style: ButtonStyle = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(`gwcfg_${id}:${userId}`).setLabel(label).setStyle(style);
+  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(btn('done', '✅ Done', ButtonStyle.Success), btn('limiters', 'Limiters & Requirements', ButtonStyle.Primary), btn('multipliers', 'Multipliers', ButtonStyle.Primary), btn('prize', 'Prize', ButtonStyle.Primary));
+  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btn('winners', 'Winners'), btn('donor', 'Donor'), btn('message', 'Message'), btn('pingrole', 'Ping Role'), btn('channel', 'Channel'));
+  const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(btn('image', 'Image'), btn('duration', 'Duration'), btn('hide', 'Hide Entry Count'));
+  const rows = [row1, row2, row3];
+  if (canSelectWinner) rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(btn('selectwinner', '🎯 Select Winner', ButtonStyle.Danger)));
+  return rows;
 }
