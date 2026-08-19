@@ -13,12 +13,14 @@ export async function handleHinglishCursedWords(message: Message): Promise<void>
   if ((data.antiNuke?.whitelist ?? []).includes(message.author.id)) return;
   if (message.member.permissions.has(PermissionFlagsBits.Administrator) || message.member.permissions.has(PermissionFlagsBits.ManageGuild)) return;
 
+  const rule = cfg.hinglishCursedWordsRule;
+  if (rule?.enabled === false) return;
   const matched = matchesHinglishCursedWord(message.content, cfg.hinglishCursedWords);
   if (!matched) return;
 
-  const rule = cfg.hinglishCursedWordsRule ?? { action: cfg.action ?? 'delete_timeout' as const };
-  const action = rule.action ?? cfg.action ?? 'delete_timeout';
-  const template = rule.templateId ? (data.config.moderationTemplates ?? []).find(x => x.id === rule.templateId) : undefined;
+  const effectiveRule = rule ?? { action: cfg.action ?? 'delete_timeout' as const };
+  const action = effectiveRule.action ?? cfg.action ?? 'delete_timeout';
+  const template = effectiveRule.templateId ? (data.config.moderationTemplates ?? []).find(x => x.id === effectiveRule.templateId) : undefined;
   const reason = `Hinglish cursed word: ${matched}`;
 
   if (action === 'delete' || action === 'delete_timeout' || action === 'dm_warn') {
