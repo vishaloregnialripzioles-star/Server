@@ -3,7 +3,7 @@ export interface Command { data: SlashCommandBuilder | SlashCommandOptionsOnlyBu
 declare module 'discord.js' { interface Client { commands: Collection<string, Command>; } }
 export type AutoModAction = 'delete' | 'warn' | 'timeout' | 'delete_timeout' | 'dm_warn';
 export interface AutoModRule { enabled?: boolean; windowSeconds?: number; maxCount?: number; action?: AutoModAction; templateId?: string; }
-export interface AutoModConfig { enabled: boolean; antiSpam?: boolean; antiScam?: boolean; massMentions?: boolean; suspiciousLinks?: boolean; spaceSpam?: boolean; bannedWords: string[]; antiScamWords?: string[]; action: AutoModAction; spam?: AutoModRule; mentions?: AutoModRule; space?: AutoModRule; bannedWordsRule?: AutoModRule; antiScamRule?: AutoModRule; suspiciousLinksRule?: AutoModRule; }
+export interface AutoModConfig { enabled: boolean; antiSpam?: boolean; antiScam?: boolean; massMentions?: boolean; suspiciousLinks?: boolean; spaceSpam?: boolean; bannedWords: string[]; hinglishCursedWords?: string[]; antiScamWords?: string[]; action: AutoModAction; spam?: AutoModRule; mentions?: AutoModRule; space?: AutoModRule; bannedWordsRule?: AutoModRule; hinglishCursedWordsRule?: AutoModRule; antiScamRule?: AutoModRule; suspiciousLinksRule?: AutoModRule; }
 export interface ModerationTemplate { id: string; name: string; message: string; }
 export type LoggingCategorySetting = boolean | string;
 export interface LoggingConfig { enabled?: boolean; channelId?: string; categories?: Record<string, LoggingCategorySetting>; channels?: Record<string, string>; }
