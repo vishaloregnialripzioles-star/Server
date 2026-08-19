@@ -39,11 +39,7 @@ async function latestYouTube(input: string): Promise<{ id: string; title: string
 }
 
 function renderTemplate(template: string, video: { title: string; url: string; published: string }, platform: string): string {
-  return template
-    .replaceAll('{platform}', platform)
-    .replaceAll('{title}', video.title)
-    .replaceAll('{url}', video.url)
-    .replaceAll('{published}', video.published);
+  return template.replaceAll('{platform}', platform).replaceAll('{title}', video.title).replaceAll('{url}', video.url).replaceAll('{published}', video.published);
 }
 
 async function checkGuild(client: Client, guildId: string): Promise<void> {
@@ -53,6 +49,11 @@ async function checkGuild(client: Client, guildId: string): Promise<void> {
   try {
     const video = await latestYouTube(cfg.source);
     if (!video) return;
+    if (!cfg.lastVideoId) {
+      cfg.lastVideoId = video.id;
+      saveGuild(guildId, data);
+      return;
+    }
     if (cfg.lastVideoId === video.id) return;
     const channelIds = Array.isArray(cfg.channelIds) ? cfg.channelIds.map(clean).filter(Boolean) : (clean(cfg.channelId) ? [clean(cfg.channelId)] : []);
     if (!channelIds.length) return;
