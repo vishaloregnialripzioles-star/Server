@@ -1,11 +1,13 @@
 import type { Client, BaseGuildTextChannel } from 'discord.js';
 import { loadGuild, saveGuild } from './storage.js';
 import { endGiveaway, buildGiveawayRow } from './giveawayUtils.js';
+import { startSocialNotifications } from './socialNotifications.js';
 
 const DAILY_MS = 24 * 60 * 60 * 1000;
 
 export function startLoops(client: Client): void {
   void syncActiveGiveawayButtons(client);
+  startSocialNotifications(client);
   setInterval(() => {
     void checkReminders(client);
     void checkTempRoles(client);
@@ -59,7 +61,6 @@ async function checkGiveaways(client: Client): Promise<void> {
     const data = loadGuild(guild.id);
     const daily = data.config.giveawayDaily;
     let changed = false;
-
     if (daily?.enabled && daily.channelId && daily.message) {
       for (const giveaway of data.giveaways) {
         if (giveaway.ended || giveaway.endsAt <= now) continue;
@@ -76,10 +77,9 @@ async function checkGiveaways(client: Client): Promise<void> {
             (giveaway as any).dailyReminderLastAt = now;
             changed = true;
           }
-        } catch { /* channel inaccessible */ }
+        } catch { /* inaccessible */ }
       }
     }
-
     const due = data.giveaways.filter(g => !g.ended && g.endsAt <= now);
     for (const giveaway of due) await endGiveaway(guild, giveaway).catch(() => undefined);
     if (changed) saveGuild(guild.id, data);
