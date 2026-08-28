@@ -13,7 +13,6 @@ async function clearGuildChannels(guild: any, actorTag: string): Promise<{ delet
   await guild.channels.fetch();
   const channels = [...guild.channels.cache.values()]
     .filter((channel: any) => channel && channel.type !== ChannelType.GuildDirectory)
-    // Delete child channels first, then categories, so category deletion never blocks the cleanup.
     .sort((a: any, b: any) => {
       const ac = a.type === ChannelType.GuildCategory ? 1 : 0;
       const bc = b.type === ChannelType.GuildCategory ? 1 : 0;
@@ -37,46 +36,88 @@ async function clearGuildChannels(guild: any, actorTag: string): Promise<{ delet
 
 async function runClearConfirmation(interaction: any): Promise<void> {
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('clear_channels_confirm').setLabel('Yes, clear all').setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId('clear_channels_cancel').setLabel('Cancel').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('clear_channels_confirm')
+      .setLabel('Yes, clear all')
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId('clear_channels_cancel')
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Secondary),
   );
 
+  // IMPORTANT: awaitMessageComponent belongs to the returned Message, not the command interaction.
+  // Using interaction.awaitMessageComponent() causes an immediate rejection in discord.js v14,
+  // which was being caught and displayed as an instantly expired confirmation.
   const message = await interaction.reply({
     embeds: [new EmbedBuilder()
       .setColor(0xED4245)
       .setTitle('⚠️ Clear All Channels?')
-      .setDescription('This will permanently delete **all channels and categories that the bot is allowed to delete**.\n\nPress **Yes, clear all** within 60 seconds to continue.')],
+      .setDescription(
+        'This will permanently delete **all channels and categories that the bot is allowed to delete**.\n\n' +
+        'Press **Yes, clear all** within 60 seconds to continue.'
+      )],
     components: [row],
     fetchReply: true,
   });
 
   try {
-    const button = await interaction.awaitMessageComponent({
+    const button = await message.awaitMessageComponent({
       time: 60_000,
-      filter: (i: any) => i.isButton() && i.user.id === interaction.user.id && i.message.id === message.id,
+      filter: (i: any) =>
+        i.isButton() &&
+        i.user.id === interaction.user.id &&
+        i.message.id === message.id,
     });
 
     if (button.customId === 'clear_channels_cancel') {
-      await button.update({ content: '✅ Channel clearing cancelled.', embeds: [], components: [] });
+      await button.update({
+        content: '✅ Channel clearing cancelled.',
+        embeds: [],
+        components: [],
+      });
       return;
     }
 
     const guild = interaction.guild;
     const me = guild?.members.me ?? await guild?.members.fetchMe().catch(() => null);
     if (!guild || !me?.permissions.has(PermissionFlagsBits.ManageChannels)) {
-      await button.update({ content: '❌ I no longer have the **Manage Channels** permission.', embeds: [], components: [] });
+      await button.update({
+        content: '❌ I no longer have the **Manage Channels** permission.',
+        embeds: [],
+        components: [],
+      });
       return;
     }
 
-    await button.update({ content: '⏳ Clearing all deletable channels and categories...', embeds: [], components: [] });
-    const result = await clearGuildChannels(guild, interaction.user.tag);
-    await interaction.editReply({
-      content: `✅ **Channel clear complete.** Deleted **${result.deleted}** channel(s)/category(ies).${result.failed ? ` Could not delete **${result.failed}** protected/unavailable item(s).` : ''}`,
+    await button.update({
+      content: '⏳ Clearing all deletable channels and categories...',
       embeds: [],
       components: [],
     });
-  } catch {
-    await interaction.editReply({ content: '⌛ Confirmation expired. Nothing was deleted.', embeds: [], components: [] }).catch(() => undefined);
+
+    const result = await clearGuildChannels(guild, interaction.user.tag);
+    await interaction.editReply({
+      content:
+        `✅ **Channel clear complete.** Deleted **${result.deleted}** channel(s)/category(ies).` +
+        (result.failed
+          ? ` Could not delete **${result.failed}** protected/unavailable item(s).`
+          : ''),
+      embeds: [],
+      components: [],
+    });
+  } catch (error: any) {
+    // A timeout is expected only when nobody clicks within 60 seconds.
+    // Other errors are logged so real problems aren't incorrectly reported as an expiry.
+    const timedOut = error?.code === 'InteractionCollectorError' || error?.message?.includes('time');
+    console.warn('[ClearChannels] Confirmation collector ended:', error);
+    await interaction.editReply({
+      content: timedOut
+        ? '⌛ Confirmation expired after 60 seconds. Nothing was deleted.'
+        : '❌ The confirmation could not be completed. Nothing was deleted. Check the bot logs.',
+      embeds: [],
+      components: [],
+    }).catch(() => undefined);
   }
 }
 
@@ -87,16 +128,25 @@ export const clearchannels: Command = {
 
   async execute(interaction) {
     if (!interaction.guild) {
-      await interaction.reply({ content: '❌ This command can only be used in a server.', ephemeral: true });
+      await interaction.reply({
+        content: '❌ This command can only be used in a server.',
+        ephemeral: true,
+      });
       return;
     }
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
-      await interaction.reply({ content: '❌ You need **Manage Channels** permission to use this command.', ephemeral: true });
+      await interaction.reply({
+        content: '❌ You need **Manage Channels** permission to use this command.',
+        ephemeral: true,
+      });
       return;
     }
     const me = interaction.guild.members.me ?? await interaction.guild.members.fetchMe().catch(() => null);
     if (!me?.permissions.has(PermissionFlagsBits.ManageChannels)) {
-      await interaction.reply({ content: '❌ I need the **Manage Channels** permission to do this.', ephemeral: true });
+      await interaction.reply({
+        content: '❌ I need the **Manage Channels** permission to do this.',
+        ephemeral: true,
+      });
       return;
     }
     await runClearConfirmation(interaction);
