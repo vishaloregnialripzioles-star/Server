@@ -170,11 +170,6 @@ export const autosetup: Command = {
         throw new Error('I need the **Manage Roles** permission.');
       }
 
-      const botTopPosition = botMember.roles.highest.position;
-      if (botTopPosition <= 1) {
-        throw new Error('My highest role is too low to place new roles. Move my bot role above the roles I should manage.');
-      }
-
       const createdRoles = [];
       for (const name of roleNames) {
         const role = await interaction.guild.roles.create({
@@ -185,7 +180,13 @@ export const autosetup: Command = {
         createdRoles.push(role);
       }
 
-      // First entered role = highest created role, then each next role appears below it.
+      // Refresh the hierarchy after creation, then make the first entered role the highest.
+      const refreshedBotMember = await interaction.guild.members.fetchMe();
+      const botTopPosition = refreshedBotMember.roles.highest.position;
+      if (botTopPosition <= 1) {
+        throw new Error('My highest role is too low to place new roles. Move my bot role above the roles I should manage.');
+      }
+
       for (let index = 0; index < createdRoles.length; index++) {
         const targetPosition = Math.max(1, botTopPosition - 1 - index);
         await createdRoles[index].setPosition(targetPosition).catch(() => undefined);
