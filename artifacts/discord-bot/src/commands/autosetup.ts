@@ -20,9 +20,8 @@ function parseChannelLayout(input: string): ChannelBlock[] {
     const line = cleanName(rawLine);
     if (!line) continue;
 
-    // Supports both "Hybrid - category" and the user's "Hybrid - catogery" spelling.
-    const categoryMatch = line.match(/^(.+?)\s*-\s*cat(?:e)?g(?:o)?ry\s*$/i)
-      ?? line.match(/^(.+?)\s*-\s*catogery\s*$/i);
+    // Supports both the correct spelling and the user's "catogery" spelling.
+    const categoryMatch = line.match(/^(.+?)\s*-\s*(?:category|catogery)\s*$/i);
 
     if (categoryMatch) {
       const name = cleanName(categoryMatch[1]);
