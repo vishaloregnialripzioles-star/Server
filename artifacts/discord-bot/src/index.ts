@@ -39,33 +39,57 @@ registerEvents(client);
 
 client.once('ready', async () => {
   console.log(`✅ DISCORD ONLINE: logged in as ${client.user?.tag}`);
+
+  // Load the game command independently first. This guarantees /game is
+  // available even if an unrelated command module fails during bulk loading.
   try {
-    const [{ allCommands }, { startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([
-      import('./commands/index.js'),
+    const { game } = await import('./commands/games.js');
+    client.commands.set(game.data.name, game);
+    console.log('🎮 Loaded /game command');
+  } catch (err) {
+    console.error('❌ Failed to load /game command:', err);
+  }
+
+  let allCommands: import('./types.js').Command[] = [];
+  try {
+    const commandsModule = await import('./commands/index.js');
+    allCommands = commandsModule.allCommands;
+    for (const command of allCommands) client.commands.set(command.data.name, command);
+    console.log(`✅ Loaded ${client.commands.size} commands`);
+  } catch (err) {
+    console.error('[Command startup failed — /game remains available]', err);
+  }
+
+  // Always sync whatever commands were successfully loaded. Use the logged-in
+  // bot application's ID so DISCORD_CLIENT_ID cannot point at another app.
+  try {
+    const { REST, Routes } = await import('discord.js');
+    const guildId = process.env.DISCORD_GUILD_ID?.trim();
+    const commandData = [...client.commands.values()].map(command => command.data.toJSON());
+    const rest = new REST({ version: '10' }).setToken(token);
+    if (guildId && /^\d+$/.test(guildId)) {
+      await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), { body: commandData });
+      console.log(`✅ Synced ${commandData.length} slash commands to guild ${guildId}`);
+    } else {
+      await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData });
+      console.log(`✅ Synced ${commandData.length} global slash commands`);
+    }
+  } catch (err) {
+    console.error('[Slash sync failed]', err);
+  }
+
+  try {
+    const [{ startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([
       import('./loops.js'),
       import('./globalGameEvents.js'),
       import('./commands/help.js'),
     ]);
-    client.commands.clear();
-    for (const command of allCommands) client.commands.set(command.data.name, command);
     registerGlobalGameEvents(client);
     startLoops(client);
     void primeHelpApplicationEmojis(client).catch(err => console.error('[Help emoji cache]', err));
-    console.log(`✅ Loaded ${client.commands.size} commands`);
-    try {
-      const { REST, Routes } = await import('discord.js');
-      const guildId = process.env.DISCORD_GUILD_ID?.trim();
-      const commandData = allCommands.map(command => command.data.toJSON());
-      const rest = new REST({ version: '10' }).setToken(token);
-      if (guildId && /^\d+$/.test(guildId)) {
-        await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), { body: commandData });
-        console.log(`✅ Synced ${commandData.length} slash commands to guild ${guildId}`);
-      } else {
-        await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData });
-        console.log(`✅ Synced ${commandData.length} global slash commands`);
-      }
-    } catch (err) { console.error('[Slash sync failed]', err); }
-  } catch (err) { console.error('[Command startup failed — event listeners remain active]', err); }
+  } catch (err) {
+    console.error('[Background startup failed]', err);
+  }
 });
 
 client.on('error', err => console.error('[Discord error]', err));
