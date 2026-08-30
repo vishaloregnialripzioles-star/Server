@@ -1,0 +1,44 @@
+name: Fix Mafia syntax
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  fix:
+    if: ${{ !startsWith(github.event.head_commit.message, 'fix: repair Mafia action syntax') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Repair malformed Mafia action function
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('artifacts/discord-bot/src/commands/games.ts')
+          lines=p.read_text(encoding='utf-8').splitlines()
+          replacement='''async function mafiaActionDM(client:ChatInputCommandInteraction[\'client\'],userId:string,title:string,description:string,targets:string[],session:string,action:string):Promise<string|null>{\n  try {\n    const user=await client.users.fetch(userId);\n    const rows:ActionRowBuilder<ButtonBuilder>[]=[];\n    for(let i=0;i<targets.length;i+=5){\n      rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(...targets.slice(i,i+5).map((id,j)=>new ButtonBuilder().setCustomId(`mafia:${session}:${action}:${id}`).setLabel(`Choose ${i+j+1}`).setStyle(action===\'protect\'?ButtonStyle.Success:ButtonStyle.Primary))));\n    }\n    const msg=await user.send({embeds:[new EmbedBuilder().setColor(action===\'kill\'?0xe11d48:action===\'protect\'?0x22c55e:0x38bdf8).setTitle(title).setDescription(`${description}\\n\\nChoose a player below. You have **20 seconds**.`).setFooter({text:\'Blox Mafia • Private action\'})],components:rows});\n    return await new Promise<string|null>(resolve=>{\n      let settled=false;\n      const finish=(value:string|null)=>{if(settled)return;settled=true;resolve(value);};\n      const collector=msg.createMessageComponentCollector({time:20_000,max:1});\n      collector.on(\'collect\',async i=>{\n        if(i.user.id!==userId){await i.reply({content:\'This private action is not yours.\',ephemeral:true}).catch(()=>undefined);return;}\n        await i.update({embeds:[new EmbedBuilder().setColor(0xd4af37).setTitle(\'✅ Choice locked\').setDescription(\'Your action has been recorded.\').setFooter({text:\'Blox Mafia • Action secured\'})],components:[]}).catch(()=>undefined);\n        finish(i.customId.split(\':\').pop()??null);\n      });\n      collector.once(\'end\',()=>finish(null));\n    });\n  } catch {\n    return null;\n  }\n}'''.splitlines()
+          idx=next((i for i,l in enumerate(lines) if l.startswith('async function mafiaActionDM(')),None)
+          if idx is None: raise SystemExit('mafiaActionDM not found')
+          end=idx+1
+          while end<len(lines) and not lines[end].startswith('async function runMafia('): end+=1
+          if end>=len(lines): raise SystemExit('runMafia boundary not found')
+          lines[idx:end]=replacement+['']
+          p.write_text('\n'.join(lines)+'\n',encoding='utf-8')
+          PY
+      - name: Validate TypeScript syntax
+        run: |
+          npm install -g pnpm@10
+          pnpm install --no-frozen-lockfile
+          pnpm --filter @workspace/discord-bot exec tsc --noEmit --pretty false
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/fix-mafia-syntax.yml
+          git add artifacts/discord-bot/src/commands/games.ts .github/workflows/fix-mafia-syntax.yml
+          git commit -m 'fix: repair Mafia action syntax'
+          git push
