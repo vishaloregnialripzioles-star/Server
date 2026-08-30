@@ -1,59 +1,27 @@
-name: Repair and polish Mafia
-
+name: Restore games.ts
 on:
   push:
     branches: [main]
-
 permissions:
   contents: write
-
 jobs:
-  repair:
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore: repair Mafia') }}
+  restore:
+    if: ${{ !startsWith(github.event.head_commit.message, 'fix: restore games.ts') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Restore known-good engine and polish Mafia artwork
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PATH_TO_FILE: artifacts/discord-bot/src/commands/games.ts
-          BASE: ab4ab17be72d70bb7dc225ad577daf6ee72db70c
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore known-good games.ts
         run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import base64, json, os, re, subprocess
-          repo=os.environ['REPO']; path=os.environ['PATH_TO_FILE']; base=os.environ['BASE']; token=os.environ['GH_TOKEN']
-          api=f'https://api.github.com/repos/{repo}/contents/{path}?ref={base}'
-          raw=subprocess.check_output(['curl','-fsSL','-H','Accept: application/vnd.github+json','-H',f'Authorization: Bearer {token}',api],text=True)
-          data=json.loads(raw)
-          s=base64.b64decode(data['content']).decode('utf-8')
-
-          board=r'''function mafiaBoardSvg(players:string[],roles:Map<string,string>,round:number):string{
-            const cols=4,w=205,h=142,g=22,rows=Math.ceil(players.length/cols),height=360+rows*(h+g);
-            const cards=players.map((id,i)=>{const x=60+(i%cols)*(w+g),y=175+Math.floor(i/cols)*(h+g);return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="24" fill="#0b1220" stroke="#64748b" stroke-width="2"/><rect x="${x}" y="${y}" width="7" height="${h}" rx="3" fill="#64748b"/><circle cx="${x+42}" cy="${y+48}" r="25" fill="#64748b" opacity=".14"/><text x="${x+42}" y="${y+55}" text-anchor="middle" fill="#cbd5e1" font-size="19" font-weight="900">${String(i+1).padStart(2,'0')}</text><text x="${x+112}" y="${y+42}" text-anchor="middle" fill="#f8fafc" font-size="16" font-weight="800">PLAYER ${i+1}</text><text x="${x+112}" y="${y+72}" text-anchor="middle" fill="#94a3b8" font-size="12" font-weight="800">ROLE HIDDEN</text><text x="${x+112}" y="${y+105}" text-anchor="middle" fill="#475569" font-size="11">CLASSIFIED</text></g>`}).join('');
-            return `<svg xmlns="http://www.w3.org/2000/svg" width="980" height="${height}" viewBox="0 0 980 ${height}"><defs><linearGradient id="mb" x2="1" y2="1"><stop stop-color="#020617"/><stop offset=".55" stop-color="#0f172a"/><stop offset="1" stop-color="#1b1020"/></linearGradient><radialGradient id="mg"><stop stop-color="#ef4444" stop-opacity=".25"/><stop offset="1" stop-color="#ef4444" stop-opacity="0"/></radialGradient></defs><rect width="980" height="${height}" rx="38" fill="url(#mb)"/><circle cx="820" cy="105" r="190" fill="url(#mg)"/><text x="60" y="62" fill="#f8fafc" font-size="38" font-weight="900" letter-spacing="5">MAFIA</text><text x="60" y="96" fill="#94a3b8" font-size="16" font-weight="700" letter-spacing="2">ROLE DISTRIBUTION • ROUND ${round}</text><rect x="60" y="118" width="860" height="34" rx="17" fill="#111827"/><circle cx="82" cy="135" r="6" fill="#ef4444"/><text x="98" y="141" fill="#cbd5e1" font-size="12">MAFIA HUNTS</text><circle cx="220" cy="135" r="6" fill="#22c55e"/><text x="236" y="141" fill="#cbd5e1" font-size="12">DOCTOR PROTECTS</text><circle cx="386" cy="135" r="6" fill="#38bdf8"/><text x="402" y="141" fill="#cbd5e1" font-size="12">DETECTIVE INVESTIGATES</text>${cards}<text x="60" y="${height-30}" fill="#64748b" font-size="12" letter-spacing="1">PUBLIC BOARD • IDENTITIES STAY SECRET • TRUST NOBODY</text></svg>`;
-          }
-          role=r'''function roleCardSvg(role:string,objective:string):string{
-            const theme=role==='Mafia'?'#ef4444':role==='Doctor'?'#22c55e':role==='Detective'?'#38bdf8':'#a78bfa';
-            const title=role==='Mafia'?'MAFIA':role==='Doctor'?'DOCTOR':role==='Detective'?'DETECTIVE':'CIVILIAN';
-            const subtitle=role==='Mafia'?'THE SHADOWS HAVE CHOSEN YOU':role==='Doctor'?'THE TOWN NEEDS YOUR JUDGEMENT':role==='Detective'?'THE TRUTH IS YOUR WEAPON':'THE TOWN NEEDS YOU TO SURVIVE';
-            return `<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="620" viewBox="0 0 1000 620"><defs><linearGradient id="rb" x2="1" y2="1"><stop stop-color="#020617"/><stop offset=".6" stop-color="#0f172a"/><stop offset="1" stop-color="#111827"/></linearGradient><radialGradient id="rg"><stop stop-color="${theme}" stop-opacity=".34"/><stop offset="1" stop-color="${theme}" stop-opacity="0"/></radialGradient></defs><rect width="1000" height="620" rx="42" fill="url(#rb)"/><circle cx="500" cy="250" r="250" fill="url(#rg)"/><text x="70" y="88" fill="#64748b" font-size="15" font-weight="800" letter-spacing="4">BLOX • MAFIA // CLASSIFIED DOSSIER</text><rect x="70" y="130" width="860" height="235" rx="32" fill="#020617" stroke="${theme}" stroke-width="2"/><text x="500" y="210" text-anchor="middle" fill="${theme}" font-size="44" font-weight="900" letter-spacing="6">${title}</text><text x="500" y="258" text-anchor="middle" fill="#fff" font-size="27" font-weight="900">YOUR IDENTITY IS SECRET</text><text x="500" y="294" text-anchor="middle" fill="#94a3b8" font-size="15" letter-spacing="2">${subtitle}</text><text x="95" y="420" fill="${theme}" font-size="16" font-weight="900" letter-spacing="2">MISSION</text><text x="95" y="460" fill="#f8fafc" font-size="22" font-weight="700">${escSvg(objective)}</text><rect x="95" y="500" width="810" height="54" rx="27" fill="#111827"/><text x="500" y="534" text-anchor="middle" fill="#cbd5e1" font-size="14">Keep this message private • Your decisions shape the round</text></svg>`;
-          }'''
-          # Replace both visual generators while leaving all game mechanics untouched.
-          s=re.sub(r'function mafiaBoardSvg.*?\n}\n\nfunction roleCardSvg',board+'\n\nfunction roleCardSvg',s,count=1,flags=re.S)
-          s=re.sub(r'function roleCardSvg.*?\n}\n\nfunction countryChallengeSvg',role+'\n\nfunction countryChallengeSvg',s,count=1,flags=re.S)
-          if 'function mafiaBoardSvg' not in s or 'function roleCardSvg' not in s:
-              raise SystemExit('Mafia visual replacement failed')
-          payload={'message':'chore: repair Mafia visuals','content':base64.b64encode(s.encode()).decode()}
-          # Resolve current blob SHA so the API update is conflict-safe.
-          cur=subprocess.check_output(['curl','-fsSL','-H','Accept: application/vnd.github+json','-H',f'Authorization: Bearer {token}',f'https://api.github.com/repos/{repo}/contents/{path}?ref=main'],text=True)
-          payload['sha']=json.loads(cur)['sha']
-          open('/tmp/update.json','w').write(json.dumps(payload))
-          subprocess.check_call(['curl','-fsSL','-X','PUT','-H','Accept: application/vnd.github+json','-H',f'Authorization: Bearer {token}','-H','Content-Type: application/json','--data-binary','@/tmp/update.json',f'https://api.github.com/repos/{repo}/contents/{path}'])
-          PY
-          rm -f .github/workflows/restore-games.yml .github/workflows/polish-mafia.yml
+          set -e
+          git checkout 7deb440e4682471b5e6d0e98caa98988f390d39d -- artifacts/discord-bot/src/commands/games.ts
+          npx --yes esbuild@0.27.3 artifacts/discord-bot/src/commands/games.ts --platform=node --format=esm --outfile=/tmp/games-check.js
+      - name: Commit and clean up
+        run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -A
-          git commit -m 'chore: remove temporary Mafia workflows' || true
-          git push || true
+          rm -f .github/workflows/restore-games.yml
+          git add artifacts/discord-bot/src/commands/games.ts .github/workflows/restore-games.yml
+          git commit -m 'fix: restore games.ts' 
+          git push
