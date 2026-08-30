@@ -43,16 +43,21 @@ export async function syncAllInviteRoles(guild: Guild): Promise<void> {
   }
 }
 
-export async function handleInviteRole(member: GuildMember): Promise<void> {
+export interface InviteJoinResult {
+  inviterId: string;
+  inviteCount: number;
+}
+
+export async function handleInviteRole(member: GuildMember): Promise<InviteJoinResult | null> {
   try {
     // Bot accounts and joins without a real inviter never count as valid invites.
-    if (member.user.bot) return;
+    if (member.user.bot) return null;
     const invites = await member.guild.invites.fetch();
     const previous = inviteUses.get(member.guild.id);
     const current = new Map<string, number>();
     for (const invite of invites.values()) current.set(invite.code, invite.uses ?? 0);
     inviteUses.set(member.guild.id, current);
-    if (!previous) return;
+    if (!previous) return null;
 
     let best: { inviterId: string; delta: number } | undefined;
     for (const invite of invites.values()) {
@@ -65,8 +70,9 @@ export async function handleInviteRole(member: GuildMember): Promise<void> {
       if (inviter?.user.bot) continue;
       if (!best || delta > best.delta) best = { inviterId, delta };
     }
-    if (!best) return;
+    if (!best) return null;
 
+    let counted = false;
     updateGuild(member.guild.id, data => {
       data.invites ??= {};
       data.inviteSources ??= {};
@@ -74,11 +80,15 @@ export async function handleInviteRole(member: GuildMember): Promise<void> {
       if (data.inviteSources[member.id]) return;
       data.inviteSources[member.id] = best!.inviterId;
       data.invites[best!.inviterId] = (data.invites[best!.inviterId] ?? 0) + 1;
+      counted = true;
     });
+    if (!counted) return null;
 
     const inviter = await member.guild.members.fetch(best.inviterId).catch(() => null);
-    if (inviter) await syncRoles(inviter, loadGuild(member.guild.id).invites?.[best.inviterId] ?? 0);
-  } catch (error) { console.error('[inviteRoles] Join tracking failed:', error); }
+    const inviteCount = loadGuild(member.guild.id).invites?.[best.inviterId] ?? 0;
+    if (inviter) await syncRoles(inviter, inviteCount);
+    return { inviterId: best.inviterId, inviteCount };
+  } catch (error) { console.error('[inviteRoles] Join tracking failed:', error); return null; }
 }
 
 export async function handleInviteMemberLeave(member: GuildMember): Promise<void> {
