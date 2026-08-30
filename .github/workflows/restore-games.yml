@@ -1,0 +1,27 @@
+name: Restore game engine
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore: restore games') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore games.ts from the last known-good game commit
+        run: |
+          set -e
+          FILE=artifacts/discord-bot/src/commands/games.ts
+          git show ab4ab17be72d70bb7dc225ad577daf6ee72db70c:$FILE > $FILE
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add $FILE
+          git commit -m 'chore: restore games' || exit 0
+          git push
