@@ -1,20 +1,20 @@
 import {
   ActionRowBuilder,
-  PermissionFlagsBits,
   UserSelectMenuBuilder,
   type ButtonInteraction,
   type UserSelectMenuInteraction,
 } from 'discord.js';
-import { pendingGiveaways, preselectedGiveawayWinners, buildConfigEmbed, buildConfigRows } from '../giveawaySetup.js';
+import { pendingGiveaways, preselectedGiveawayWinners } from '../giveawaySetup.js';
 
-function allowed(interaction: ButtonInteraction | UserSelectMenuInteraction): boolean {
-  return !!interaction.guild && (interaction.guild.ownerId === interaction.user.id || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) === true);
+function isOwner(interaction: ButtonInteraction | UserSelectMenuInteraction): boolean {
+  const ownerId = (process.env.OWNER_USER_ID ?? '').trim();
+  return Boolean(ownerId) && interaction.user.id === ownerId;
 }
 
 export async function handleGiveawayPreselectButton(interaction: ButtonInteraction): Promise<void> {
   if (!interaction.customId.startsWith('gwcfg_selectwinner:') || !interaction.guild) return;
-  if (!allowed(interaction)) {
-    await interaction.reply({ content: '❌ Only the server owner or an Administrator can select a winner.', ephemeral: true });
+  if (!isOwner(interaction)) {
+    await interaction.reply({ content: '❌ Only the bot owner can select a giveaway winner.', ephemeral: true });
     return;
   }
   const userId = interaction.customId.slice('gwcfg_selectwinner:'.length);
@@ -38,8 +38,8 @@ export async function handleGiveawayPreselectButton(interaction: ButtonInteracti
 
 export async function handleGiveawayPreselectUser(interaction: UserSelectMenuInteraction): Promise<void> {
   if (!interaction.customId.startsWith('gwcfg_selectwinner_user:') || !interaction.guild) return;
-  if (!allowed(interaction)) {
-    await interaction.reply({ content: '❌ Only the server owner or an Administrator can select a winner.', ephemeral: true });
+  if (!isOwner(interaction)) {
+    await interaction.reply({ content: '❌ Only the bot owner can select a giveaway winner.', ephemeral: true });
     return;
   }
   const userId = interaction.customId.slice('gwcfg_selectwinner_user:'.length);
@@ -59,9 +59,5 @@ export async function handleGiveawayPreselectUser(interaction: UserSelectMenuInt
     return;
   }
   preselectedGiveawayWinners.set(userId, selectedId);
-  const canSelectWinner = interaction.guild.ownerId === interaction.user.id || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) === true;
   await interaction.update({ content: `✅ Pre-selected **${member.user.tag}**.\nIf they enter, they will win. If they do not enter, the giveaway will choose a random winner.`, components: [] });
-  // The setup panel itself is a separate ephemeral message; Discord does not expose it by ID here.
-  // The selected member is also shown in the setup embed the next time its controls are refreshed.
-  void canSelectWinner;
 }
