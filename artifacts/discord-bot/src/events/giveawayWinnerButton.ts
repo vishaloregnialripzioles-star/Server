@@ -1,5 +1,4 @@
 import type { ButtonInteraction } from 'discord.js';
-import { PermissionFlagsBits } from 'discord.js';
 import { loadGuild, updateGuild } from '../storage.js';
 import { pickWinners, buildGiveawayEmbed, buildGiveawayRow } from '../giveawayUtils.js';
 import type { Giveaway } from '../types.js';
@@ -7,15 +6,9 @@ import type { Giveaway } from '../types.js';
 export async function handleGiveawayWinnerButton(interaction: ButtonInteraction): Promise<void> {
   if (!interaction.customId.startsWith('giveaway_select_winner:') || !interaction.guild) return;
 
-  const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-  const allowed = interaction.user.id === interaction.guild.ownerId ||
-    Boolean(member?.permissions.has(PermissionFlagsBits.Administrator));
-  if (!allowed) {
-    await interaction.reply({ content: '❌ Only the server owner or an Administrator can select a giveaway winner.', ephemeral: true });
-    return;
-  }
-  if (!member) {
-    await interaction.reply({ content: '❌ Could not verify your server membership.', ephemeral: true });
+  const ownerId = (process.env.OWNER_USER_ID ?? '').trim();
+  if (!ownerId || interaction.user.id !== ownerId) {
+    await interaction.reply({ content: '❌ Only the bot owner can select a giveaway winner.', ephemeral: true });
     return;
   }
 
