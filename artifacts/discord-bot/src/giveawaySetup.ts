@@ -19,10 +19,15 @@ export function buildConfigEmbed(pending: PendingGiveaway): EmbedBuilder {
   return new EmbedBuilder().setColor(0x57F287).setTitle(typeLabel).setDescription(lines.join('\n')).setFooter({ text: 'Click ✅ Done when you are ready to start the giveaway.' });
 }
 
-export function buildConfigRows(userId: string, canSelectWinner = preselectAllowedUsers.has(userId)): ActionRowBuilder<ButtonBuilder>[] {
+export function buildConfigRows(userId: string, canSelectWinner = isOwner(userId)): ActionRowBuilder<ButtonBuilder>[] {
   const btn = (id: string, label: string, style: ButtonStyle = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(`gwcfg_${id}:${userId}`).setLabel(label).setStyle(style);
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(btn('done', '✅ Done', ButtonStyle.Success), btn('limiters', 'Limiters & Requirements', ButtonStyle.Primary), btn('multipliers', 'Multipliers', ButtonStyle.Primary), btn('prize', 'Prize', ButtonStyle.Primary));
   const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(btn('winners', 'Winners'), btn('donor', 'Donor'), btn('message', 'Message'), btn('pingrole', 'Ping Role'), btn('channel', 'Channel'));
   const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(btn('image', 'Image'), btn('duration', 'Duration'), btn('hide', 'Hide Entry Count'));
   const rows = [row1, row2, row3]; if (canSelectWinner) rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(btn('selectwinner', '🎯 Select Winner', ButtonStyle.Danger))); return rows;
+}
+
+function isOwner(userId: string): boolean {
+  const ownerId = (process.env.OWNER_USER_ID ?? '').trim();
+  return Boolean(ownerId) && userId === ownerId;
 }
