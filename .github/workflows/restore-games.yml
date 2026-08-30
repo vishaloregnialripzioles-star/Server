@@ -1,27 +1,38 @@
 name: Restore games.ts
+
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+
 permissions:
   contents: write
+
 jobs:
   restore:
-    if: ${{ !startsWith(github.event.head_commit.message, 'fix: restore games.ts') }}
+    if: ${{ github.event.head_commit.message != 'fix: restore games.ts' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Restore known-good games.ts
         run: |
-          set -e
-          git checkout 7deb440e4682471b5e6d0e98caa98988f390d39d -- artifacts/discord-bot/src/commands/games.ts
+          set -euo pipefail
+          git show 7deb440e4682471b5e6d0e98caa98988f390d39d:artifacts/discord-bot/src/commands/games.ts > artifacts/discord-bot/src/commands/games.ts
           npx --yes esbuild@0.27.3 artifacts/discord-bot/src/commands/games.ts --platform=node --format=esm --outfile=/tmp/games-check.js
-      - name: Commit and clean up
+
+      - name: Commit repaired file
         run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          rm -f .github/workflows/restore-games.yml
-          git add artifacts/discord-bot/src/commands/games.ts .github/workflows/restore-games.yml
-          git commit -m 'fix: restore games.ts' 
-          git push
+          git add artifacts/discord-bot/src/commands/games.ts
+          if git diff --cached --quiet; then
+            echo 'games.ts already matches the known-good revision.'
+            exit 0
+          fi
+          git commit -m 'fix: restore games.ts'
+          git push origin main
