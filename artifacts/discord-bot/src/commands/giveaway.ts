@@ -59,7 +59,7 @@ export const giveaway: Command = {
     if (sub === 'manage') {
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) { await interaction.reply({ content: '❌ You need **Manage Server** permission.', flags: 64 }); return; }
       await interaction.deferReply({ flags: 64 }); const input = interaction.options.getString('id', true).trim(); const gv = loadGuild(interaction.guild.id).giveaways.find(g => g.id === input || g.messageId === input);
-      if (!gv) { await interaction.editReply(`❌ No giveaway found with ID or message ID \`${input}\`.`); return; } await interaction.editReply({ embeds: [buildAdminPanelEmbed(gv)], components: buildAdminPanelRows(gv.id, gv.ended) }); return;
+      if (!gv) { await interaction.editReply(`❌ No giveaway found with ID or message ID \`${input}\`.`); return; } await interaction.editReply({ embeds: [buildAdminPanelEmbed(gv)], components: buildAdminPanelRows(gv.id, gv.ended, interaction.user.id) }); return;
     }
   },
 };
