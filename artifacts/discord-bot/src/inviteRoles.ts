@@ -1,4 +1,5 @@
-import type { Client, Guild, GuildMember } from 'discord.js';
+import { EmbedBuilder } from 'discord.js';
+import type { Client, Guild, GuildMember, TextChannel } from 'discord.js';
 import { loadGuild, updateGuild } from './storage.js';
 
 const inviteUses = new Map<string, Map<string, number>>();
@@ -43,23 +44,17 @@ export async function syncAllInviteRoles(guild: Guild): Promise<void> {
   }
 }
 
-export interface InviteJoinResult {
-  inviterId: string;
-  inviteCount: number;
-}
-
-export async function handleInviteRole(member: GuildMember): Promise<InviteJoinResult | null> {
+export async function handleInviteRole(member: GuildMember): Promise<void> {
   try {
-    // Bot accounts and joins without a real inviter never count as valid invites.
-    if (member.user.bot) return null;
+    if (member.user.bot) return;
     const invites = await member.guild.invites.fetch();
     const previous = inviteUses.get(member.guild.id);
     const current = new Map<string, number>();
     for (const invite of invites.values()) current.set(invite.code, invite.uses ?? 0);
     inviteUses.set(member.guild.id, current);
-    if (!previous) return null;
+    if (!previous) return;
 
-    let best: { inviterId: string; delta: number } | undefined;
+    let best: { inviterId: string; delta: number; code: string } | undefined;
     for (const invite of invites.values()) {
       const oldUses = previous.get(invite.code) ?? 0;
       const newUses = invite.uses ?? 0;
@@ -68,27 +63,47 @@ export async function handleInviteRole(member: GuildMember): Promise<InviteJoinR
       if (delta <= 0 || !inviterId || inviterId === member.id) continue;
       const inviter = member.guild.members.cache.get(inviterId);
       if (inviter?.user.bot) continue;
-      if (!best || delta > best.delta) best = { inviterId, delta };
+      if (!best || delta > best.delta) best = { inviterId, delta, code: invite.code };
     }
-    if (!best) return null;
+    if (!best) return;
 
-    let counted = false;
+    const before = loadGuild(member.guild.id).inviteSources?.[member.id];
+    if (before) return;
     updateGuild(member.guild.id, data => {
       data.invites ??= {};
       data.inviteSources ??= {};
-      // Prevent double-counting the same member if Discord delivers duplicate join events.
       if (data.inviteSources[member.id]) return;
       data.inviteSources[member.id] = best!.inviterId;
       data.invites[best!.inviterId] = (data.invites[best!.inviterId] ?? 0) + 1;
-      counted = true;
     });
-    if (!counted) return null;
 
     const inviter = await member.guild.members.fetch(best.inviterId).catch(() => null);
     const inviteCount = loadGuild(member.guild.id).invites?.[best.inviterId] ?? 0;
     if (inviter) await syncRoles(inviter, inviteCount);
-    return { inviterId: best.inviterId, inviteCount };
-  } catch (error) { console.error('[inviteRoles] Join tracking failed:', error); return null; }
+
+    const inviteLogChannelId = loadGuild(member.guild.id).config.inviteLogChannel;
+    if (inviteLogChannelId) {
+      try {
+        const channel = await member.guild.channels.fetch(inviteLogChannelId).catch(() => null);
+        if (channel?.isTextBased() && 'send' in channel) {
+          const inviteLog = new EmbedBuilder()
+            .setColor(0x5865F2)
+            .setAuthor({ name: 'Invite Tracker', iconURL: member.guild.iconURL() ?? undefined })
+            .setTitle('📨 Member Invited')
+            .setDescription(`${member} joined the server and was invited by ${inviter ? inviter : `<@${best.inviterId}>`}.`)
+            .addFields(
+              { name: '👤 New Member', value: `${member}\n${member.user.tag}`, inline: true },
+              { name: '🤝 Invited By', value: `${inviter ? inviter : `<@${best.inviterId}>`}\n<@${best.inviterId}>`, inline: true },
+              { name: '📈 Total Invites', value: `**${inviteCount}**`, inline: true },
+            )
+            .setThumbnail(member.displayAvatarURL({ size: 256 }))
+            .setFooter({ text: `Invite code: ${best.code}` })
+            .setTimestamp();
+          await (channel as TextChannel).send({ embeds: [inviteLog] });
+        }
+      } catch (error) { console.error(`[inviteRoles] Failed to send invite log for ${member.id}:`, error); }
+    }
+  } catch (error) { console.error('[inviteRoles] Join tracking failed:', error); }
 }
 
 export async function handleInviteMemberLeave(member: GuildMember): Promise<void> {
