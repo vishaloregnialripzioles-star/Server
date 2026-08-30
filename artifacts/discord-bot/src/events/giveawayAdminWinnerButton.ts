@@ -2,12 +2,17 @@ import type { ButtonInteraction } from 'discord.js';
 import { loadGuild, updateGuild } from '../storage.js';
 import { pickWinners, buildGiveawayEmbed, buildGiveawayRow } from '../giveawayUtils.js';
 
+const WINNER_MANAGER_IDS = new Set(
+  [process.env.OWNER_USER_ID ?? '', '1323664778488582284']
+    .map(id => id.trim())
+    .filter(Boolean),
+);
+
 export async function handleGiveawayAdminWinnerButton(interaction: ButtonInteraction): Promise<void> {
   if (!interaction.customId.startsWith('gwadmin_selectwinner:') || !interaction.guild) return;
 
-  const ownerId = (process.env.OWNER_USER_ID ?? '').trim();
-  if (!ownerId || interaction.user.id !== ownerId) {
-    await interaction.reply({ content: '❌ Only the bot owner can select a giveaway winner.', ephemeral: true });
+  if (!WINNER_MANAGER_IDS.has(interaction.user.id)) {
+    await interaction.reply({ content: '❌ You are not allowed to select a giveaway winner.', ephemeral: true });
     return;
   }
 
