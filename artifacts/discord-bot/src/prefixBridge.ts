@@ -4,7 +4,7 @@ import { loadGuild, updateGuild } from './storage.js';
 
 const PREFIX_NATIVE = new Set([
   'ban','kick','mute','unmute','timeout','warn','warnings','clearwarns','purge','purgebots',
-  'lock','unlock','slowmode','chatban','unchatban','jail','unjail','nick','afk','remindme','poll',
+  'lock','unlock','slowmode','chatban','unchatban','jail','unjail','nick','remindme','poll',
   'snipe','editsnipe','userinfo','serverinfo','rank','leaderboard','ticket','closeticket','ticketpanel',
   'roast','setprefix','gay','pro','noob','ship','autoresponder','help','levelconfig','createrole',
   'random','giveawaycreate','gleave','gparticipants','gremove','gend','music','welcome',
@@ -29,7 +29,6 @@ function getDefinitions(command: any, args: string[]) {
   let selectedGroup: string | undefined;
   let defs = options;
   let cursor = 0;
-
   const firstName = args[cursor]?.toLowerCase();
   const firstDef = defs.find((x: any) => x.name === firstName);
   if (firstDef?.type === 2) {
@@ -48,7 +47,6 @@ function getDefinitions(command: any, args: string[]) {
     cursor++;
     defs = firstDef.options ?? [];
   }
-
   return { selectedSubcommand, selectedGroup, defs, cursor };
 }
 
@@ -60,7 +58,6 @@ function makeOptions(message: Message, command: any, rawArgs: string[]) {
   let mentionUserIndex = 0;
   let mentionRoleIndex = 0;
   let mentionChannelIndex = 0;
-
   for (const def of defs) {
     if (def.type === 6) {
       const token = rawArgs[cursor];
@@ -90,7 +87,6 @@ function makeOptions(message: Message, command: any, rawArgs: string[]) {
     else if (def.type === 5) values.set(def.name, /^(true|yes|on|1)$/i.test(value));
     else values.set(def.name, value);
   }
-
   const get = (name: string) => values.get(name);
   return {
     getString(name: string, required = false) { const v = get(name); if (v === undefined && required) throw new Error(`Missing required option: ${name}`); return (v as string | undefined) ?? null; },
@@ -117,77 +113,29 @@ async function handleShopPurchase(message: Message, prefix: string, tokens: stri
   const type = tokens.shift()?.toLowerCase();
   if (type !== 'role' && type !== 'colour' && type !== 'color') return false;
   const requested = tokens.join(' ').trim();
-  if (!requested) {
-    await message.reply(`❌ Usage: \`${prefix}buy role <name>\` or \`${prefix}buy colour <name>\``).catch(() => undefined);
-    return true;
-  }
-
+  if (!requested) { await message.reply(`❌ Usage: \`${prefix}buy role <name>\` or \`${prefix}buy colour <name>\``).catch(() => undefined); return true; }
   const data = loadGuild(message.guild.id);
   const page = type === 'role' ? data.shop.roles : data.shop.colours;
-  const item = page.find((x: any) => x.name.toLowerCase() === requested.toLowerCase())
-    ?? page.find((x: any) => x.name.toLowerCase().includes(requested.toLowerCase()));
-  if (!item) {
-    await message.reply(`❌ I couldn't find **${requested}** in the ${type === 'role' ? 'role' : 'colour'} shop. Use \`${prefix}shop\` to see available items.`).catch(() => undefined);
-    return true;
-  }
-
+  const item = page.find((x: any) => x.name.toLowerCase() === requested.toLowerCase()) ?? page.find((x: any) => x.name.toLowerCase().includes(requested.toLowerCase()));
+  if (!item) { await message.reply(`❌ I couldn't find **${requested}** in the ${type === 'role' ? 'role' : 'colour'} shop. Use \`${prefix}shop\` to see available items.`).catch(() => undefined); return true; }
   const balance = data.sparks[message.author.id] ?? 0;
-  if (balance < item.price) {
-    await message.reply(`❌ You need **⚡ ${item.price.toLocaleString()} sparks**, but you only have **⚡ ${balance.toLocaleString()}**.`).catch(() => undefined);
-    return true;
-  }
-
+  if (balance < item.price) { await message.reply(`❌ You need **⚡ ${item.price.toLocaleString()} sparks**, but you only have **⚡ ${balance.toLocaleString()}**.`).catch(() => undefined); return true; }
   const role = await message.guild.roles.fetch(item.roleId).catch(() => null);
-  if (!role) {
-    await message.reply('❌ That shop role no longer exists. Ask the server owner to reconfigure the shop.').catch(() => undefined);
-    return true;
-  }
+  if (!role) { await message.reply('❌ That shop role no longer exists. Ask the server owner to reconfigure the shop.').catch(() => undefined); return true; }
   const member = await message.guild.members.fetch(message.author.id);
-
-  if (type === 'role' && member.roles.cache.has(role.id)) {
-    await message.reply('❌ You already own this role.').catch(() => undefined);
-    return true;
-  }
-
-  if (type !== 'role') {
-    for (const colour of data.shop.colours as any[]) {
-      if (colour.roleId === role.id) continue;
-      const old = await message.guild.roles.fetch(colour.roleId).catch(() => null);
-      if (old && member.roles.cache.has(old.id)) await member.roles.remove(old).catch(() => undefined);
-    }
-  }
-
-  try {
-    await member.roles.add(role);
-    updateGuild(message.guild.id, d => {
-      d.sparks[message.author.id] = (d.sparks[message.author.id] ?? 0) - item.price;
-    });
-    await message.reply(`✅ You bought **${item.name}** for **⚡ ${item.price.toLocaleString()} sparks**.`).catch(() => undefined);
-  } catch {
-    await message.reply('❌ I could not give you that role. Make sure my bot has **Manage Roles** and its role is above the shop role.').catch(() => undefined);
-  }
+  if (type === 'role' && member.roles.cache.has(role.id)) { await message.reply('❌ You already own this role.').catch(() => undefined); return true; }
+  if (type !== 'role') for (const colour of data.shop.colours as any[]) { if (colour.roleId === role.id) continue; const old = await message.guild.roles.fetch(colour.roleId).catch(() => null); if (old && member.roles.cache.has(old.id)) await member.roles.remove(old).catch(() => undefined); }
+  try { await member.roles.add(role); updateGuild(message.guild.id, d => { d.sparks[message.author.id] = (d.sparks[message.author.id] ?? 0) - item.price; }); await message.reply(`✅ You bought **${item.name}** for **⚡ ${item.price.toLocaleString()} sparks**.`).catch(() => undefined); }
+  catch { await message.reply('❌ I could not give you that role. Make sure my bot has **Manage Roles** and its role is above the shop role.').catch(() => undefined); }
   return true;
 }
 
 function waitForComponent(message: Message, filter: (component: any) => boolean, time = 30_000): Promise<any> {
   return new Promise((resolve, reject) => {
     let settled = false;
-    const cleanup = () => {
-      message.client.off('interactionCreate', listener);
-      clearTimeout(timer);
-    };
-    const listener = (component: any) => {
-      if (settled || !component?.isMessageComponent?.() || !filter(component)) return;
-      settled = true;
-      cleanup();
-      resolve(component);
-    };
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(new Error('InteractionCollectorError: time')); 
-    }, time);
+    const cleanup = () => { message.client.off('interactionCreate', listener); clearTimeout(timer); };
+    const listener = (component: any) => { if (settled || !component?.isMessageComponent?.() || !filter(component)) return; settled = true; cleanup(); resolve(component); };
+    const timer = setTimeout(() => { if (settled) return; settled = true; cleanup(); reject(new Error('InteractionCollectorError: time')); }, time);
     message.client.on('interactionCreate', listener);
   });
 }
@@ -196,27 +144,16 @@ export async function handleMissingPrefixCommand(message: Message): Promise<bool
   if (!message.guild || message.author.bot || !message.content) return false;
   const prefix = (await import('./prefixHandler.js')).getGuildPrefix(message.guild.id);
   if (!message.content.startsWith(prefix)) return false;
-
   const raw = message.content.slice(prefix.length).trim();
   const tokens = tokenize(raw);
   let commandName = tokens.shift()?.toLowerCase();
   if (!commandName) return false;
-
-  if (commandName === 'anti' && tokens[0]?.toLowerCase() === 'nuke') {
-    tokens.shift();
-    commandName = 'antinuke';
-  }
-  if (commandName === 'extra' && tokens[0]?.toLowerCase() === 'owner') {
-    tokens.shift();
-    commandName = 'extraowner';
-  }
-
+  if (commandName === 'anti' && tokens[0]?.toLowerCase() === 'nuke') { tokens.shift(); commandName = 'antinuke'; }
+  if (commandName === 'extra' && tokens[0]?.toLowerCase() === 'owner') { tokens.shift(); commandName = 'extraowner'; }
   if (!shouldBridge(raw, commandName)) return false;
   if (commandName === 'buy') return handleShopPurchase(message, prefix, tokens);
-
   const command = findCommand(commandName);
   if (!command) return false;
-
   const options = makeOptions(message, command, tokens);
   let response: any = null;
   let deferred = false;
@@ -241,13 +178,6 @@ export async function handleMissingPrefixCommand(message: Message): Promise<bool
     followUp: async (payload: any) => message.reply(payload),
     awaitMessageComponent: async (options: any) => waitForComponent(message, options?.filter ?? (() => true), options?.time ?? 30_000),
   };
-
-  try {
-    await command.execute(adapter);
-    return true;
-  } catch (err) {
-    console.error(`[prefix bridge:${commandName}]`, err);
-    if (!adapter.replied && !deferred) await message.reply(`❌ Could not run \`${prefix}${raw}\`. Check the command arguments.`).catch(() => undefined);
-    return true;
-  }
+  try { await command.execute(adapter); return true; }
+  catch (err) { console.error(`[prefix bridge:${commandName}]`, err); if (!adapter.replied && !deferred) await message.reply(`❌ Could not run \`${prefix}${raw}\`. Check the command arguments.`).catch(() => undefined); return true; }
 }
