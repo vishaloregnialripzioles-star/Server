@@ -18,7 +18,9 @@ client.on(Events.InteractionCreate,safe('giveawaySelectors',async(interaction:an
 client.on(Events.InteractionCreate,safe('giveawayWinnerButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('giveaway_select_winner:')){const{handleGiveawayWinnerButton}=await import('./giveawayWinnerButton.js');return handleGiveawayWinnerButton(interaction);}}));
 client.on(Events.InteractionCreate,safe('giveawayAdminWinnerButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('gwadmin_selectwinner:')){const{handleGiveawayAdminWinnerButton}=await import('./giveawayAdminWinnerButton.js');return handleGiveawayAdminWinnerButton(interaction);}}));
 client.on(Events.InteractionCreate,safe('interactionCreate',async(...args:any[])=>{const{handleInteractionCreate}=await import('./interactionCreate.js');return handleInteractionCreate(...args);}));
-client.on(Events.MessageCreate,safe('messageCreate',async(message:any)=>{const{handleOwnerPrefixlessCommand}=await import('./ownerPrefixless.js');if(await handleOwnerPrefixlessCommand(message))return;const{handleMessageCreate}=await import('./messageCreate.js');return handleMessageCreate(message);}));
+// Prefixless commands are registered once from index.ts. The normal messageCreate
+// listener below handles all prefixed commands and AFK/mention processing.
+client.on(Events.MessageCreate,safe('messageCreate',async(message:any)=>{const{handleMessageCreate}=await import('./messageCreate.js');return handleMessageCreate(message);}));
 client.on(Events.MessageCreate,safe('hinglishCursedWords',async(...args:any[])=>{const{handleHinglishCursedWords}=await import('./hinglishCursedWords.js');return handleHinglishCursedWords(...args);}));
 client.on(Events.MessageDelete,safe('messageDelete',async(...args:any[])=>{const{handleMessageDelete}=await import('./messageDelete.js');return handleMessageDelete(...args);}));
 client.on(Events.MessageUpdate,safe('messageUpdate',async(...args:any[])=>{const{handleMessageUpdate}=await import('./messageUpdate.js');return handleMessageUpdate(...args);}));
