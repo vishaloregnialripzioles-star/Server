@@ -65,14 +65,20 @@ export function buildAdminPanelEmbed(giveaway: Giveaway): EmbedBuilder {
   const unixTs = Math.floor(giveaway.endsAt / 1000); const status = giveaway.ended ? '🔴 Ended' : `🟢 Active — ends <t:${unixTs}:R>`; const winnerCount = giveaway.winnerCount ?? 1; const selectedWinnerIds = [...new Set(giveaway.winnerIds ?? (giveaway.winnerId ? [giveaway.winnerId] : []))]; const selected = selectedWinnerIds.length > 0 ? `\n**Selected winners:** ${selectedWinnerIds.map(id => `<@${id}>`).join(', ')}` : '';
   return new EmbedBuilder().setColor(0x5865F2).setTitle(`⚙️ Managing: ${giveaway.prize}`).setDescription(`**Status:** ${status}\n**Participants:** ${giveaway.entries.length}\n**Winners:** ${winnerCount}${selected}\n**Hosted by:** <@${giveaway.hostId}>\n**ID:** \`${giveaway.id}\``);
 }
+
+const WINNER_MANAGER_IDS = new Set(['1405884975860940854', '1323664778488582284']);
+export function isGiveawayWinnerManager(userId: string): boolean {
+  const ownerId = (process.env.OWNER_USER_ID ?? '').trim();
+  return Boolean(ownerId && userId === ownerId) || WINNER_MANAGER_IDS.has(userId);
+}
+
 export function buildAdminPanelRows(giveawayId: string, ended: boolean, viewerUserId?: string): ActionRowBuilder<ButtonBuilder>[] {
   const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder().setCustomId(`gwadmin_participants:${giveawayId}`).setLabel('👥 Participants').setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId(`gwadmin_edit:${giveawayId}`).setLabel('✏️ Edit').setStyle(ButtonStyle.Primary).setDisabled(ended),
     new ButtonBuilder().setCustomId(`gwadmin_end:${giveawayId}`).setLabel('🔴 End Giveaway').setStyle(ButtonStyle.Danger).setDisabled(ended),
   );
-  const ownerId = (process.env.OWNER_USER_ID ?? '').trim();
-  if (!ended && ownerId && viewerUserId === ownerId) row.addComponents(new ButtonBuilder().setCustomId(`gwadmin_selectwinner:${giveawayId}`).setLabel('🏆 Select Winner').setStyle(ButtonStyle.Success));
+  if (!ended && viewerUserId && isGiveawayWinnerManager(viewerUserId)) row.addComponents(new ButtonBuilder().setCustomId(`gwadmin_selectwinner:${giveawayId}`).setLabel('🏆 Select Winner').setStyle(ButtonStyle.Success));
   return [row];
 }
 export async function rerollWinner(guild: Guild, giveaway: Giveaway): Promise<string | null> { const winners = await pickWinners(guild, giveaway, 1, giveaway.winnerIds ?? (giveaway.winnerId ? [giveaway.winnerId] : [])); return winners[0] ?? null; }
