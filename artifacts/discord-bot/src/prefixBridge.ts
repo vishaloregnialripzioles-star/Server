@@ -103,7 +103,8 @@ function makeOptions(message: Message, command: any, rawArgs: string[]) {
   };
 }
 
-function shouldBridge(raw: string, commandName: string): boolean {
+function shouldBridge(raw: string, commandName: string, allowNative = false): boolean {
+  if (allowNative) return true;
   if (commandName === 'setup') return /^setup\s+(shoprole|shop\s+colour)\b/i.test(raw);
   return !PREFIX_NATIVE.has(commandName);
 }
@@ -140,7 +141,7 @@ function waitForComponent(message: Message, filter: (component: any) => boolean,
   });
 }
 
-export async function handleMissingPrefixCommand(message: Message): Promise<boolean> {
+export async function handleMissingPrefixCommand(message: Message, allowNative = false): Promise<boolean> {
   if (!message.guild || message.author.bot || !message.content) return false;
   const prefix = (await import('./prefixHandler.js')).getGuildPrefix(message.guild.id);
   if (!message.content.startsWith(prefix)) return false;
@@ -150,7 +151,7 @@ export async function handleMissingPrefixCommand(message: Message): Promise<bool
   if (!commandName) return false;
   if (commandName === 'anti' && tokens[0]?.toLowerCase() === 'nuke') { tokens.shift(); commandName = 'antinuke'; }
   if (commandName === 'extra' && tokens[0]?.toLowerCase() === 'owner') { tokens.shift(); commandName = 'extraowner'; }
-  if (!shouldBridge(raw, commandName)) return false;
+  if (!shouldBridge(raw, commandName, allowNative)) return false;
   if (commandName === 'buy') return handleShopPurchase(message, prefix, tokens);
   const command = findCommand(commandName);
   if (!command) return false;
