@@ -44,19 +44,18 @@ export function buildConfigEmbed(pending: PendingGiveaway): EmbedBuilder {
   if (pending.requiredRoleId) lines.push(`**Required Role:** <@&${pending.requiredRoleId}>`);
   if (pending.bypassRoleId) lines.push(`**Requirement Bypass:** <@&${pending.bypassRoleId}>`);
   if (pending.blacklistRoleId) lines.push(`**Blacklisted Role:** <@&${pending.blacklistRoleId}>`);
-  if (pending.extraEntryRoles.length > 0) lines.push(`**Multipliers:** ${pending.extraEntryRoles.map(r => `<@&${r.roleId}>: +${r.entries}`).join(', ')}`);
+  if (pending.extraEntryRoles.length > 0) lines.push(`**Multipliers:** ${pending.extraEntryRoles.map(r => `<@&${r.roleId}>: ${r.entries}×`).join(', ')}`);
   if (pending.imageUrl) lines.push('**Image:** ✅ set');
   if (pending.hideEntryCount) lines.push('**Hide Entry Count:** Yes');
-  return new EmbedBuilder()
-    .setColor(0x57F287)
-    .setTitle(typeLabel)
-    .setDescription(lines.join('\n'))
-    .setFooter({ text: 'Click ✅ Done when you are ready to start the giveaway.' });
+  return new EmbedBuilder().setColor(0x57F287).setTitle(typeLabel).setDescription(lines.join('\n')).setFooter({ text: 'Click ✅ Done when you are ready to start the giveaway.' });
 }
 
 export function buildConfigRows(userId: string, canSelectWinner = isOwner(userId)): ActionRowBuilder<ButtonBuilder>[] {
-  const btn = (id: string, label: string, style: ButtonStyle = ButtonStyle.Secondary) =>
-    new ButtonBuilder().setCustomId(`gwcfg_${id}:${userId}`).setLabel(label).setStyle(style);
+  const selectorButtons = new Set(['done', 'limiters', 'multipliers', 'donor', 'pingrole', 'channel']);
+  const btn = (id: string, label: string, style: ButtonStyle = ButtonStyle.Secondary) => {
+    const prefix = selectorButtons.has(id) ? 'gws_' : 'gwcfg_';
+    return new ButtonBuilder().setCustomId(`${prefix}${id}:${userId}`).setLabel(label).setStyle(style);
+  };
 
   const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
     btn('done', '✅ Done', ButtonStyle.Success),
@@ -77,7 +76,7 @@ export function buildConfigRows(userId: string, canSelectWinner = isOwner(userId
     btn('hide', 'Hide Entry Count'),
   );
   const rows = [row1, row2, row3];
-  // Keep the existing Select Winner button exactly as-is.
+  // Intentionally unchanged: the existing Select Winner button keeps its original ID/style.
   if (canSelectWinner) rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(btn('selectwinner', '🎯 Select Winner', ButtonStyle.Danger)));
   return rows;
 }
