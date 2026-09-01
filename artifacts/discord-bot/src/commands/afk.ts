@@ -8,25 +8,13 @@ import {
   type Client,
 } from 'discord.js';
 import type { Command } from '../types.js';
-import { loadGuild, updateGuild } from '../storage.js';
+import { updateGuild } from '../storage.js';
 import { removeGlobalAfk, setGlobalAfk } from '../globalAfk.js';
 
 type AfkMode = 'server' | 'global';
 const BUTTON_PREFIX = 'afk_scope:';
 const pendingReasons = new Map<string, string>();
 const listenerClients = new WeakSet<Client>();
-
-function pingRows(pings: Array<{ messageUrl: string }>) {
-  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
-  for (let i = 0; i < Math.min(pings.length, 25); i += 5) {
-    const row = new ActionRowBuilder<ButtonBuilder>();
-    for (let j = i; j < Math.min(i + 5, pings.length, 25); j++) {
-      row.addComponents(new ButtonBuilder().setLabel(`Jump #${j + 1}`).setStyle(ButtonStyle.Link).setURL(pings[j].messageUrl));
-    }
-    rows.push(row);
-  }
-  return rows;
-}
 
 async function finishAfk(button: ButtonInteraction): Promise<void> {
   const parts = button.customId.split(':');
@@ -91,13 +79,23 @@ export const afk: Command = {
   },
 };
 
-export function buildAfkReturnPayload(pings: Array<{ messageUrl: string; authorName: string }>) {
+export function buildAfkReturnPayload(pings: Array<{ messageUrl: string; authorName: string; channelName?: string }>) {
   const count = pings.length;
-  const description = count
-    ? `You were pinged **${count} time${count === 1 ? '' : 's'}** while AFK.\n\n${pings.slice(0, 25).map((p, i) => `**${i + 1}.** ${p.authorName} — [Click to jump](${p.messageUrl})`).join('\n')}`
-    : 'You were not pinged while AFK.';
+  const mentionList = count
+    ? pings.slice(0, 25).map((p) => `💠 **${p.authorName}**${p.channelName ? ` in **#${p.channelName}**` : ''} — [Click to jump](${p.messageUrl})`).join('\n')
+    : 'None';
+
+  const description = [
+    '💠 **Your AFK has been removed**',
+    '',
+    '⏱️ You were AFK while away from Discord.',
+    '',
+    `💎 **Mentions received while AFK: ${count}**`,
+    mentionList,
+    count > 25 ? '', 'Showing the first 25 mentions.' : '',
+  ].filter(Boolean).join('\n');
+
   return {
-    embeds: [new EmbedBuilder().setColor(0x57F287).setTitle('👋 Welcome back!').setDescription(description).setFooter({ text: count > 25 ? 'Showing the first 25 pings.' : 'AFK status removed.' }).setTimestamp()],
-    components: pingRows(pings),
+    embeds: [new EmbedBuilder().setColor(0x57F287).setTitle('👋 Welcome back!').setDescription(description).setFooter({ text: 'AFK status removed.' }).setTimestamp()],
   };
 }
