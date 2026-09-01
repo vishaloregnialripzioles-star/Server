@@ -2,13 +2,11 @@ import { type Interaction, type BaseGuildTextChannel } from 'discord.js';
 import { loadGuild, updateGuild } from '../storage.js';
 import { buildGiveawayEmbed, buildGiveawayRow } from '../giveawayUtils.js';
 
-/**
- * Compatibility bridge for the existing giveaway-enter handler.
- * The main handler already enforces requiredRoleId, so for a member holding
- * the configured bypass role we temporarily relax that one check while the
- * existing entry flow runs. The original requirement is restored immediately
- * after the current event turn.
- */
+function hasRole(member: any, roleId: string): boolean {
+  return Array.isArray(member?.roles) ? member.roles.includes(roleId) : Boolean(member?.roles?.cache?.has(roleId));
+}
+
+/** Compatibility bridge for the existing giveaway-enter handler. */
 export async function handleGiveawayBypass(interaction: Interaction): Promise<void> {
   if (!interaction.isButton() || !interaction.guild || !interaction.customId.startsWith('giveaway_enter:')) return;
   const giveawayId = interaction.customId.slice('giveaway_enter:'.length);
@@ -16,8 +14,10 @@ export async function handleGiveawayBypass(interaction: Interaction): Promise<vo
   const giveaway = data.giveaways.find(g => g.id === giveawayId);
   if (!giveaway?.requiredRoleId || !giveaway.bypassRoleId) return;
 
-  const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-  if (!member || member.roles.cache.has(giveaway.requiredRoleId) || !member.roles.cache.has(giveaway.bypassRoleId)) return;
+  // Read the member already attached to the interaction so this runs before
+  // the normal entry handler reaches its required-role check.
+  const member = (interaction as any).member;
+  if (hasRole(member, giveaway.requiredRoleId) || !hasRole(member, giveaway.bypassRoleId)) return;
 
   const requiredRoleId = giveaway.requiredRoleId;
   updateGuild(interaction.guild.id, d => {
@@ -25,8 +25,6 @@ export async function handleGiveawayBypass(interaction: Interaction): Promise<vo
     if (g && g.requiredRoleId === requiredRoleId) g.requiredRoleId = undefined;
   });
 
-  // Restore the requirement after the existing interaction handler has had a
-  // chance to process the click. Entry data is already persisted separately.
   setTimeout(() => {
     updateGuild(interaction.guild!.id, d => {
       const g = d.giveaways.find(g => g.id === giveawayId);
@@ -34,8 +32,6 @@ export async function handleGiveawayBypass(interaction: Interaction): Promise<vo
     });
   }, 1500);
 
-  // Refresh the live embed so the requirement remains visible while the
-  // compatibility bridge is active.
   try {
     const ch = await interaction.guild.channels.fetch(giveaway.channelId);
     if (ch?.isTextBased()) {
