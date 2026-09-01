@@ -16,16 +16,12 @@ import {
 import type { Giveaway, ExtraEntryRole } from '../types.js';
 import { pendingGiveaways, buildConfigEmbed, buildConfigRows } from '../giveawaySetup.js';
 import { buildGiveawayEmbed, buildGiveawayRow } from '../giveawayUtils.js';
-import { loadGuild, updateGuild } from '../storage.js';
+import { updateGuild } from '../storage.js';
 import { generateId, parseDuration } from '../utils.js';
 
 function getUserId(customId: string): string | null {
-  const idx = customId.indexOf(':');
-  return idx === -1 ? null : customId.slice(idx + 1);
-}
-
-function owned(customId: string, userId: string): boolean {
-  return getUserId(customId) === userId;
+  const parts = customId.split(':');
+  return parts.length >= 2 ? parts[1]! : null;
 }
 
 function backRow(userId: string): ActionRowBuilder<ButtonBuilder> {
@@ -120,13 +116,11 @@ async function finishGiveaway(interaction: any, pending: NonNullable<ReturnType<
     await renderConfig(interaction, pending.hostId, pending, 'Invalid duration. Use formats like 30m, 1h, 2d (min 10s, max 30d).');
     return;
   }
-
   const targetCh = interaction.guild.channels.cache.get(pending.channelId);
   if (!targetCh?.isTextBased()) {
     await renderConfig(interaction, pending.hostId, pending, 'The selected channel is no longer available.');
     return;
   }
-
   const giveawayId = generateId();
   const endsAt = Date.now() + durationMs;
   const newGiveaway: Giveaway = {
@@ -153,11 +147,9 @@ async function finishGiveaway(interaction: any, pending: NonNullable<ReturnType<
     imageUrl: pending.imageUrl,
     ended: false,
   };
-
   let pingContent = '🎉 GIVEAWAY 🎉';
   if (pending.pingRoleId === 'everyone') pingContent = '@everyone\n🎉 GIVEAWAY 🎉';
   else if (pending.pingRoleId) pingContent = `<@&${pending.pingRoleId}>\n🎉 GIVEAWAY 🎉`;
-
   try {
     const sent = await (targetCh as BaseGuildTextChannel).send({
       content: pingContent,
@@ -181,7 +173,6 @@ export async function handleGiveawaySelectors(interaction: Interaction): Promise
   if (!interaction.guild) return;
   const customId = 'customId' in interaction ? String((interaction as any).customId) : '';
   if (!customId.startsWith('gws_')) return;
-
   const userId = getUserId(customId);
   if (!userId || interaction.user.id !== userId) {
     if ('reply' in interaction) await (interaction as any).reply({ content: '❌ This is not your giveaway setup panel.', flags: 64 });
@@ -196,7 +187,6 @@ export async function handleGiveawaySelectors(interaction: Interaction): Promise
   if (interaction.isButton()) {
     if (customId === `gws_done:${userId}`) { await finishGiveaway(interaction, pending); return; }
     if (customId === `gws_back:${userId}`) { await renderConfig(interaction, userId, pending); return; }
-
     if (customId === `gws_limiters:${userId}`) {
       await interaction.update({ embeds: [selectorEmbed('🎯 Giveaway Requirements', 'Configure who can enter. Each role is selected directly from your server — no IDs to paste.')], components: limiterRows(userId, pending) });
       return;
@@ -262,10 +252,7 @@ export async function handleGiveawaySelectors(interaction: Interaction): Promise
     else if (customId === `gws_pick_bypass:${userId}`) pending.bypassRoleId = roleId;
     else if (customId === `gws_pick_blacklist:${userId}`) pending.blacklistRoleId = roleId;
     else if (customId === `gws_pick_pingrole:${userId}`) pending.pingRoleId = roleId;
-    else if (customId === `gws_pick_multiplier:${userId}`) {
-      await interaction.showModal(multiplierBonusModal(userId, roleId));
-      return;
-    }
+    else if (customId === `gws_pick_multiplier:${userId}`) { await interaction.showModal(multiplierBonusModal(userId, roleId)); return; }
     else return;
     await renderConfig(interaction, userId, pending);
     return;
