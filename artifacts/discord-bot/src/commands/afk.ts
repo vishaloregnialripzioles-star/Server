@@ -92,8 +92,8 @@ export function buildAfkReturnPayload(pings: Array<{ messageUrl: string; authorN
     '',
     `💎 **Mentions received while AFK: ${count}**`,
     mentionList,
-    count > 25 ? '', 'Showing the first 25 mentions.' : '',
-  ].filter(Boolean).join('\n');
+    ...(count > 25 ? ['Showing the first 25 mentions.'] : []),
+  ].join('\n');
 
   return {
     embeds: [new EmbedBuilder().setColor(0x57F287).setTitle('👋 Welcome back!').setDescription(description).setFooter({ text: 'AFK status removed.' }).setTimestamp()],
