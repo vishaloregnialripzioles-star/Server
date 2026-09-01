@@ -28,7 +28,7 @@ export interface SavedEmbed { name: string; title?: string; description?: string
 export interface WelcomeEmbed { enabled: boolean; title?: string; description?: string; color?: number; thumbnailUrl?: string; footerText?: string; }
 export interface WelcomeConfig { enabled: boolean; channelId?: string; message?: string; embed?: WelcomeEmbed; }
 export interface ExtraEntryRole { roleId: string; entries: number; }
-export interface Giveaway { id: string; guildId: string; channelId: string; messageId: string; name: string; prize: string; endsAt: number; hostId: string; donorId?: string; winnerCount?: number; winnerIds?: string[]; type?: string; pingRoleId?: string; customMessage?: string; hideEntryCount?: boolean; durationStr?: string; entries: string[]; requiredRoleId?: string; blacklistRoleId?: string; extraEntryRoles?: ExtraEntryRole[]; imageUrl?: string; ended: boolean; winnerId?: string; }
+export interface Giveaway { id: string; guildId: string; channelId: string; messageId: string; name: string; prize: string; endsAt: number; hostId: string; donorId?: string; winnerCount?: number; winnerIds?: string[]; type?: string; pingRoleId?: string; customMessage?: string; hideEntryCount?: boolean; durationStr?: string; entries: string[]; requiredRoleId?: string; bypassRoleId?: string; blacklistRoleId?: string; extraEntryRoles?: ExtraEntryRole[]; imageUrl?: string; ended: boolean; winnerId?: string; }
 export interface ShopRoleItem { id: string; name: string; roleId: string; position: number; price: number; }
 export interface ShopColourItem { id: string; name: string; color?: number; price: number; roleId?: string; }
 export interface ShopCustomRole { id: string; userId: string; shopRoleId: string; roleId: string; }
