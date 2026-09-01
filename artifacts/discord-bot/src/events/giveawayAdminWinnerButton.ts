@@ -1,17 +1,13 @@
 import type { ButtonInteraction } from 'discord.js';
 import { loadGuild, updateGuild } from '../storage.js';
-import { pickWinners, buildGiveawayEmbed, buildGiveawayRow } from '../giveawayUtils.js';
-
-const WINNER_MANAGER_IDS = new Set(
-  [process.env.OWNER_USER_ID ?? '', '1323664778488582284']
-    .map(id => id.trim())
-    .filter(Boolean),
-);
+import { pickWinners, buildGiveawayEmbed, buildGiveawayRow, isGiveawayWinnerManager } from '../giveawayUtils.js';
 
 export async function handleGiveawayAdminWinnerButton(interaction: ButtonInteraction): Promise<void> {
   if (!interaction.customId.startsWith('gwadmin_selectwinner:') || !interaction.guild) return;
 
-  if (!WINNER_MANAGER_IDS.has(interaction.user.id)) {
+  // Security check is repeated here so manually crafted component interactions
+  // cannot bypass the button's visibility rules.
+  if (!isGiveawayWinnerManager(interaction.user.id)) {
     await interaction.reply({ content: '❌ You are not allowed to select a giveaway winner.', ephemeral: true });
     return;
   }
