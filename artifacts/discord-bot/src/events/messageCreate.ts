@@ -1,9 +1,10 @@
 import type { Message, BaseGuildTextChannel, GuildMember } from 'discord.js';
 import { PermissionFlagsBits } from 'discord.js';
-import { loadGuild, updateGuild, claimCommandMessage } from '../storage.js';
+import { loadGuild, updateGuild, claimCommandMessage, claimMessageEvent } from '../storage.js';
 import { levelFromXp } from '../utils.js';
 import { handlePrefixCommand, getGuildPrefix } from '../prefixHandler.js';
 import { handleMissingPrefixCommand } from '../prefixBridge.js';
+import { handlePrefixlessMessage } from '../prefixless.js';
 import { buildLevelUpEmbed } from '../commands/levelconfig.js';
 import { askAI } from '../commands/ai.js';
 import { getGlobalAfk, addGlobalAfkPing, removeGlobalAfk } from '../globalAfk.js';
@@ -30,6 +31,17 @@ if(!reason)return false;await punish(message,reason,rule);return true;}
 
 export async function handleMessageCreate(message:Message):Promise<void>{
 if(message.author.bot||!message.guild||!message.member)return;
+
+// One atomic claim covers the entire message pipeline. This is stronger than a
+// per-listener flag because Discord can deliver the same message to two bot
+// processes as separate Message objects. Neon makes the claim cross-process;
+// the in-memory fallback protects a single process.
+if(!(await claimMessageEvent(message.id))){console.warn(`[Message dedupe] Skipping already-processed message ${message.id}`);return;}
+
+// Owners/friends use the same pipeline as prefixed commands. There is no second
+// messageCreate listener, so a prefixless command can only execute once.
+if(await handlePrefixlessMessage(message))return;
+
 if(await runAutoMod(message))return;
 const restricted=loadGuild(message.guild.id),{chatBanRole,jailRole}=restricted.config,memberRoles=message.member.roles.cache;
 if((chatBanRole&&memberRoles.has(chatBanRole))||(jailRole&&memberRoles.has(jailRole))){await message.delete().catch(()=>undefined);return;}
