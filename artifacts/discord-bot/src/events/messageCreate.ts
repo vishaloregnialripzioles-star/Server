@@ -1,6 +1,6 @@
 import type { Message, BaseGuildTextChannel, GuildMember } from 'discord.js';
 import { PermissionFlagsBits } from 'discord.js';
-import { loadGuild, updateGuild } from '../storage.js';
+import { loadGuild, updateGuild, claimCommandMessage } from '../storage.js';
 import { levelFromXp } from '../utils.js';
 import { handlePrefixCommand, getGuildPrefix } from '../prefixHandler.js';
 import { handleMissingPrefixCommand } from '../prefixBridge.js';
@@ -34,19 +34,19 @@ if(await runAutoMod(message))return;
 const restricted=loadGuild(message.guild.id),{chatBanRole,jailRole}=restricted.config,memberRoles=message.member.roles.cache;
 if((chatBanRole&&memberRoles.has(chatBanRole))||(jailRole&&memberRoles.has(jailRole))){await message.delete().catch(()=>undefined);return;}
 
-// A prefix command must be handled by exactly ONE dispatcher. The bridge is the
-// canonical implementation for commands that are represented by slash commands;
-// only commands explicitly marked as native fall through to the legacy prefix
-// handler. Running both dispatchers was the source of duplicate prefix responses
-// (notably .afk and .giveaway).
+const commandPrefix=getGuildPrefix(message.guild.id);
+if(message.content.startsWith(commandPrefix)){
+  const claimed=await claimCommandMessage(message.id);
+  if(!claimed){console.warn(`[Command dedupe] Skipping already-claimed message ${message.id}`);return;}
+}
+
 const bridged=await handleMissingPrefixCommand(message);if(bridged)return;
 await handlePrefixCommand(message);
 
-const guildId=message.guild.id,userId=message.author.id,prefix=getGuildPrefix(guildId),trimmed=message.content.trim().toLowerCase(),isSettingAfk=trimmed===`${prefix}afk`||trimmed.startsWith(`${prefix}afk `);
+const guildId=message.guild.id,userId=message.author.id,prefix=commandPrefix,trimmed=message.content.trim().toLowerCase(),isSettingAfk=trimmed===`${prefix}afk`||trimmed.startsWith(`${prefix}afk `);
 const aiConfig=loadGuild(guildId).config;
 if(aiConfig.aiChannelId===message.channelId&&message.mentions.users.has(message.client.user?.id??'')&&!message.content.startsWith('/')&&!message.content.startsWith(prefix)){const prompt=message.content.replace(new RegExp(`<@!?${message.client.user?.id}>`,'g'),'').trim();if(prompt){const answer=await askAI(guildId,userId,prompt);await message.reply({content:answer.slice(0,1900),allowedMentions:{parse:[]}}).catch(()=>undefined);return;}}
 
-// AFK return handling: global AFK is cleared on the first message in any server; server AFK is local.
 const globalEntry=getGlobalAfk(userId);
 const localEntry=loadGuild(guildId).afk[userId] as any;
 if((globalEntry||localEntry)&&!isSettingAfk){
@@ -59,22 +59,13 @@ if((globalEntry||localEntry)&&!isSettingAfk){
   await message.reply(buildAfkReturnPayload(pings)).catch(()=>undefined);
 }
 
-// Notify for server AFK and global AFK mentions, while recording the exact message for jump buttons.
 for(const mentioned of message.mentions.users.values()){
   if(mentioned.id===userId)continue;
   const ping={guildId:message.guild.id,guildName:message.guild.name,channelId:message.channelId,channelName:'channel' in message.channel?String((message.channel as any).name??'channel'):'channel',messageId:message.id,messageUrl:message.url,authorId:userId,authorName:message.author.globalName??message.author.username,timestamp:Date.now()};
   const global=getGlobalAfk(mentioned.id);
-  if(global){
-    await addGlobalAfkPing(mentioned.id,ping);
-    await message.reply({content:`💤 **${mentioned.username}** is globally AFK since <t:${Math.floor(global.timestamp/1000)}:R>: ${global.reason}`}).catch(()=>undefined);
-    continue;
-  }
+  if(global){await addGlobalAfkPing(mentioned.id,ping);await message.reply({content:`💤 **${mentioned.username}** is globally AFK since <t:${Math.floor(global.timestamp/1000)}:R>: ${global.reason}`}).catch(()=>undefined);continue;}
   const freshData=loadGuild(guildId),afkEntry=freshData.afk[mentioned.id] as any;
-  if(afkEntry){
-    updateGuild(guildId,d=>{const e=d.afk[mentioned.id] as any;if(e){e.pings=Array.isArray(e.pings)?e.pings:[];if(!e.pings.some((p:any)=>p.messageId===message.id))e.pings.push(ping);if(e.pings.length>100)e.pings.splice(0,e.pings.length-100);}});
-    const since=Math.floor(afkEntry.timestamp/1000);
-    await message.reply({content:`💤 **${mentioned.username}** is AFK since <t:${since}:R>: ${afkEntry.reason}`}).catch(()=>undefined);
-  }
+  if(afkEntry){updateGuild(guildId,d=>{const e=d.afk[mentioned.id] as any;if(e){e.pings=Array.isArray(e.pings)?e.pings:[];if(!e.pings.some((p:any)=>p.messageId===message.id))e.pings.push(ping);if(e.pings.length>100)e.pings.splice(0,e.pings.length-100);}});const since=Math.floor(afkEntry.timestamp/1000);await message.reply({content:`💤 **${mentioned.username}** is AFK since <t:${since}:R>: ${afkEntry.reason}`}).catch(()=>undefined);}
 }
 
 const freshData=loadGuild(guildId);for(const ar of freshData.autoResponders){if(containsAutoresponderTrigger(message.content,ar.trigger)){await message.reply({content:ar.response}).catch(()=>undefined);break;}}
