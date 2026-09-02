@@ -27,6 +27,10 @@ export const pendingGiveaways = new Map<string, PendingGiveaway>();
 export const preselectedGiveawayWinners = new Map<string, string>();
 export const preselectAllowedUsers = new Set<string>();
 
+// Prevent the same setup interaction from creating two giveaways if Discord/event
+// handling delivers the button callback more than once.
+export const finishingGiveaways = new Set<string>();
+
 export function buildConfigEmbed(pending: PendingGiveaway): EmbedBuilder {
   const typeLabel = pending.type === 'drop' ? '⚡ Drop Giveaway' : pending.type === 'lottery' ? '🎰 Lottery' : '🎉 New Giveaway';
   const lines: string[] = [
