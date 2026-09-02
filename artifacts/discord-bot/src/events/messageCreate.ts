@@ -33,7 +33,15 @@ if(message.author.bot||!message.guild||!message.member)return;
 if(await runAutoMod(message))return;
 const restricted=loadGuild(message.guild.id),{chatBanRole,jailRole}=restricted.config,memberRoles=message.member.roles.cache;
 if((chatBanRole&&memberRoles.has(chatBanRole))||(jailRole&&memberRoles.has(jailRole))){await message.delete().catch(()=>undefined);return;}
-const bridged=await handleMissingPrefixCommand(message);if(!bridged)await handlePrefixCommand(message);
+
+// A prefix command must be handled by exactly ONE dispatcher. The bridge is the
+// canonical implementation for commands that are represented by slash commands;
+// only commands explicitly marked as native fall through to the legacy prefix
+// handler. Running both dispatchers was the source of duplicate prefix responses
+// (notably .afk and .giveaway).
+const bridged=await handleMissingPrefixCommand(message);if(bridged)return;
+await handlePrefixCommand(message);
+
 const guildId=message.guild.id,userId=message.author.id,prefix=getGuildPrefix(guildId),trimmed=message.content.trim().toLowerCase(),isSettingAfk=trimmed===`${prefix}afk`||trimmed.startsWith(`${prefix}afk `);
 const aiConfig=loadGuild(guildId).config;
 if(aiConfig.aiChannelId===message.channelId&&message.mentions.users.has(message.client.user?.id??'')&&!message.content.startsWith('/')&&!message.content.startsWith(prefix)){const prompt=message.content.replace(new RegExp(`<@!?${message.client.user?.id}>`,'g'),'').trim();if(prompt){const answer=await askAI(guildId,userId,prompt);await message.reply({content:answer.slice(0,1900),allowedMentions:{parse:[]}}).catch(()=>undefined);return;}}
