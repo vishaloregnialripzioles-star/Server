@@ -14,7 +14,7 @@ import {
   type Interaction,
 } from 'discord.js';
 import type { Giveaway, ExtraEntryRole } from '../types.js';
-import { pendingGiveaways, buildConfigEmbed, buildConfigRows } from '../giveawaySetup.js';
+import { pendingGiveaways, buildConfigEmbed, buildConfigRows, finishingGiveaways } from '../giveawaySetup.js';
 import { buildGiveawayEmbed, buildGiveawayRow } from '../giveawayUtils.js';
 import { updateGuild } from '../storage.js';
 import { generateId, parseDuration } from '../utils.js';
@@ -121,51 +121,79 @@ async function finishGiveaway(interaction: any, pending: NonNullable<ReturnType<
     await renderConfig(interaction, pending.hostId, pending, 'The selected channel is no longer available.');
     return;
   }
-  const giveawayId = generateId();
-  const endsAt = Date.now() + durationMs;
-  const newGiveaway: Giveaway = {
-    id: giveawayId,
-    guildId: interaction.guild.id,
-    channelId: pending.channelId,
-    messageId: '',
-    name: pending.prize,
-    prize: pending.prize,
-    endsAt,
-    hostId: pending.hostId,
-    donorId: pending.donorId,
-    winnerCount: pending.winnerCount,
-    type: pending.type,
-    pingRoleId: pending.pingRoleId,
-    customMessage: pending.customMessage,
-    hideEntryCount: pending.hideEntryCount,
-    durationStr: pending.durationStr,
-    entries: [],
-    requiredRoleId: pending.requiredRoleId,
-    bypassRoleId: pending.bypassRoleId,
-    blacklistRoleId: pending.blacklistRoleId,
-    extraEntryRoles: pending.extraEntryRoles.length ? pending.extraEntryRoles : undefined,
-    imageUrl: pending.imageUrl,
-    ended: false,
-  };
-  let pingContent = '🎉 GIVEAWAY 🎉';
-  if (pending.pingRoleId === 'everyone') pingContent = '@everyone\n🎉 GIVEAWAY 🎉';
-  else if (pending.pingRoleId) pingContent = `<@&${pending.pingRoleId}>\n🎉 GIVEAWAY 🎉`;
+
+  // Claim the setup before the Discord API send. If the same Done interaction
+  // is delivered twice (for example during a listener reload/race), only the
+  // first callback is allowed to create a Giveaway message.
+  const finishKey = `${pending.guildId}:${pending.hostId}`;
+  if (finishingGiveaways.has(finishKey)) {
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: '⏳ This giveaway is already being created. Please wait a moment.', flags: 64 }).catch(() => undefined);
+    }
+    return;
+  }
+  finishingGiveaways.add(finishKey);
+
   try {
-    const sent = await (targetCh as BaseGuildTextChannel).send({
-      content: pingContent,
-      embeds: [buildGiveawayEmbed(newGiveaway)],
-      components: [buildGiveawayRow(giveawayId, 0, pending.hideEntryCount)],
-      allowedMentions: pending.pingRoleId === 'everyone' ? { parse: ['everyone'] } : pending.pingRoleId ? { roles: [pending.pingRoleId] } : { parse: [] },
-    });
-    newGiveaway.messageId = sent.id;
-    updateGuild(interaction.guild.id, data => { data.giveaways.push(newGiveaway); });
-    pendingGiveaways.delete(pending.hostId);
-    await interaction.update({
-      embeds: [new EmbedBuilder().setColor(0x57F287).setTitle('✅ Giveaway Started!').setDescription(`**${pending.prize}** is now live in <#${pending.channelId}>!\n\nID: \`${giveawayId}\``).setFooter({ text: 'Use /giveaway end to end early • /giveaway reroll to reroll' })],
-      components: [],
-    });
-  } catch {
-    await renderConfig(interaction, pending.hostId, pending, 'Failed to post. Check Send Messages and Embed Links permissions.');
+    // The pending object must still be the active session. A successful first
+    // callback removes it after posting, so a racing callback cannot post again.
+    const currentPending = pendingGiveaways.get(pending.hostId);
+    if (!currentPending || currentPending !== pending) {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({ content: '❌ This giveaway setup has already been completed.', flags: 64 }).catch(() => undefined);
+      }
+      return;
+    }
+
+    const giveawayId = generateId();
+    const endsAt = Date.now() + durationMs;
+    const newGiveaway: Giveaway = {
+      id: giveawayId,
+      guildId: interaction.guild.id,
+      channelId: pending.channelId,
+      messageId: '',
+      name: pending.prize,
+      prize: pending.prize,
+      endsAt,
+      hostId: pending.hostId,
+      donorId: pending.donorId,
+      winnerCount: pending.winnerCount,
+      type: pending.type,
+      pingRoleId: pending.pingRoleId,
+      customMessage: pending.customMessage,
+      hideEntryCount: pending.hideEntryCount,
+      durationStr: pending.durationStr,
+      entries: [],
+      requiredRoleId: pending.requiredRoleId,
+      bypassRoleId: pending.bypassRoleId,
+      blacklistRoleId: pending.blacklistRoleId,
+      extraEntryRoles: pending.extraEntryRoles.length ? pending.extraEntryRoles : undefined,
+      imageUrl: pending.imageUrl,
+      ended: false,
+    };
+    let pingContent = '🎉 GIVEAWAY 🎉';
+    if (pending.pingRoleId === 'everyone') pingContent = '@everyone\n🎉 GIVEAWAY 🎉';
+    else if (pending.pingRoleId) pingContent = `<@&${pending.pingRoleId}>\n🎉 GIVEAWAY 🎉`;
+
+    try {
+      const sent = await (targetCh as BaseGuildTextChannel).send({
+        content: pingContent,
+        embeds: [buildGiveawayEmbed(newGiveaway)],
+        components: [buildGiveawayRow(giveawayId, 0, pending.hideEntryCount)],
+        allowedMentions: pending.pingRoleId === 'everyone' ? { parse: ['everyone'] } : pending.pingRoleId ? { roles: [pending.pingRoleId] } : { parse: [] },
+      });
+      newGiveaway.messageId = sent.id;
+      updateGuild(interaction.guild.id, data => { data.giveaways.push(newGiveaway); });
+      pendingGiveaways.delete(pending.hostId);
+      await interaction.update({
+        embeds: [new EmbedBuilder().setColor(0x57F287).setTitle('✅ Giveaway Started!').setDescription(`**${pending.prize}** is now live in <#${pending.channelId}>!\n\nID: \`${giveawayId}\``).setFooter({ text: 'Use /giveaway end to end early • /giveaway reroll to reroll' })],
+        components: [],
+      });
+    } catch {
+      await renderConfig(interaction, pending.hostId, pending, 'Failed to post. Check Send Messages and Embed Links permissions.');
+    }
+  } finally {
+    finishingGiveaways.delete(finishKey);
   }
 }
 
