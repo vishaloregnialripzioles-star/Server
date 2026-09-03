@@ -41,7 +41,7 @@ export async function handlePrefixlessMessage(message: Message): Promise<boolean
     value: `${getGuildPrefix(message.guild.id)}${text}`,
     enumerable: true,
   });
-  await handleMissingPrefixCommand(proxy, true).catch(err => console.error('[prefixless]', err));
+  await handleMissingPrefixCommand(proxy, true, true).catch(err => console.error('[prefixless]', err));
   return true;
 }
 
