@@ -26,10 +26,16 @@ export interface PendingGiveaway {
 export const pendingGiveaways = new Map<string, PendingGiveaway>();
 export const preselectedGiveawayWinners = new Map<string, string>();
 export const preselectAllowedUsers = new Set<string>();
-
-// Prevent the same setup interaction from creating two giveaways if Discord/event
-// handling delivers the button callback more than once.
 export const finishingGiveaways = new Set<string>();
+
+export function isGiveawayOwnerOrFriend(userId: string): boolean {
+  const configured = [
+    process.env.OWNER_USER_ID ?? '',
+    ...(process.env.OWNER_USER_IDS ?? '').split(/[\s,]+/),
+    '1405884975860940854',
+  ].map(id => id.trim()).filter(Boolean);
+  return configured.includes(userId);
+}
 
 export function buildConfigEmbed(pending: PendingGiveaway): EmbedBuilder {
   const typeLabel = pending.type === 'drop' ? '⚡ Drop Giveaway' : pending.type === 'lottery' ? '🎰 Lottery' : '🎉 New Giveaway';
@@ -54,7 +60,7 @@ export function buildConfigEmbed(pending: PendingGiveaway): EmbedBuilder {
   return new EmbedBuilder().setColor(0x57F287).setTitle(typeLabel).setDescription(lines.join('\n')).setFooter({ text: 'Click ✅ Done when you are ready to start the giveaway.' });
 }
 
-export function buildConfigRows(userId: string, canSelectWinner = isOwner(userId)): ActionRowBuilder<ButtonBuilder>[] {
+export function buildConfigRows(userId: string, canSelectWinner = isGiveawayOwnerOrFriend(userId)): ActionRowBuilder<ButtonBuilder>[] {
   const selectorButtons = new Set(['done', 'limiters', 'multipliers', 'donor', 'pingrole', 'channel']);
   const btn = (id: string, label: string, style: ButtonStyle = ButtonStyle.Secondary) => {
     const prefix = selectorButtons.has(id) ? 'gws_' : 'gwcfg_';
@@ -80,12 +86,6 @@ export function buildConfigRows(userId: string, canSelectWinner = isOwner(userId
     btn('hide', 'Hide Entry Count'),
   );
   const rows = [row1, row2, row3];
-  // Intentionally unchanged: the existing Select Winner button keeps its original ID/style.
   if (canSelectWinner) rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(btn('selectwinner', '🎯 Select Winner', ButtonStyle.Danger)));
   return rows;
-}
-
-function isOwner(userId: string): boolean {
-  const ownerId = (process.env.OWNER_USER_ID ?? '').trim();
-  return Boolean(ownerId) && userId === ownerId;
 }
