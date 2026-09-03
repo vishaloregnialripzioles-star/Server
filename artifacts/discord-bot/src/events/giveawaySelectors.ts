@@ -101,7 +101,9 @@ async function finishGiveaway(interaction: any, pending: NonNullable<ReturnType<
 
   const finishKey = `${pending.guildId}:${pending.hostId}`;
   if (finishingGiveaways.has(finishKey)) {
-    if (!interaction.replied && !interaction.deferred) await interaction.reply({ content: '⏳ This giveaway is already being created. Please wait a moment.', flags: 64 }).catch(() => undefined);
+    // A second listener/process must acknowledge the component silently. Never
+    // send a visible "already creating" message for a duplicate click event.
+    await interaction.deferUpdate().catch(() => undefined);
     return;
   }
   finishingGiveaways.add(finishKey);
@@ -109,7 +111,7 @@ async function finishGiveaway(interaction: any, pending: NonNullable<ReturnType<
   try {
     const currentPending = pendingGiveaways.get(pending.hostId);
     if (!currentPending || currentPending !== pending) {
-      if (!interaction.replied && !interaction.deferred) await interaction.reply({ content: '❌ This giveaway setup has already been completed.', flags: 64 }).catch(() => undefined);
+      await interaction.deferUpdate().catch(() => undefined);
       return;
     }
 
@@ -117,7 +119,9 @@ async function finishGiveaway(interaction: any, pending: NonNullable<ReturnType<
     // giveaway message, so two bot processes can never both post for one click.
     const interactionClaimed = await claimGiveawayCreation(String(interaction.id));
     if (!interactionClaimed) {
-      if (!interaction.replied && !interaction.deferred) await interaction.reply({ content: '⏳ This giveaway creation was already received. Please wait a moment.', flags: 64 }).catch(() => undefined);
+      // This interaction was already handled by another bot process/listener.
+      // Acknowledge it without producing a second visible response.
+      await interaction.deferUpdate().catch(() => undefined);
       return;
     }
 
