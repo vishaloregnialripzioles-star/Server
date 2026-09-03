@@ -162,6 +162,7 @@ export async function handleMissingPrefixCommand(message: Message, allowNative =
     client: message.client,
     user: message.author,
     member: message.member,
+    memberPermissions: message.member?.permissions ?? null,
     guild: message.guild,
     guildId: message.guild.id,
     channel: message.channel,
