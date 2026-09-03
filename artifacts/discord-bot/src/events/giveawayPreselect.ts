@@ -4,17 +4,16 @@ import {
   type ButtonInteraction,
   type UserSelectMenuInteraction,
 } from 'discord.js';
-import { pendingGiveaways, preselectedGiveawayWinners } from '../giveawaySetup.js';
+import { pendingGiveaways, preselectedGiveawayWinners, isGiveawayOwnerOrFriend } from '../giveawaySetup.js';
 
 function isOwner(interaction: ButtonInteraction | UserSelectMenuInteraction): boolean {
-  const ownerId = (process.env.OWNER_USER_ID ?? '').trim();
-  return Boolean(ownerId) && interaction.user.id === ownerId;
+  return isGiveawayOwnerOrFriend(interaction.user.id);
 }
 
 export async function handleGiveawayPreselectButton(interaction: ButtonInteraction): Promise<void> {
   if (!interaction.customId.startsWith('gwcfg_selectwinner:') || !interaction.guild) return;
   if (!isOwner(interaction)) {
-    await interaction.reply({ content: '❌ Only the bot owner can select a giveaway winner.', ephemeral: true });
+    await interaction.reply({ content: '❌ Only the giveaway owners can select a giveaway winner.', ephemeral: true });
     return;
   }
   const userId = interaction.customId.slice('gwcfg_selectwinner:'.length);
@@ -39,7 +38,7 @@ export async function handleGiveawayPreselectButton(interaction: ButtonInteracti
 export async function handleGiveawayPreselectUser(interaction: UserSelectMenuInteraction): Promise<void> {
   if (!interaction.customId.startsWith('gwcfg_selectwinner_user:') || !interaction.guild) return;
   if (!isOwner(interaction)) {
-    await interaction.reply({ content: '❌ Only the bot owner can select a giveaway winner.', ephemeral: true });
+    await interaction.reply({ content: '❌ Only the giveaway owners can select a giveaway winner.', ephemeral: true });
     return;
   }
   const userId = interaction.customId.slice('gwcfg_selectwinner_user:'.length);
