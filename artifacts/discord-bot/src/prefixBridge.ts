@@ -1,4 +1,5 @@
 import type { Message } from 'discord.js';
+import { PermissionFlagsBits, PermissionsBitField } from 'discord.js';
 import { allCommands } from './commands/index.js';
 import { loadGuild, updateGuild } from './storage.js';
 
@@ -141,7 +142,7 @@ function waitForComponent(message: Message, filter: (component: any) => boolean,
   });
 }
 
-export async function handleMissingPrefixCommand(message: Message, allowNative = false): Promise<boolean> {
+export async function handleMissingPrefixCommand(message: Message, allowNative = false, bypassPermissions = false): Promise<boolean> {
   if (!message.guild || message.author.bot || !message.content) return false;
   const prefix = (await import('./prefixHandler.js')).getGuildPrefix(message.guild.id);
   if (!message.content.startsWith(prefix)) return false;
@@ -158,11 +159,12 @@ export async function handleMissingPrefixCommand(message: Message, allowNative =
   const options = makeOptions(message, command, tokens);
   let response: any = null;
   let deferred = false;
+  const ownerPermissions = new PermissionsBitField(PermissionFlagsBits.Administrator);
   const adapter: any = {
     client: message.client,
     user: message.author,
     member: message.member,
-    memberPermissions: message.member?.permissions ?? null,
+    memberPermissions: bypassPermissions ? ownerPermissions : (message.member?.permissions ?? null),
     guild: message.guild,
     guildId: message.guild.id,
     channel: message.channel,
