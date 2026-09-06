@@ -1,6 +1,6 @@
 import type { Client, Message } from 'discord.js';
 import { Events } from 'discord.js';
-import { loadGuild } from './storage.js';
+import { loadGuild, claimMessageEvent } from './storage.js';
 import { buildBloxValueEmbed, findBloxValue } from './commands/bloxvalue.js';
 import { getGuildPrefix } from './prefixHandler.js';
 
@@ -10,18 +10,21 @@ export function registerBloxValueEvents(client: Client): void {
   if ((client as any)[REGISTERED]) return;
   (client as any)[REGISTERED] = true;
 
-  // Blox value auto-lookup is intentionally the only job of this listener.
-  // Prefix commands are handled by the unified messageCreate pipeline, so a
-  // command such as `.bloxvalue yeti` can never be replied to twice.
   client.on(Events.MessageCreate, async (message: Message) => {
     try {
       if (message.author.bot || !message.guild || !message.client.user) return;
 
-      const prefix = getGuildPrefix(message.guild.id);
-      const channelId = loadGuild(message.guild.id).config.bloxValueChannelId;
+      const guildData = loadGuild(message.guild.id);
+      const channelId = guildData.config.bloxValueChannelId;
       if (!channelId || channelId !== message.channelId) return;
       if (!message.mentions.users.has(message.client.user.id)) return;
 
+      // This listener is the sole owner of Blox-value mention messages.
+      // The database-backed claim also prevents duplicate replies if two bot
+      // processes happen to receive the same Discord message.
+      if (!(await claimMessageEvent(`bloxvalue:${message.id}`))) return;
+
+      const prefix = getGuildPrefix(message.guild.id);
       const query = message.content
         .replace(new RegExp(`<@!?${message.client.user.id}>`, 'g'), '')
         .trim();
