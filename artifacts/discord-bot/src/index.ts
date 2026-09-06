@@ -23,27 +23,30 @@ registerEvents(client);
 client.once('ready', async () => {
   console.log(`✅ DISCORD ONLINE: logged in as ${client.user?.tag}`);
 
-  // Load the game command first so it remains available even if another command module breaks.
   try {
     const { game } = await import('./commands/games.js');
     client.commands.set(game.data.name, game);
     console.log('🎮 Loaded /game command');
   } catch (err) { console.error('❌ Failed to load /game command:', err); }
 
-  // Load the main registry independently from optional/new command modules.
   try {
     const { allCommands } = await import('./commands/index.js');
     for (const command of allCommands) client.commands.set(command.data.name, command);
     console.log(`✅ Loaded ${client.commands.size} core commands`);
   } catch (err) { console.error('[Core command startup failed]', err); }
 
-  // Blox commands are isolated so a Blox module error can never hide every other slash command.
   try {
     const { bloxValueCommand, setBloxValueChannelCommand } = await import('./commands/bloxvalue.js');
     client.commands.set(bloxValueCommand.data.name, bloxValueCommand);
     client.commands.set(setBloxValueChannelCommand.data.name, setBloxValueChannelCommand);
     console.log('🍈 Loaded Blox Fruits commands');
   } catch (err) { console.error('[Blox command startup failed]', err); }
+
+  try {
+    const { bloxscanner } = await import('./commands/bloxScanner.js');
+    client.commands.set(bloxscanner.data.name, bloxscanner);
+    console.log('🔎 Loaded /bloxscanner command');
+  } catch (err) { console.error('[Blox scanner command startup failed]', err); }
 
   try {
     const { REST, Routes } = await import('discord.js');
