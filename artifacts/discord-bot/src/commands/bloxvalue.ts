@@ -4,9 +4,10 @@ import { updateGuild } from '../storage.js';
 
 export type BloxValueEntry = {
   name:string; aliases:string[]; rarity:string; type:string; regular:string; perm:string; beli:string;
-  demand:string; trend:string; bestFor:string; obtain?:string;
+  demand:string; trend:string; bestFor:string; obtain?:string; robux?:string;
 };
-const V=(name:string,aliases:string[],rarity:string,type:string,regular:string,perm:string,beli:string,demand:string,trend:string,bestFor:string,obtain?:string):BloxValueEntry=>({name,aliases,rarity,type,regular,perm,beli,demand,trend,bestFor,obtain});
+const V=(name:string,aliases:string[],rarity:string,type:string,regular:string,perm:string,beli:string,demand:string,trend:string,bestFor:string,obtain?:string,robux?:string):BloxValueEntry=>({name,aliases,rarity,type,regular,perm,beli,demand,trend,bestFor,obtain,robux});
+const GP=(name:string,aliases:string[],value:string,robux:string,demand:string,trend:string,bestFor:string):BloxValueEntry=>V(name,aliases,'Gamepass','Gamepass',value,'—','—',demand,trend,bestFor,undefined,robux);
 
 export const BLOX_VALUES:BloxValueEntry[]=[
 V('West Dragon',['west dragon','dragon west'],'Mythical','Beast','2.85B','6.57B','15M','6/10','Stable','PVP, Trading'),
@@ -14,7 +15,7 @@ V('East Dragon',['east dragon','dragon east'],'Mythical','Beast','2.46B','6.57B'
 V('Kitsune',['kitsune'],'Mythical','Beast','600M','5.43B','8M','10/10','Stable','PVP, Trading'),
 V('Control',['control'],'Mythical','Natural','150M','5.43B','9M','8/10','Stable','PVP'),
 V('Tiger',['tiger','leopard'],'Mythical','Beast','120M','4.29B','5M','8/10','Stable','PVP'),
-V('Yeti',['yeti'],'Mythical','Beast','110M','4.29B','5M','9/10','Stable','PVP, Grinding'),
+V('Yeti',['yeti'],'Mythical','Beast','110M','4.29B','5M','7/10','Stable','PVP, Grinding'),
 V('Gas',['gas'],'Mythical','Logia','60M','3.69B','3.2M','8/10','Stable','PVP'),
 V('Dough',['dough'],'Mythical','Logia','30M','3.45B','2.8M','9/10','Stable','PVP, Grinding'),
 V('Venom',['venom'],'Mythical','Natural','20M','3.57B','3M','7/10','Stable','PVP, Grinding'),
@@ -51,7 +52,7 @@ V('Spring',['spring'],'Common','Natural','60K','60M','60K','1/10','Stable','Grin
 V('Blade',['blade','chop'],'Common','Natural','50K','20M','30K','1/10','Stable','PvP (Sword Immunity)'),
 V('Spin',['spin'],'Common','Natural','7.5K','15M','7.5K','1/10','Stable','N/A'),
 V('Rocket',['rocket'],'Common','Natural','5K','10M','5K','1/10','Stable','N/A'),
-V('Meme',['meme','meme fruit'],'Mythical','Natural','1.35B','1.35B','—','N/A','Stable','Trading'),
+V('Meme',['meme','meme fruit'],'Mythical','Natural','4.5B','—','—','N/A','Stable','Trading'),
 
 V('Galaxy Empyrean Kitsune',['galaxy empyrean kitsune','galaxy kitsune','galaxy'],'Mythical','Skin','9.63B','—','—','10/10','Stable','Trading','Winter 2025 Fruit Box; tradeable now'),
 V('Rabid Dog Blade',['rabid dog blade','rabid dog'],'Limited','Skin','7.98B','—','—','10/10','Fluctuating','Trading','Limited release/event; tradeable now'),
@@ -89,9 +90,19 @@ V('Dragon Token',['dragon token','dragon token skin'],'Limited','Skin','N/A','�
 V('Eclipse',['eclipse'],'Limited','Skin','N/A','—','—','10/10','Overpaid','Trading','Limited Shop release; tradeable now'),
 V('Orange Portal',['orange portal','orange'],'Limited','Skin','N/A','—','—','N/A','Stable','Trading','Limited release; tradeable now'),
 V('Pink Portal',['pink portal','pink'],'Limited','Skin','N/A','—','—','N/A','Stable','Trading','Limited release; tradeable now'),
+
+// Current community gamepass values. Robux is the permanent shop price, not the trade value.
+GP('Fruit Notifier',['fruit notifier','notifier'],'3.87B','2.7K','9/10','Stable','Finding fruit spawns'),
+GP('Mythical Scrolls',['mythical scrolls','mythical scroll'],'1.44B','1.5K','4/10','Stable','Scroll collection'),
+GP('Legendary Scrolls',['legendary scrolls','legendary scroll'],'630M','800','3/10','Stable','Scroll collection'),
+GP('+1 Fruit Storage',['+1 fruit storage','fruit storage','storage'],'420M','400','10/10','Overpaid','Trading and holding duplicate fruits'),
+GP('2x Mastery',['2x mastery','2x mastery gamepass'],'420M','450','10/10','Overpaid','Faster mastery grinding'),
+GP('2x Money',['2x money','2x money gamepass'],'420M','450','10/10','Overpaid','Faster Beli earning'),
+GP('2x Boss Drops Chance',['2x boss drops','2x boss drops chance','boss drops'],'300M','350','8/10','Overpaid','Boss drop farming'),
+GP('Fast Boats',['fast boats'],'300M','350','9/10','Overpaid','Faster sea travel'),
 ];
 
-function normalizeBloxQuery(query:string):string{return query.toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();}
+function normalizeBloxQuery(query:string):string{return query.toLowerCase().replace(/[^a-z0-9+]+/g,' ').replace(/\s+/g,' ').trim();}
 
 export function findBloxValue(query:string):BloxValueEntry|undefined{
   const normalized=normalizeBloxQuery(query);
@@ -123,6 +134,14 @@ export function buildBloxValueEmbed(entry:BloxValueEntry):EmbedBuilder{
       {name:'🏆 Best Used For',value:entry.bestFor},
       {name:'🎯 How to Obtain',value:entry.obtain??'Limited release; tradeable now'},
     );
+  }else if(entry.type==='Gamepass'){
+    embed.addFields(
+      {name:'💎 Trade Value',value:`\`${entry.regular}\``},
+      {name:'💰 Robux Price',value:`\`${entry.robux??'—'} R$\``},
+      {name:'📊 Demand',value:`🟢 **${entry.demand}**`},
+      {name:'⚖️ Trend',value:`📈 **${entry.trend}**`},
+      {name:'🏆 Best Used For',value:entry.bestFor},
+    );
   }else{
     embed.addFields(
       {name:'💱 Regular Value',value:`\`${entry.regular}\``},
@@ -137,11 +156,11 @@ export function buildBloxValueEmbed(entry:BloxValueEntry):EmbedBuilder{
 }
 
 export const bloxValueCommand:Command={
-  data:new SlashCommandBuilder().setName('bloxvalue').setDescription('Look up a Blox Fruits value').addStringOption(o=>o.setName('item').setDescription('Fruit or skin name').setRequired(true)),
+  data:new SlashCommandBuilder().setName('bloxvalue').setDescription('Look up a Blox Fruits value').addStringOption(o=>o.setName('item').setDescription('Fruit, gamepass, or skin name').setRequired(true)),
   async execute(interaction){
     const query=interaction.options.getString('item',true);
     const entry=findBloxValue(query);
-    if(!entry){await interaction.reply({content:`❌ No Blox Fruits value found for **${query}**. Try a fruit/skin name or part of its name.`,ephemeral:true});return;}
+    if(!entry){await interaction.reply({content:`❌ No Blox Fruits value found for **${query}**. Try a fruit, gamepass, skin name, or part of its name.`,ephemeral:true});return;}
     await interaction.reply({embeds:[buildBloxValueEmbed(entry)]});
   },
 };
@@ -151,6 +170,6 @@ export const setBloxValueChannelCommand:Command={
   async execute(interaction){
     const channel=interaction.options.getChannel('channel',true);
     updateGuild(interaction.guildId!,d=>{d.config.bloxValueChannelId=channel.id;});
-    await interaction.reply(`✅ Blox Fruits value channel set to <#${channel.id}>. Ping me with a fruit or skin name to look it up.`);
+    await interaction.reply(`✅ Blox Fruits value channel set to <#${channel.id}>. Ping me with a fruit, gamepass, or skin name to look it up.`);
   },
 };
