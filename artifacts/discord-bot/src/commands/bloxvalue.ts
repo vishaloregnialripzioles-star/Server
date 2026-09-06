@@ -12,10 +12,46 @@ V('Magma',['magma'],'Rare','Logia','1.15M','—','960K','5/10','Overpaid','Grind
 V('Diamond',['diamond'],'Uncommon','Natural','1M','—','600K','2/10','Stable','Grinding'),V('Eagle',['eagle','falcon'],'Uncommon','Beast','800K','—','550K','2/10','Stable','Grinding'),V('Ice',['ice'],'Uncommon','Logia','550K','—','350K','2/10','Stable','PVP, Grinding'),V('Sand',['sand'],'Uncommon','Logia','420K','—','420K','1/10','Stable','Grinding'),V('Dark',['dark'],'Uncommon','Logia','400K','—','500K','1/10','Stable','PVP'),V('Flame',['flame'],'Uncommon','Logia','250K','—','250K','1/10','Stable','Grinding'),
 V('Spike',['spike'],'Common','Natural','180K','—','180K','1/10','Stable','Grinding'),V('Smoke',['smoke'],'Common','Logia','100K','—','100K','1/10','Stable','Grinding'),V('Bomb',['bomb'],'Common','Natural','80K','—','80K','1/10','Stable','Grinding'),V('Spring',['spring'],'Common','Natural','60K','60M','60K','1/10','Stable','Grinding'),V('Blade',['blade','chop'],'Common','Natural','50K','20M','30K','1/10','Stable','PvP (Sword Immunity)'),V('Spin',['spin'],'Common','Natural','7.5K','15M','7.5K','1/10','Stable','N/A'),V('Rocket',['rocket'],'Common','Natural','5K','10M','5K','1/10','Stable','N/A'),
 V('Chromatic Skin',['chromatic skin','chromatic'],'Premium','Skin','2.025B','—','—','10/10','Stable','Trading'),V('Dragon Token',['dragon token','dragon token skin'],'Limited','Skin','N/A','—','N/A','4/10','Overpaid','Trading'),
+V('Yellow Lightning',['yellow lightning','yellow lighting','yellow light','yellow'],'Limited','Skin','1.53B','—','—','9/10','Stable','Trading'),
 ];
 
-export function findBloxValue(query:string):BloxValueEntry|undefined{const normalized=query.trim().toLocaleLowerCase().replace(/\s+/g,' ');if(!normalized)return undefined;return BLOX_VALUES.find(v=>v.name.toLocaleLowerCase()===normalized||v.aliases.includes(normalized));}
-export function buildBloxValueEmbed(entry:BloxValueEntry):EmbedBuilder{return new EmbedBuilder().setColor(0xF4C430).setTitle(`🍈 ${entry.name}`).setDescription(`🟡 **${entry.rarity}**  ·  🐾 **${entry.type}**\n\n━━━━━━━━━━━━━━━━━━`).addFields({name:'💱 Regular Value',value:`\`${entry.regular}\``},{name:':PERM: Perm Value',value:`\`${entry.perm}\``},{name:'💲 Beli Price',value:`\`${entry.beli}\``},{name:'📊 Demand',value:`🟢 **${entry.demand}**`},{name:'⚖️ Trend',value:`📈 **${entry.trend}**`},{name:'🏆 Best Used For',value:entry.bestFor}).setFooter({text:'Blox Fruits Values | Sparxie'}).setTimestamp();}
+function normalizeBloxQuery(query:string):string{return query.trim().toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').replace(/\s+/g,' ').trim();}
+
+export function findBloxValue(query:string):BloxValueEntry|undefined{
+  const normalized=normalizeBloxQuery(query);
+  if(!normalized)return undefined;
+  const entries=BLOX_VALUES.map(entry=>({entry,name:normalizeBloxQuery(entry.name),aliases:entry.aliases.map(normalizeBloxQuery)}));
+
+  // Exact names/aliases always win. This keeps "light" = Light and
+  // "lightning" = Lightning even though one is contained in the other.
+  const exact=entries.find(({name,aliases})=>name===normalized||aliases.includes(normalized));
+  if(exact)return exact.entry;
+
+  // Natural chat-style lookup: "bud" -> Buddha, "yeti" -> Yeti,
+  // "yellow" / "yellow ligh" -> Yellow Lightning, etc.
+  const candidates=entries.filter(({name,aliases})=>
+    name.startsWith(normalized)||
+    aliases.some(alias=>alias.startsWith(normalized))||
+    name.includes(normalized)||
+    aliases.some(alias=>alias.includes(normalized))
+  );
+  if(!candidates.length)return undefined;
+
+  // Prefer the closest/most specific match, then keep the database order as a
+  // deterministic tie-breaker so a partial query always returns one item.
+  candidates.sort((a,b)=>{
+    const score=(item:{name:string;aliases:string[]}):number=>{
+      if(item.name.startsWith(normalized))return 0;
+      if(item.aliases.some(alias=>alias.startsWith(normalized)))return 1;
+      if(item.name.includes(normalized))return 2;
+      return 3;
+    };
+    return score(a)-score(b)||a.name.length-b.name.length;
+  });
+  return candidates[0].entry;
+}
+
+export function buildBloxValueEmbed(entry:BloxValueEntry):EmbedBuilder{return new EmbedBuilder().setColor(0xF4C430).setTitle(`🍈 ${entry.name}`).setDescription(`🟡 **${entry.rarity}**  ·  🐾 **${entry.type}**\n\n━━━━━━━━━━━━━━━━━━`).addFields({name:'💱 Regular Value',value:`\`${entry.regular}\`'},{name:':PERM: Perm Value',value:`\`${entry.perm}\`'},{name:'💲 Beli Price',value:`\`${entry.beli}\`'},{name:'📊 Demand',value:`🟢 **${entry.demand}**`},{name:'⚖️ Trend',value:`📈 **${entry.trend}**`},{name:'🏆 Best Used For',value:entry.bestFor}).setFooter({text:'Blox Fruits Values | Sparxie'}).setTimestamp();}
 
 export const bloxvalue:Command={data:new SlashCommandBuilder().setName('bloxvalue').setDescription('Show the Blox Fruits value for a fruit or skin').addStringOption(o=>o.setName('item').setDescription('Fruit or skin name').setRequired(true)),async execute(interaction){const item=interaction.options.getString('item',true);const entry=findBloxValue(item);if(!entry){await interaction.reply({content:`❌ I couldn't find a Blox Fruits value for **${item}**.`,ephemeral:true});return;}await interaction.reply({embeds:[buildBloxValueEmbed(entry)]});}};
 export const setbloxvaluechannel:Command={data:new SlashCommandBuilder().setName('setbloxvaluechannel').setDescription('Enable automatic Blox Fruits value lookups in a channel').setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).addChannelOption(o=>o.setName('channel').setDescription('Channel where @Sparxie <fruit> will work').setRequired(true).addChannelTypes(ChannelType.GuildText)),async execute(interaction){if(!interaction.guild)return;const channel=interaction.options.getChannel('channel',true);updateGuild(interaction.guild.id,d=>{d.config.bloxValueChannelId=channel.id;});await interaction.reply({content:`✅ Blox Fruits value lookup is now enabled in <#${channel.id}>.\n\nUse **@${interaction.client.user.username} Yeti** (or any supported fruit/skin name) in that channel.`});}};
