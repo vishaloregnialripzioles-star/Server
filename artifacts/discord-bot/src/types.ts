@@ -8,7 +8,7 @@ export interface ModerationTemplate { id: string; name: string; message: string;
 export type LoggingCategorySetting = boolean | string;
 export interface LoggingConfig { enabled?: boolean; channelId?: string; categories?: Record<string, LoggingCategorySetting>; channels?: Record<string, string>; }
 export interface GiveawayDailyConfig { enabled: boolean; channelId?: string; message?: string; }
-export interface JoinRoleConfig { enabled: boolean; roleId?: string; }
+export interface JoinRoleConfig { enabled: boolean; channelId?: string; roleId?: string; }
 export interface SocialNotificationConfig { enabled: boolean; platform?: string; channelId?: string; message?: string; }
 export interface ReactionRoleConfig { [messageId: string]: Record<string, string>; }
 export interface RoleConnectionConfig { enabled: boolean; channelId?: string; roleId?: string; message?: string; }
@@ -21,7 +21,7 @@ export interface Warning { id: string; moderatorId: string; reason: string; time
 export interface Reminder { id: string; userId: string; channelId: string; guildId: string; message: string; due: number; }
 export interface StarboardEntry { starboardMessageId: string; count: number; }
 export interface SnipedMessage { content: string; authorId: string; authorName: string; authorAvatar: string | null; timestamp: number; imageUrl?: string; }
-export interface TempRole { id: string; guildId: string; userId: string; roleId: string; position: number; expiresAt: number; }
+export interface TempRole { id: string; channelId: string; creatorId: string; createdAt: number; closed: boolean; }
 export interface Ticket { id: string; channelId: string; creatorId: string; createdAt: number; closed: boolean; }
 export interface AutoResponder { trigger: string; response: string; }
 export interface EmbedField { name: string; value: string; inline?: boolean; }
@@ -38,6 +38,6 @@ export interface RecoveryRole { id: string; name: string; color: number; hoist: 
 export interface RecoveryOverwrite { id: string; type: number; allow: string; deny: string; }
 export interface RecoveryChannel { id: string; name: string; type: number; position: number; parentId?: string; topic?: string; nsfw?: boolean; permissionOverwrites: RecoveryOverwrite[]; }
 export interface RecoveryEmoji { id: string; name: string; url: string; animated: boolean; roles: string[]; }
-export interface RecoveryGuildSettings { name: string; iconUrl?: string; verificationLevel: number; explicitContentFilter: number; defaultMessageNotifications: number; afkTimeout: number; systemChannelId?: string; rulesChannelId?: string; safetyAlertsChannelId?: string; }
+export interface RecoveryGuildSettings { name: string; iconUrl?: string; verificationLevel: number; explicitContentFilter: number; defaultMessageNotifications: number; afkTimeout: number; systemChannelId?: string; rulesChannelId?: string; publicUpdatesChannelId?: string; safetyAlertsChannelId?: string; }
 export interface RecoveryBackup { id: string; name: string; createdAt: number; guild: RecoveryGuildSettings; roles: RecoveryRole[]; channels: RecoveryChannel[]; emojis: RecoveryEmoji[]; }
 export interface GuildData { config: Config; antiNuke: AntiNukeConfig; extraOwners: string[]; afk: Record<string, AfkEntry>; levels: Record<string, LevelEntry>; sparks: Record<string, number>; invites: Record<string, number>; inviteSources: Record<string, string>; warnings: Record<string, Warning[]>; reminders: Reminder[]; starboard: Record<string, StarboardEntry>; lastDeleted: Record<string, SnipedMessage[]>; lastEdited: Record<string, SnipedMessage[]>; tempRoles: TempRole[]; tickets: Record<string, Ticket>; autoResponders: AutoResponder[]; giveaways: Giveaway[]; savedEmbeds: Record<string, SavedEmbed>; welcome?: WelcomeConfig; shop: ShopConfig; recoveryBackups: RecoveryBackup[]; }
