@@ -3,6 +3,7 @@ import { Events, AuditLogEvent } from 'discord.js';
 import { auditLog } from '../auditLogger.js';
 import { deleteGuild } from '../storage.js';
 import { registerBloxValueEvents } from '../bloxValueEvents.js';
+import { registerBloxScannerEvents } from '../bloxScanner.js';
 
 function safe(name:string,fn:(...args:any[])=>any){return(...args:any[])=>{try{Promise.resolve(fn(...args)).catch((err:unknown)=>console.error(`[${name}]`,err));}catch(err){console.error(`[${name}]`,err);}};}
 
@@ -13,6 +14,7 @@ export function registerEvents(client:Client):void{
 if((client as any)[EVENTS_REGISTERED]){console.warn('[Events] registerEvents() called more than once; ignoring duplicate registration.');return;}
 (client as any)[EVENTS_REGISTERED]=true;
 registerBloxValueEvents(client);
+registerBloxScannerEvents(client);
 client.once(Events.ClientReady,safe('ready',async(...args:any[])=>{const{handleReady}=await import('./ready.js');return handleReady(...args);}));
 client.on(Events.InteractionCreate,safe('clearChannelsButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('clearchannels:')){const{handleClearChannelsButton}=await import('../commands/clearchannels.js');return handleClearChannelsButton(interaction);}}));
 client.on(Events.InteractionCreate,safe('giveawayPreselectButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('gwcfg_selectwinner:')){const{handleGiveawayPreselectButton}=await import('./giveawayPreselect.js');return handleGiveawayPreselectButton(interaction);}if(interaction?.isUserSelectMenu?.()&&String(interaction.customId).startsWith('gwcfg_selectwinner_user:')){const{handleGiveawayPreselectUser}=await import('./giveawayPreselect.js');return handleGiveawayPreselectUser(interaction);}}));
