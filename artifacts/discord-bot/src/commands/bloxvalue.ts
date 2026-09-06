@@ -22,13 +22,9 @@ export function findBloxValue(query:string):BloxValueEntry|undefined{
   if(!normalized)return undefined;
   const entries=BLOX_VALUES.map(entry=>({entry,name:normalizeBloxQuery(entry.name),aliases:entry.aliases.map(normalizeBloxQuery)}));
 
-  // Exact names/aliases always win. This keeps "light" = Light and
-  // "lightning" = Lightning even though one is contained in the other.
   const exact=entries.find(({name,aliases})=>name===normalized||aliases.includes(normalized));
   if(exact)return exact.entry;
 
-  // Natural chat-style lookup: "bud" -> Buddha, "yeti" -> Yeti,
-  // "yellow" / "yellow ligh" -> Yellow Lightning, etc.
   const candidates=entries.filter(({name,aliases})=>
     name.startsWith(normalized)||
     aliases.some(alias=>alias.startsWith(normalized))||
@@ -37,8 +33,6 @@ export function findBloxValue(query:string):BloxValueEntry|undefined{
   );
   if(!candidates.length)return undefined;
 
-  // Prefer the closest/most specific match, then keep the database order as a
-  // deterministic tie-breaker so a partial query always returns one item.
   candidates.sort((a,b)=>{
     const score=(item:{name:string;aliases:string[]}):number=>{
       if(item.name.startsWith(normalized))return 0;
@@ -51,7 +45,7 @@ export function findBloxValue(query:string):BloxValueEntry|undefined{
   return candidates[0].entry;
 }
 
-export function buildBloxValueEmbed(entry:BloxValueEntry):EmbedBuilder{return new EmbedBuilder().setColor(0xF4C430).setTitle(`🍈 ${entry.name}`).setDescription(`🟡 **${entry.rarity}**  ·  🐾 **${entry.type}**\n\n━━━━━━━━━━━━━━━━━━`).addFields({name:'💱 Regular Value',value:`\`${entry.regular}\`'},{name:':PERM: Perm Value',value:`\`${entry.perm}\`'},{name:'💲 Beli Price',value:`\`${entry.beli}\`'},{name:'📊 Demand',value:`🟢 **${entry.demand}**`},{name:'⚖️ Trend',value:`📈 **${entry.trend}**`},{name:'🏆 Best Used For',value:entry.bestFor}).setFooter({text:'Blox Fruits Values | Sparxie'}).setTimestamp();}
+export function buildBloxValueEmbed(entry:BloxValueEntry):EmbedBuilder{return new EmbedBuilder().setColor(0xF4C430).setTitle(`🍈 ${entry.name}`).setDescription(`🟡 **${entry.rarity}**  ·  🐾 **${entry.type}**\n\n━━━━━━━━━━━━━━━━━━`).addFields({name:'💱 Regular Value',value:`\`${entry.regular}\``},{name:':PERM: Perm Value',value:`\`${entry.perm}\``},{name:'💲 Beli Price',value:`\`${entry.beli}\``},{name:'📊 Demand',value:`🟢 **${entry.demand}**`},{name:'⚖️ Trend',value:`📈 **${entry.trend}**`},{name:'🏆 Best Used For',value:entry.bestFor}).setFooter({text:'Blox Fruits Values | Sparxie'}).setTimestamp();}
 
 export const bloxvalue:Command={data:new SlashCommandBuilder().setName('bloxvalue').setDescription('Show the Blox Fruits value for a fruit or skin').addStringOption(o=>o.setName('item').setDescription('Fruit or skin name').setRequired(true)),async execute(interaction){const item=interaction.options.getString('item',true);const entry=findBloxValue(item);if(!entry){await interaction.reply({content:`❌ I couldn't find a Blox Fruits value for **${item}**.`,ephemeral:true});return;}await interaction.reply({embeds:[buildBloxValueEmbed(entry)]});}};
 export const setbloxvaluechannel:Command={data:new SlashCommandBuilder().setName('setbloxvaluechannel').setDescription('Enable automatic Blox Fruits value lookups in a channel').setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).addChannelOption(o=>o.setName('channel').setDescription('Channel where @Sparxie <fruit> will work').setRequired(true).addChannelTypes(ChannelType.GuildText)),async execute(interaction){if(!interaction.guild)return;const channel=interaction.options.getChannel('channel',true);updateGuild(interaction.guild.id,d=>{d.config.bloxValueChannelId=channel.id;});await interaction.reply({content:`✅ Blox Fruits value lookup is now enabled in <#${channel.id}>.\n\nUse **@${interaction.client.user.username} Yeti** (or any supported fruit/skin name) in that channel.`});}};
