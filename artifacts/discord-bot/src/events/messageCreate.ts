@@ -31,34 +31,26 @@ if(!reason)return false;await punish(message,reason,rule);return true;}
 
 export async function handleMessageCreate(message:Message):Promise<void>{
 if(message.author.bot||!message.guild||!message.member)return;
-
-// One atomic claim covers the entire message pipeline. This is stronger than a
-// per-listener flag because Discord can deliver the same message to two bot
-// processes as separate Message objects. Neon makes the claim cross-process;
-// the in-memory fallback protects a single process.
 if(!(await claimMessageEvent(message.id))){console.warn(`[Message dedupe] Skipping already-processed message ${message.id}`);return;}
-
-// Owners/friends use the same pipeline as prefixed commands. There is no second
-// messageCreate listener, so a prefixless command can only execute once.
 if(await handlePrefixlessMessage(message))return;
-
 if(await runAutoMod(message))return;
 const restricted=loadGuild(message.guild.id),{chatBanRole,jailRole}=restricted.config,memberRoles=message.member.roles.cache;
 if((chatBanRole&&memberRoles.has(chatBanRole))||(jailRole&&memberRoles.has(jailRole))){await message.delete().catch(()=>undefined);return;}
-
 const commandPrefix=getGuildPrefix(message.guild.id);
 if(message.content.startsWith(commandPrefix)){
   const claimed=await claimCommandMessage(message.id);
   if(!claimed){console.warn(`[Command dedupe] Skipping already-claimed message ${message.id}`);return;}
 }
-
 const bridged=await handleMissingPrefixCommand(message);if(bridged)return;
 await handlePrefixCommand(message);
-
 const guildId=message.guild.id,userId=message.author.id,prefix=commandPrefix,trimmed=message.content.trim().toLowerCase(),isSettingAfk=trimmed===`${prefix}afk`||trimmed.startsWith(`${prefix}afk `);
 const aiConfig=loadGuild(guildId).config;
-if(aiConfig.aiChannelId===message.channelId&&message.mentions.users.has(message.client.user?.id??'')&&!message.content.startsWith('/')&&!message.content.startsWith(prefix)){const prompt=message.content.replace(new RegExp(`<@!?${message.client.user?.id}>`,'g'),'').trim();if(prompt){const answer=await askAI(guildId,userId,prompt);await message.reply({content:answer.slice(0,1900),allowedMentions:{parse:[]}}).catch(()=>undefined);return;}}
-
+// The dedicated Blox value listener owns bot mentions in the configured value channel.
+// Excluding that channel here prevents the AI listener from sending a second reply.
+if(aiConfig.aiChannelId===message.channelId&&aiConfig.bloxValueChannelId!==message.channelId&&message.mentions.users.has(message.client.user?.id??'')&&!message.content.startsWith('/')&&!message.content.startsWith(prefix)){
+  const prompt=message.content.replace(new RegExp(`<@!?${message.client.user?.id}>`,'g'),'').trim();
+  if(prompt){const answer=await askAI(guildId,userId,prompt);await message.reply({content:answer.slice(0,1900),allowedMentions:{parse:[]}}).catch(()=>undefined);return;}
+}
 const globalEntry=getGlobalAfk(userId);
 const localEntry=loadGuild(guildId).afk[userId] as any;
 if((globalEntry||localEntry)&&!isSettingAfk){
@@ -70,7 +62,6 @@ if((globalEntry||localEntry)&&!isSettingAfk){
   if(member.nickname?.startsWith('[AFK] '))await member.setNickname(member.nickname.slice(6)||null).catch(()=>undefined);
   await message.reply(buildAfkReturnPayload(pings)).catch(()=>undefined);
 }
-
 for(const mentioned of message.mentions.users.values()){
   if(mentioned.id===userId)continue;
   const ping={guildId:message.guild.id,guildName:message.guild.name,channelId:message.channelId,channelName:'channel' in message.channel?String((message.channel as any).name??'channel'):'channel',messageId:message.id,messageUrl:message.url,authorId:userId,authorName:message.author.globalName??message.author.username,timestamp:Date.now()};
@@ -79,6 +70,5 @@ for(const mentioned of message.mentions.users.values()){
   const freshData=loadGuild(guildId),afkEntry=freshData.afk[mentioned.id] as any;
   if(afkEntry){updateGuild(guildId,d=>{const e=d.afk[mentioned.id] as any;if(e){e.pings=Array.isArray(e.pings)?e.pings:[];if(!e.pings.some((p:any)=>p.messageId===message.id))e.pings.push(ping);if(e.pings.length>100)e.pings.splice(0,e.pings.length-100);}});const since=Math.floor(afkEntry.timestamp/1000);await message.reply({content:`💤 **${mentioned.username}** is AFK since <t:${since}:R>: ${afkEntry.reason}`}).catch(()=>undefined);}
 }
-
 const freshData=loadGuild(guildId);for(const ar of freshData.autoResponders){if(containsAutoresponderTrigger(message.content,ar.trigger)){await message.reply({content:ar.response}).catch(()=>undefined);break;}}
 const now=Date.now(),levelData=freshData.levels[userId]??{xp:0,level:0,lastMessage:0};if(now-levelData.lastMessage>=XP_COOLDOWN_MS){const xpGain=Math.floor(Math.random()*(XP_MAX-XP_MIN+1))+XP_MIN,oldLevel=levelData.level;levelData.xp+=xpGain;levelData.level=levelFromXp(levelData.xp);levelData.lastMessage=now;updateGuild(guildId,d=>{d.levels[userId]=levelData;});if(levelData.level>oldLevel){const guildData=loadGuild(guildId),announceCh=guildData.config.levelChannel??message.channelId,levelRoleId=guildData.config.levelRoles?.[String(levelData.level)];let roleName:string|undefined;if(levelRoleId){const gm=await message.guild.members.fetch(userId).catch(()=>null);if(gm){await gm.roles.add(levelRoleId).catch(()=>undefined);const role=await message.guild.roles.fetch(levelRoleId).catch(()=>null);roleName=role?.name;}}try{const ch=await message.guild.channels.fetch(announceCh);if(ch?.isTextBased()){const cfg=guildData.config.levelUpMessage,embed=buildLevelUpEmbed(`<@${userId}>`,levelData.level,levelData.xp,message.author.displayAvatarURL(),cfg?.title,cfg?.description,cfg?.imageUrl);if(roleName)embed.addFields({name:'🎖️ Role Unlocked',value:roleName,inline:true});await(ch as BaseGuildTextChannel).send({embeds:[embed],allowedMentions:{users:[userId],roles:[]}});}}catch{}}}}
