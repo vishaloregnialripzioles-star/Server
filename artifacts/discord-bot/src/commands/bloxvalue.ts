@@ -52,7 +52,6 @@ V('Blade',['blade','chop'],'Common','Natural','50K','100M','30K','1/10','Stable'
 V('Spin',['spin'],'Common','Natural','7.5K','75M','7.5K','1/10','Stable','N/A'),
 V('Rocket',['rocket'],'Common','Natural','5K','50M','5K','1/10','Stable','N/A'),
 
-// All 35 currently tracked Limited/skin entries. Skins intentionally show only trade value + obtainment.
 V('Galaxy Empyrean Kitsune',['galaxy empyrean kitsune','galaxy kitsune','galaxy'],'Mythical','Skin','9.63B','—','—','10/10','Stable','Trading','Winter 2025 Fruit Box; tradeable now'),
 V('Rabid Dog Blade',['rabid dog blade','rabid dog'],'Limited','Skin','7.98B','—','—','10/10','Fluctuating','Trading','Limited release/event; tradeable now'),
 V('Crimson Kitsune',['crimson kitsune','crimson'],'Mythical','Skin','7.41B','—','—','9/10','Stable','Trading','Shop for 2,000 Robux or Fox Spirit Bundle during Christmas Event; tradeable now'),
@@ -90,28 +89,68 @@ V('Orange Portal',['orange portal','orange'],'Limited','Skin','N/A','—','—',
 V('Pink Portal',['pink portal','pink'],'Limited','Skin','N/A','—','—','N/A','Stable','Trading','Limited release; tradeable now'),
 ];
 
-function normalizeBloxQuery(query:string):string{return query.trim().toLocaleLowerCase().replace(/[^\\p{L}\\p{N}]+/gu,' ').replace(/\\s+/g,' ').trim();}
+// Keep matching intentionally simple and robust. These are English Blox Fruits names,
+// so ASCII normalization avoids regex Unicode-escape issues and also handles punctuation.
+function normalizeBloxQuery(query:string):string{return query.toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();}
 
 export function findBloxValue(query:string):BloxValueEntry|undefined{
-  const normalized=normalizeBloxQuery(query); if(!normalized)return undefined;
+  const normalized=normalizeBloxQuery(query);
+  if(!normalized)return undefined;
   const entries=BLOX_VALUES.map(entry=>({entry,name:normalizeBloxQuery(entry.name),aliases:entry.aliases.map(normalizeBloxQuery)}));
   const exact=entries.find(({name,aliases})=>name===normalized||aliases.includes(normalized));
   if(exact)return exact.entry;
   const candidates=entries.filter(({name,aliases})=>name.startsWith(normalized)||aliases.some(alias=>alias.startsWith(normalized))||name.includes(normalized)||aliases.some(alias=>alias.includes(normalized)));
   if(!candidates.length)return undefined;
-  candidates.sort((a,b)=>{const score=(item:{name:string;aliases:string[]}):number=>{if(item.name.startsWith(normalized))return 0;if(item.aliases.some(alias=>alias.startsWith(normalized)))return 1;if(item.name.includes(normalized))return 2;return 3;};return score(a)-score(b)||a.name.length-b.name.length;});
+  candidates.sort((a,b)=>{
+    const score=(item:{name:string;aliases:string[]}):number=>{
+      if(item.name.startsWith(normalized))return 0;
+      if(item.aliases.some(alias=>alias.startsWith(normalized)))return 1;
+      if(item.name.includes(normalized))return 2;
+      return 3;
+    };
+    return score(a)-score(b)||a.name.length-b.name.length;
+  });
   return candidates[0].entry;
 }
 
 export function buildBloxValueEmbed(entry:BloxValueEntry):EmbedBuilder{
   const embed=new EmbedBuilder().setColor(0xF4C430).setTitle(`🍈 ${entry.name}`).setDescription(`🟡 **${entry.rarity}**  ·  🐾 **${entry.type}**\n\n━━━━━━━━━━━━━━━━━━`);
   if(entry.type==='Skin'){
-    embed.addFields({name:'💎 Value',value:`\`${entry.regular}\``},{name:'📊 Demand',value:`🟢 **${entry.demand}**`},{name:'⚖️ Trend',value:`📈 **${entry.trend}**`},{name:'🏆 Best Used For',value:entry.bestFor},{name:'🎯 How to Obtain',value:entry.obtain??'Limited release; tradeable now'});
+    embed.addFields(
+      {name:'💎 Value',value:`\`${entry.regular}\``},
+      {name:'📊 Demand',value:`🟢 **${entry.demand}**`},
+      {name:'⚖️ Trend',value:`📈 **${entry.trend}**`},
+      {name:'🏆 Best Used For',value:entry.bestFor},
+      {name:'🎯 How to Obtain',value:entry.obtain??'Limited release; tradeable now'},
+    );
   }else{
-    embed.addFields({name:'💱 Regular Value',value:`\`${entry.regular}\``},{name:':PERM: Perm Value',value:`\`${entry.perm}\``},{name:'💲 Beli Price',value:`\`${entry.beli}\``},{name:'📊 Demand',value:`🟢 **${entry.demand}**`},{name:'⚖️ Trend',value:`📈 **${entry.trend}**`},{name:'🏆 Best Used For',value:entry.bestFor});
+    embed.addFields(
+      {name:'💱 Regular Value',value:`\`${entry.regular}\``},
+      {name:':PERM: Perm Value',value:`\`${entry.perm}\``},
+      {name:'💲 Beli Price',value:`\`${entry.beli}\``},
+      {name:'📊 Demand',value:`🟢 **${entry.demand}**`},
+      {name:'⚖️ Trend',value:`📈 **${entry.trend}**`},
+      {name:'🏆 Best Used For',value:entry.bestFor},
+    );
   }
-  return embed.setFooter({text:'Blox Fruits Values | Sparxie'}).setTimestamp();
+  return embed.setFooter({text:'Blox Fruits Values | Sparxie'});
 }
 
-export const bloxvalue:Command={data:new SlashCommandBuilder().setName('bloxvalue').setDescription('Show the Blox Fruits value for a fruit or skin').addStringOption(o=>o.setName('item').setDescription('Fruit or skin name').setRequired(true)),async execute(interaction){const item=interaction.options.getString('item',true);const entry=findBloxValue(item);if(!entry){await interaction.reply({content:`❌ I couldn't find a Blox Fruits value for **${item}**.`,ephemeral:true});return;}await interaction.reply({embeds:[buildBloxValueEmbed(entry)]});}};
-export const setbloxvaluechannel:Command={data:new SlashCommandBuilder().setName('setbloxvaluechannel').setDescription('Enable automatic Blox Fruits value lookups in a channel').setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).addChannelOption(o=>o.setName('channel').setDescription('Channel where @Sparxie <fruit> will work').setRequired(true).addChannelTypes(ChannelType.GuildText)),async execute(interaction){if(!interaction.guild)return;const channel=interaction.options.getChannel('channel',true);updateGuild(interaction.guild.id,d=>{d.config.bloxValueChannelId=channel.id;});await interaction.reply({content:`✅ Blox Fruits value lookup is now enabled in <#${channel.id}>.\n\nUse **@${interaction.client.user.username} Yeti** (or any supported fruit/skin name) in that channel.`});}};
+export const bloxValueCommand:Command={
+  data:new SlashCommandBuilder().setName('bloxvalue').setDescription('Look up a Blox Fruits value').addStringOption(o=>o.setName('item').setDescription('Fruit or skin name').setRequired(true)),
+  async execute(interaction){
+    const query=interaction.options.getString('item',true);
+    const entry=findBloxValue(query);
+    if(!entry){await interaction.reply({content:`❌ No Blox Fruits value found for **${query}**. Try a fruit/skin name or part of its name.`,ephemeral:true});return;}
+    await interaction.reply({embeds:[buildBloxValueEmbed(entry)]});
+  },
+};
+
+export const setBloxValueChannelCommand:Command={
+  data:new SlashCommandBuilder().setName('setbloxvaluechannel').setDescription('Set the channel for automatic Blox Fruits value lookups').setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).addChannelOption(o=>o.setName('channel').setDescription('Channel').addChannelTypes(ChannelType.GuildText).setRequired(true)),
+  async execute(interaction){
+    const channel=interaction.options.getChannel('channel',true);
+    updateGuild(interaction.guildId!,d=>{d.config.bloxValueChannelId=channel.id;});
+    await interaction.reply(`✅ Blox Fruits value channel set to <#${channel.id}>. Ping me with a fruit or skin name to look it up.`);
+  },
+};
