@@ -8,7 +8,7 @@ export interface ModerationTemplate { id: string; name: string; message: string;
 export type LoggingCategorySetting = boolean | string;
 export interface LoggingConfig { enabled?: boolean; channelId?: string; categories?: Record<string, LoggingCategorySetting>; channels?: Record<string, string>; }
 export interface GiveawayDailyConfig { enabled: boolean; channelId?: string; message?: string; }
-export interface JoinRoleConfig { enabled: boolean; channelId?: string; roleId?: string; }
+export interface JoinRoleConfig { enabled: boolean; roleId?: string; }
 export interface SocialNotificationConfig { enabled: boolean; platform?: string; channelId?: string; message?: string; }
 export interface ReactionRoleConfig { [messageId: string]: Record<string, string>; }
 export interface RoleConnectionConfig { enabled: boolean; channelId?: string; roleId?: string; message?: string; }
@@ -21,11 +21,11 @@ export interface Warning { id: string; moderatorId: string; reason: string; time
 export interface Reminder { id: string; userId: string; channelId: string; guildId: string; message: string; due: number; }
 export interface StarboardEntry { starboardMessageId: string; count: number; }
 export interface SnipedMessage { content: string; authorId: string; authorName: string; authorAvatar: string | null; timestamp: number; imageUrl?: string; }
-export interface TempRole { id: string; channelId: string; creatorId: string; createdAt: number; closed: boolean; }
+export interface TempRole { id: string; guildId: string; userId: string; roleId: string; position: number; expiresAt: number; }
 export interface Ticket { id: string; channelId: string; creatorId: string; createdAt: number; closed: boolean; }
 export interface AutoResponder { trigger: string; response: string; }
 export interface EmbedField { name: string; value: string; inline?: boolean; }
-export interface SavedEmbed { name: string; title?: string; description?: string; color?: number; thumbnailUrl?: string; imageUrl?: string; footerText?: string; footerIconUrl?: string; authorName?: string; authorIconUrl?: string; fields?: EmbedField[]; }
+export interface SavedEmbed { name: string; title?: string; description?: string; color?: number; imageUrl?: string; footerText?: string; footerIconUrl?: string; authorName?: string; authorIconUrl?: string; fields?: EmbedField[]; }
 export interface WelcomeEmbed { enabled: boolean; title?: string; description?: string; color?: number; thumbnailUrl?: string; footerText?: string; }
 export interface WelcomeConfig { enabled: boolean; channelId?: string; message?: string; embed?: WelcomeEmbed; }
 export interface ExtraEntryRole { roleId: string; entries: number; }
