@@ -12,7 +12,7 @@ export interface JoinRoleConfig { enabled: boolean; roleId?: string; }
 export interface SocialNotificationConfig { enabled: boolean; platform?: string; channelId?: string; message?: string; }
 export interface ReactionRoleConfig { [messageId: string]: Record<string, string>; }
 export interface RoleConnectionConfig { enabled: boolean; channelId?: string; roleId?: string; message?: string; }
-export interface Config { logChannel?: string; inviteLogChannel?: string; muteRole?: string; jailRole?: string; chatBanRole?: string; ticketCategory?: string; ticketSupportRole?: string; starboardChannel?: string; starboardThreshold: number; levelChannel?: string; snipeEnabled: boolean; prefix?: string; levelRoles?: Record<string, string>; inviteRoles?: Record<string, string>; levelUpMessage?: { title?: string; description?: string; imageUrl?: string; }; automod?: AutoModConfig; moderationTemplates?: ModerationTemplate[]; logging?: LoggingConfig; giveawayDaily?: GiveawayDailyConfig; joinRole?: JoinRoleConfig; socialNotifications?: SocialNotificationConfig; reactionRoles?: ReactionRoleConfig; roleConnections?: RoleConnectionConfig; aiPersonality?: 'funny' | 'roaster' | 'chill' | 'nerd' | 'savage'; aiChannelId?: string; }
+export interface Config { logChannel?: string; inviteLogChannel?: string; muteRole?: string; jailRole?: string; chatBanRole?: string; ticketCategory?: string; ticketSupportRole?: string; starboardChannel?: string; starboardThreshold: number; levelChannel?: string; snipeEnabled: boolean; prefix?: string; levelRoles?: Record<string, string>; inviteRoles?: Record<string, string>; levelUpMessage?: { title?: string; description?: string; imageUrl?: string; }; automod?: AutoModConfig; moderationTemplates?: ModerationTemplate[]; logging?: LoggingConfig; giveawayDaily?: GiveawayDailyConfig; joinRole?: JoinRoleConfig; socialNotifications?: SocialNotificationConfig; reactionRoles?: ReactionRoleConfig; roleConnections?: RoleConnectionConfig; aiPersonality?: 'funny' | 'roaster' | 'chill' | 'nerd' | 'savage'; aiChannelId?: string; bloxValueChannelId?: string; }
 export interface AntiNukeConfig { enabled: boolean; whitelist: string[]; }
 export interface AfkEntry { reason: string; timestamp: number; }
 export interface LevelEntry { xp: number; level: number; lastMessage: number; }
@@ -20,7 +20,7 @@ export interface Warning { id: string; moderatorId: string; reason: string; time
 export interface Reminder { id: string; userId: string; channelId: string; guildId: string; message: string; due: number; }
 export interface StarboardEntry { starboardMessageId: string; count: number; }
 export interface SnipedMessage { content: string; authorId: string; authorName: string; authorAvatar: string | null; timestamp: number; imageUrl?: string; }
-export interface TempRole { id: string; guildId: string; userId: string; roleId: string; expiresAt: number; }
+export interface TempRole { id: string; guildId: string; userId: string; roleId: string; position: number; expiresAt: number; }
 export interface Ticket { id: string; channelId: string; creatorId: string; createdAt: number; closed: boolean; }
 export interface AutoResponder { trigger: string; response: string; }
 export interface EmbedField { name: string; value: string; inline?: boolean; }
