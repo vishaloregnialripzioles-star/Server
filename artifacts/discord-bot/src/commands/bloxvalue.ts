@@ -11,8 +11,37 @@ V('Lightning',['lightning','rumble'],'Legendary','Logia','40M','—','2.1M','6/1
 V('Magma',['magma'],'Rare','Logia','1.15M','—','960K','5/10','Overpaid','Grinding, PVP'),V('Light',['light'],'Rare','Logia','800K','930M','650K','2/10','Stable','Mobility, PVP, Grinding'),V('Ghost',['ghost'],'Rare','Natural','800K','1.08B','940K','1/10','Underpaid','PVP'),V('Rubber',['rubber'],'Rare','Natural','700K','—','750K','1/10','Stable','PVP'),
 V('Diamond',['diamond'],'Uncommon','Natural','1M','—','600K','2/10','Stable','Grinding'),V('Eagle',['eagle','falcon'],'Uncommon','Beast','800K','—','550K','2/10','Stable','Grinding'),V('Ice',['ice'],'Uncommon','Logia','550K','—','350K','2/10','Stable','PVP, Grinding'),V('Sand',['sand'],'Uncommon','Logia','420K','—','420K','1/10','Stable','Grinding'),V('Dark',['dark'],'Uncommon','Logia','400K','—','500K','1/10','Stable','PVP'),V('Flame',['flame'],'Uncommon','Logia','250K','—','250K','1/10','Stable','Grinding'),
 V('Spike',['spike'],'Common','Natural','180K','—','180K','1/10','Stable','Grinding'),V('Smoke',['smoke'],'Common','Logia','100K','—','100K','1/10','Stable','Grinding'),V('Bomb',['bomb'],'Common','Natural','80K','—','80K','1/10','Stable','Grinding'),V('Spring',['spring'],'Common','Natural','60K','60M','60K','1/10','Stable','Grinding'),V('Blade',['blade','chop'],'Common','Natural','50K','20M','30K','1/10','Stable','PvP (Sword Immunity)'),V('Spin',['spin'],'Common','Natural','7.5K','15M','7.5K','1/10','Stable','N/A'),V('Rocket',['rocket'],'Common','Natural','5K','10M','5K','1/10','Stable','N/A'),
-V('Chromatic Skin',['chromatic skin','chromatic'],'Premium','Skin','2.025B','—','—','10/10','Stable','Trading'),V('Dragon Token',['dragon token','dragon token skin'],'Limited','Skin','N/A','—','N/A','4/10','Overpaid','Trading'),
-V('Yellow Lightning',['yellow lightning','yellow lighting','yellow light','yellow'],'Limited','Skin','1.53B','—','—','9/10','Stable','Trading'),
+V('Chromatic Skin',['chromatic skin','chromatic'],'Premium','Skin','2.025B','—','—','10/10','Stable','Trading'),
+V('Galaxy Empyrean Kitsune',['galaxy empyrean kitsune','galaxy kitsune','galaxy empyrean'],'Limited','Skin','9.63B','—','—','4/10','Stable','Trading'),
+V('Crimson Kitsune',['crimson kitsune','crimson empyrean','crimson'],'Limited','Skin','7.41B','—','—','7/10','Stable','Trading'),
+V('Ember West Dragon',['ember west dragon','ember dragon','ember'],'Limited','Skin','6.12B','—','—','3/10','Stable','Trading'),
+V('Meme-Meme',['meme-meme','meme meme','meme'],'Limited','Skin','4.5B','—','—','6/10','Stable','Trading'),
+V('Purple Lightning',['purple lightning','purple rumble','purple'],'Limited','Skin','4.59B','—','—','4/10','Stable','Trading'),
+V('Red Lightning',['red lightning','red rumble','red lightning skin'],'Limited','Skin','2.61B','—','—','6/10','Stable','Trading'),
+V('Super Spirit Pain',['super spirit pain','super spirit','spirit pain'],'Limited','Skin','3B','—','—','5/10','Stable','Trading'),
+V('Yellow Lightning',['yellow lightning','yellow lighting','yellow light','yellow'],'Limited','Skin','1.53B','—','—','4/10','Stable','Trading'),
+V('Divine Portal',['divine portal','divine portal skin','divine'],'Limited','Skin','1.56B','—','—','5/10','Stable','Trading'),
+V('Werewolf',['werewolf','werewolf yeti','yeti werewolf'],'Limited','Skin','1.2B','—','—','5/10','Rising','Trading'),
+V('Fiend',['fiend','fiend yeti','yeti fiend'],'Limited','Skin','1.26B','—','—','5/10','Stable','Trading'),
+V('Celestial Pain',['celestial pain','celestial pain skin'],'Limited','Skin','1.2B','—','—','5/10','Stable','Trading'),
+V('Sadness Pain',['sadness pain','sadness','sadness skin'],'Limited','Skin','1.08B','—','—','4/10','Stable','Trading'),
+V('Frustration Pain',['frustration pain','frustration','frustration skin'],'Limited','Skin','750M','—','—','5/10','Stable','Trading'),
+V('Green Lightning',['green lightning','green lighting','green rumble','green'],'Limited','Skin','660M','—','—','8/10','Stable','Trading'),
+V('Azura Bomb',['azura bomb','azura'],'Limited','Skin','510M','—','—','6/10','Stable','Trading'),
+V('Nuclear Bomb',['nuclear bomb','nuclear'],'Limited','Skin','510M','—','—','6/10','Stable','Trading'),
+V('Thermite Bomb',['thermite bomb','thermite'],'Limited','Skin','510M','—','—','6/10','Stable','Trading'),
+V('Rose Quartz Diamond',['rose quartz diamond','rose quartz'],'Limited','Skin','350M','—','—','8/10','Stable','Trading'),
+V('Eagle Matrix',['eagle matrix','matrix eagle','matrix'],'Limited','Skin','280M','—','—','7/10','Stable','Trading'),
+V('Emerald Diamond',['emerald diamond','emerald'],'Limited','Skin','240M','—','—','6/10','Stable','Trading'),
+V('Topaz Diamond',['topaz diamond','topaz'],'Limited','Skin','240M','—','—','6/10','Stable','Trading'),
+V('Torment Pain',['torment pain','torment'],'Limited','Skin','200M','—','—','9/10','Stable','Trading'),
+V('Eagle Requiem',['eagle requiem','requiem eagle','requiem'],'Limited','Skin','180M','—','—','5/10','Stable','Trading'),
+V('Ruby Diamond',['ruby diamond','ruby'],'Limited','Skin','180M','—','—','6/10','Stable','Trading'),
+V('Eagle Glacier',['eagle glacier','glacier eagle','glacier'],'Limited','Skin','20M','—','—','2/10','Stable','Trading'),
+V('Celebration Bomb',['celebration bomb','celebration'],'Limited','Skin','10M','—','—','3/10','Stable','Trading'),
+V('Orange Portal',['orange portal','orange portal skin'],'Limited','Skin','N/A','—','—','0/10','Stable','Collection'),
+V('Eclipse',['eclipse dragon','eclipse','eclipse skin'],'Limited','Skin','N/A','—','—','10/10','Rising','Collection, Trading'),
+V('Parrot Eagle',['parrot eagle','parrot','parrot skin'],'Limited','Skin','N/A','—','—','1/10','Stable','Collection'),
 ];
 
 function normalizeBloxQuery(query:string):string{return query.trim().toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').replace(/\s+/g,' ').trim();}
@@ -45,7 +74,7 @@ export function findBloxValue(query:string):BloxValueEntry|undefined{
   return candidates[0].entry;
 }
 
-export function buildBloxValueEmbed(entry:BloxValueEntry):EmbedBuilder{return new EmbedBuilder().setColor(0xF4C430).setTitle(`🍈 ${entry.name}`).setDescription(`🟡 **${entry.rarity}**  ·  🐾 **${entry.type}**\n\n━━━━━━━━━━━━━━━━━━`).addFields({name:'💱 Regular Value',value:`\`${entry.regular}\``},{name:':PERM: Perm Value',value:`\`${entry.perm}\``},{name:'💲 Beli Price',value:`\`${entry.beli}\``},{name:'📊 Demand',value:`🟢 **${entry.demand}**`},{name:'⚖️ Trend',value:`📈 **${entry.trend}**`},{name:'🏆 Best Used For',value:entry.bestFor}).setFooter({text:'Blox Fruits Values | Sparxie'}).setTimestamp();}
+export function buildBloxValueEmbed(entry:BloxValueEntry):EmbedBuilder{return new EmbedBuilder().setColor(0xF4C430).setTitle(`🍈 ${entry.name}`).setDescription(`🟡 **${entry.rarity}**  ·  🐾 **${entry.type}**\n\n━━━━━━━━━━━━━━━━━━`).addFields({name:'💱 Regular Value',value:`\`${entry.regular}\`"},{name:':PERM: Perm Value',value:`\`${entry.perm}\`"},{name:'💲 Beli Price',value:`\`${entry.beli}\`"},{name:'📊 Demand',value:`🟢 **${entry.demand}**`},{name:'⚖️ Trend',value:`📈 **${entry.trend}**`},{name:'🏆 Best Used For',value:entry.bestFor}).setFooter({text:'Blox Fruits Values | Sparxie'}).setTimestamp();}
 
 export const bloxvalue:Command={data:new SlashCommandBuilder().setName('bloxvalue').setDescription('Show the Blox Fruits value for a fruit or skin').addStringOption(o=>o.setName('item').setDescription('Fruit or skin name').setRequired(true)),async execute(interaction){const item=interaction.options.getString('item',true);const entry=findBloxValue(item);if(!entry){await interaction.reply({content:`❌ I couldn't find a Blox Fruits value for **${item}**.`,ephemeral:true});return;}await interaction.reply({embeds:[buildBloxValueEmbed(entry)]});}};
 export const setbloxvaluechannel:Command={data:new SlashCommandBuilder().setName('setbloxvaluechannel').setDescription('Enable automatic Blox Fruits value lookups in a channel').setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).addChannelOption(o=>o.setName('channel').setDescription('Channel where @Sparxie <fruit> will work').setRequired(true).addChannelTypes(ChannelType.GuildText)),async execute(interaction){if(!interaction.guild)return;const channel=interaction.options.getChannel('channel',true);updateGuild(interaction.guild.id,d=>{d.config.bloxValueChannelId=channel.id;});await interaction.reply({content:`✅ Blox Fruits value lookup is now enabled in <#${channel.id}>.\n\nUse **@${interaction.client.user.username} Yeti** (or any supported fruit/skin name) in that channel.`});}};
