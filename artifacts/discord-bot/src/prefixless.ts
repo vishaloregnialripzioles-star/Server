@@ -12,8 +12,22 @@ const ids = [
 export const PREFIXLESS_USERS = new Set(ids.map(id => id.trim()).filter(Boolean));
 export const PREFIXLESS_COMMAND_NAMES = new Set(allCommands.map(c => c.data.toJSON().name.toLowerCase()));
 
-export function isPrefixlessUser(userId: string): boolean {
-  return PREFIXLESS_USERS.has(userId);
+export async function isPrefixlessUser(message: Message): Promise<boolean> {
+  if (PREFIXLESS_USERS.has(message.author.id)) return true;
+
+  // Also resolve the Discord application owner so prefixless owner commands do
+  // not depend on an OWNER_USER_ID environment variable being present.
+  try {
+    const application = message.client.application;
+    if (application) {
+      const owner = application.owner ?? (await application.fetch()).owner;
+      if (owner && 'id' in owner && owner.id === message.author.id) return true;
+      if (owner && 'members' in owner && owner.members?.has(message.author.id)) return true;
+    }
+  } catch (error) {
+    console.warn('[Prefixless] Could not resolve application owner:', error);
+  }
+  return false;
 }
 
 /**
@@ -23,7 +37,7 @@ export function isPrefixlessUser(userId: string): boolean {
  * twice.
  */
 export async function handlePrefixlessMessage(message: Message): Promise<boolean> {
-  if (message.author.bot || !message.guild || !isPrefixlessUser(message.author.id)) return false;
+  if (message.author.bot || !message.guild || !(await isPrefixlessUser(message))) return false;
   const text = message.content.trim();
   if (!text || text.startsWith(getGuildPrefix(message.guild.id))) return false;
 
@@ -45,8 +59,7 @@ export async function handlePrefixlessMessage(message: Message): Promise<boolean
   return true;
 }
 
-// Kept as a compatibility export for any older imports. The actual listener is
-// intentionally not registered here; events/messageCreate.ts owns the pipeline.
+// Compatibility export. The actual listener is intentionally not registered here.
 export function registerPrefixless(_client: Client): void {
   console.log('[Prefixless] Using unified messageCreate handler.');
 }
