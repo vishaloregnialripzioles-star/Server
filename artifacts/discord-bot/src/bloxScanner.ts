@@ -34,12 +34,15 @@ function money(v: number): string {
   if (a >= 1e3) return `${(v / 1e3).toFixed(a >= 1e5 ? 0 : 1).replace(/\.0$/, '')}K`;
   return Math.round(v).toLocaleString('en-US');
 }
+
 function catalogForVision(): string {
-  return BLOX_VALUES.map((entry: any) => {
-    const aliases = Array.isArray(entry.aliases) && entry.aliases.length ? ` | aliases: ${entry.aliases.join(', ')}` : '';
-    return `${entry.name}${aliases}`;
-  }).filter(Boolean).join('\n');
+  return BLOX_VALUES
+    .filter((entry: any) => entry.type !== 'Gamepass' && !/blade/i.test(entry.name))
+    .map((entry: any) => `${entry.name} | aliases: ${(entry.aliases ?? []).join(', ')}`)
+    .join('\n');
 }
+const CATALOG = catalogForVision();
+
 function cleanDetected(raw: unknown): DetectedItem[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((x: any) => ({
@@ -79,73 +82,61 @@ async function analyze(url: string): Promise<ScanResult> {
   if (!key) throw new Error('GEMINI_API_KEY is not configured');
   const image = await downloadImage(url);
   const model = process.env.GEMINI_SCANNER_MODEL?.trim() || process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
-  const catalog = catalogForVision();
-  const firstPrompt = `You are the PRIMARY high-accuracy vision/OCR engine for a Blox Fruits trade screenshot. Study the entire attached image carefully before returning anything.
+  const firstPrompt = `Act as a meticulous Blox Fruits trade screenshot vision/OCR engine. Inspect the attached image in detail before returning JSON.
 
-ABSOLUTE GEOMETRY RULES:
-- Find the rectangular window titled "TREASURE TRADE".
-- ONLY read item slots inside that window.
-- LEFT column = the person who uploaded this screenshot. RIGHT column = the other trader.
-- Ignore inventory/hotbar, HUD, map, background, floating labels, player names, money, buttons, and every object outside the trade window.
-- The large plus (+) empty slot is NOT an item.
+GEOMETRY: First locate the rectangular window titled TREASURE TRADE. ONLY items inside its trade slots count. LEFT side is ALWAYS the person who uploaded the screenshot; RIGHT side is ALWAYS the other trader. Ignore inventory, hotbar, HUD, chat, player names, map, NPCs, background, money labels, buttons, and the large empty + slot.
 
-ITEM IDENTIFICATION:
-- Inspect each occupied slot's icon AND its visible title together.
-- Read every occupied slot independently, including duplicates.
-- Match OCR to the exact canonical name from the catalog below. Correct obvious OCR errors using the icon and catalog.
-- Special/skin variants are separate items. Preserve names such as Yellow Lightning and Green Lightning exactly; never silently convert a special skin to normal Lightning.
-- Do not confuse visually similar fruits. Use title text first, icon second, and catalog matching third.
-- permanent=true ONLY when a permanent version is clearly indicated by the trade slot; otherwise false.
-- Never invent an item. If a slot cannot be identified confidently, omit it rather than guessing.
-- Do not identify weapons/tools or anything outside the trade window.
+IDENTIFICATION: Inspect every occupied slot independently. Read the title above the slot AND inspect the icon/artwork. Use both to correct OCR. Count duplicate slots. Match to the exact canonical catalog name below. Special skins are separate items: never turn Yellow Lightning/Green Lightning/Red Lightning/Purple Lightning into normal Lightning. Do not identify weapons/tools. Never guess from color alone. If a slot is genuinely unreadable, omit it rather than inventing it. permanent=true only when the slot clearly shows a permanent version.
 
 CANONICAL CATALOG:
-${catalog}
+${CATALOG}
 
-Return JSON ONLY:
-{"left":[{"name":"Venom","quantity":1,"permanent":false,"confidence":0.99}],"right":[{"name":"Control","quantity":1,"permanent":false,"confidence":0.99}]}
-Confidence is 0..1. Count duplicate slots. Do not calculate values or W/F/L.`;
+Return JSON ONLY in this shape: {"left":[{"name":"Venom","quantity":1,"permanent":false,"confidence":0.99}],"right":[{"name":"Control","quantity":1,"permanent":false,"confidence":0.99}]}. Do not calculate values or W/F/L.`;
   const first = await callGemini(key, model, image, firstPrompt);
-  const verifyPrompt = `You are the SECOND independent verification engine. Re-scan the attached Blox Fruits screenshot from the pixels, not from assumptions.
+  const verifyPrompt = `Independently VERIFY this Blox Fruits trade screenshot from the pixels. Do not blindly trust the draft.
 
-Candidate from the first scan:
+DRAFT:
 ${JSON.stringify(first)}
 
-Verify rigorously: locate ONLY the TREASURE TRADE rectangle; LEFT is screenshot sender and RIGHT is other trader; count every occupied slot; re-read title text and cross-check icons; correct OCR using the canonical catalog; preserve Yellow Lightning and Green Lightning; permanent=true only when clearly visible; never add weapons/tools/background objects; never invent an item.
+RULES: Locate only the TREASURE TRADE rectangle. LEFT = screenshot sender. RIGHT = other trader. Re-read every occupied slot's title and cross-check the artwork. Count duplicates. Correct OCR to the exact canonical name. Preserve all special/skin variants separately, especially Yellow Lightning, Green Lightning, Red Lightning and Purple Lightning. Ignore inventory/hotbar/HUD/background and do not identify weapons/tools. Do not invent items. permanent=true only if clearly shown.
 
-CANONICAL CATALOG:
-${catalog}
+CATALOG:
+${CATALOG}
 
-Return JSON ONLY:
-{"left":[{"name":"...","quantity":1,"permanent":false,"confidence":0.99}],"right":[{"name":"...","quantity":1,"permanent":false,"confidence":0.99}]}
-Do not calculate values or W/F/L.`;
-  const verified = await callGemini(key, model, image, verifyPrompt);
-  return verified.left.length || verified.right.length ? verified : first;
+Return JSON ONLY: {"left":[{"name":"...","quantity":1,"permanent":false,"confidence":0.99}],"right":[{"name":"...","quantity":1,"permanent":false,"confidence":0.99}]}. No explanation. No values. No W/F/L.`;
+  try {
+    const verified = await callGemini(key, model, image, verifyPrompt);
+    return verified.left.length || verified.right.length ? verified : first;
+  } catch {
+    return first;
+  }
 }
+
 function resolve(item: DetectedItem) {
   const entry = findBloxValue(item.name);
-  if (!entry) return null;
+  if (!entry || entry.type === 'Gamepass' || /blade/i.test(entry.name)) return null;
   const quantity = Math.max(1, Math.min(50, Math.round(Number(item.quantity ?? 1))));
   const permanent = Boolean(item.permanent);
   const unit = permanent && entry.perm && entry.perm !== '—' && entry.perm !== 'N/A' ? parseValue(entry.perm) : parseValue(entry.regular);
   if (unit === null) return null;
-  return { entry, quantity, permanent, unit, demand: parseDemand(entry.demand), confidence: item.confidence ?? 0 };
+  return { entry, quantity, permanent, unit, value: unit * quantity, demand: parseDemand(entry.demand), confidence: item.confidence ?? 0 };
 }
 function totals(items: DetectedItem[]) {
   const resolved: any[] = []; const unknown: string[] = []; let raw = 0; let demandScore = 0; let demandSum = 0; let demandCount = 0;
   for (const item of items) {
     const r = resolve(item); if (!r) { unknown.push(item.name); continue; }
-    const value = r.unit * r.quantity; const multiplier = r.demand == null ? 1 : 0.80 + (0.02 * r.demand);
-    raw += value; demandScore += value * multiplier;
+    raw += r.value;
+    const multiplier = r.demand == null ? 1 : 0.80 + (0.02 * r.demand);
+    demandScore += r.value * multiplier;
     if (r.demand != null) { demandSum += r.demand; demandCount++; }
-    resolved.push({ ...r, value });
+    resolved.push(r);
   }
   return { resolved, unknown, raw, demandScore, avgDemand: demandCount ? demandSum / demandCount : null };
 }
 function classify(left: ReturnType<typeof totals>, right: ReturnType<typeof totals>): { label: 'W' | 'FAIR' | 'L'; ratio: number } {
   if (left.raw === 0 && right.raw === 0) return { label: 'FAIR', ratio: 1 };
-  if (right.raw === 0) return { label: left.raw > 0 ? 'L' : 'FAIR', ratio: Infinity };
-  if (left.raw === 0) return { label: 'W', ratio: 0 };
+  if (right.demandScore === 0) return { label: left.demandScore > 0 ? 'L' : 'FAIR', ratio: Infinity };
+  if (left.demandScore === 0) return { label: 'W', ratio: 0 };
   const ratio = left.demandScore / right.demandScore;
   if (ratio >= 0.90 && ratio <= 1.10) return { label: 'FAIR', ratio };
   return ratio < 1 ? { label: 'W', ratio } : { label: 'L', ratio };
@@ -154,45 +145,96 @@ function buildEmbed(authorId: string, result: ScanResult, sourceId: string): Emb
   const left = totals(result.left); const right = totals(result.right); const verdict = classify(left, right);
   const list = (side: ReturnType<typeof totals>) => side.resolved.length ? side.resolved.map(x => `${x.quantity > 1 ? `${x.quantity}x ` : ''}${x.entry.name}${x.permanent ? ' (Perm)' : ''} — **${money(x.value)}** · Demand **${x.demand == null ? 'N/A' : `${x.demand}/10`}** · ${Math.round(x.confidence * 100)}%`).join('\n') : 'None detected';
   const ratio = Number.isFinite(verdict.ratio) ? `${(verdict.ratio * 100).toFixed(1)}%` : '∞';
-  const embed = new EmbedBuilder().setTitle(`🔎 Trade Scanner — ${verdict.label}`).setDescription(`**<@${authorId}>** = screenshot sender. **LEFT is always their trade.** RIGHT is the other trader.\nDeep scan: item text + icons + catalog matching + demand.`).setColor(verdict.label === 'W' ? 0x2ecc71 : verdict.label === 'L' ? 0xe74c3c : 0xf1c40f).addFields(
-    { name: '👈 LEFT — Your Trade', value: `${list(left)}\n\n**Raw value:** ${money(left.raw)}\n**Demand-adjusted:** ${money(left.demandScore)}\n**Average demand:** ${left.avgDemand == null ? 'N/A' : `${left.avgDemand.toFixed(1)}/10`}`.slice(0, 1024) },
-    { name: '👉 RIGHT — Other Trade', value: `${list(right)}\n\n**Raw value:** ${money(right.raw)}\n**Demand-adjusted:** ${money(right.demandScore)}\n**Average demand:** ${right.avgDemand == null ? 'N/A' : `${right.avgDemand.toFixed(1)}/10`}`.slice(0, 1024) },
+  const embed = new EmbedBuilder().setTitle(`🔎 Trade Scanner — ${verdict.label}`).setDescription(`**<@${authorId}>** = screenshot sender. **LEFT is always their side. RIGHT is the other trader.**\nDeep scan verified item text + artwork + catalog + demand.`).setColor(verdict.label === 'W' ? 0x2ecc71 : verdict.label === 'L' ? 0xe74c3c : 0xf1c40f).addFields(
+    { name: '👈 LEFT — Screenshot Sender', value: `${list(left)}\n\n**Raw value:** ${money(left.raw)}\n**Demand-adjusted:** ${money(left.demandScore)}\n**Average demand:** ${left.avgDemand == null ? 'N/A' : `${left.avgDemand.toFixed(1)}/10`}`.slice(0, 1024) },
+    { name: '👉 RIGHT — Other Trader', value: `${list(right)}\n\n**Raw value:** ${money(right.raw)}\n**Demand-adjusted:** ${money(right.demandScore)}\n**Average demand:** ${right.avgDemand == null ? 'N/A' : `${right.avgDemand.toFixed(1)}/10`}`.slice(0, 1024) },
     { name: '🏆 FINAL VERDICT', value: `# **${verdict.label}**\nScore ratio: **${ratio}**\nRaw difference: **${money(left.raw - right.raw)}**\nDemand-adjusted difference: **${money(left.demandScore - right.demandScore)}**`, inline: false },
   ).setFooter({ text: `Sparxie Blox Fruits Deep Scanner • ${sourceId}` }).setTimestamp();
   const unknown = [...left.unknown, ...right.unknown];
-  if (unknown.length) embed.addFields({ name: '⚠️ Unmatched — not counted', value: [...new Set(unknown)].slice(0, 10).map(x => `• ${x}`).join('\n').slice(0, 1024) });
+  if (unknown.length) embed.addFields({ name: '⚠️ Unmatched — NOT counted', value: [...new Set(unknown)].slice(0, 10).map(x => `• ${x}`).join('\n').slice(0, 1024) });
   return embed;
 }
 function latest(guildId: string, userId: string): StoredScreenshot | null { return loadGuild(guildId).config.bloxScannerScreenshots?.[userId] ?? null; }
 function saveScreenshot(message: Message, attachment: Attachment) { updateGuild(message.guild!.id, data => { data.config.bloxScannerScreenshots = data.config.bloxScannerScreenshots ?? {}; data.config.bloxScannerScreenshots[message.author.id] = { url: attachment.url, messageId: message.id, createdAt: Date.now() }; }); }
 async function scanMessage(message: Message, url: string, sourceId: string) {
-  const status = await message.reply('🔎 **Scanning screenshot...**\nDeep-reading the trade window, identifying every fruit, matching the catalog, and checking value + demand.');
-  try { const result = await analyze(url); const left = totals(result.left); const right = totals(result.right); if (!left.resolved.length && !right.resolved.length) { await status.edit('❌ I could not confidently identify any supported trade items. Please send the complete **TREASURE TRADE** window clearly.'); return; } await status.edit({ content: '', embeds: [buildEmbed(message.author.id, result, sourceId)] }); }
-  catch (error) { console.error('[BloxScanner]', error); const reason = error instanceof Error ? error.message : String(error); await status.edit(reason.includes('GEMINI_API_KEY') ? '❌ **GEMINI_API_KEY is missing in Render.**' : '❌ Deep scan failed. Please upload a clearer full trade screenshot.'); }
+  const status = await message.reply('🔎 **Scanning screenshot...**\nDeep-reading every trade slot, matching fruits/skins, values and demand.');
+  try {
+    const result = await analyze(url); const left = totals(result.left); const right = totals(result.right);
+    if (!left.resolved.length && !right.resolved.length) { await status.edit('❌ I could not confidently identify supported trade items. Please upload the complete **TREASURE TRADE** window clearly.'); return; }
+    await status.edit({ content: '', embeds: [buildEmbed(message.author.id, result, sourceId)] });
+  } catch (error) {
+    console.error('[BloxScanner]', error);
+    const reason = error instanceof Error ? error.message : String(error);
+    await status.edit(reason.includes('GEMINI_API_KEY') ? '❌ **GEMINI_API_KEY is missing in Render.**' : '❌ Deep scan failed. Please upload a clear full trade screenshot.');
+  }
 }
+
+function setupCommand(content: string, prefix: string): string | undefined {
+  const raw = content.trim();
+  const values = [raw, raw.startsWith(prefix) ? raw.slice(prefix.length) : '', raw.startsWith('.') ? raw.slice(1) : ''];
+  for (const value of values) { const n = value.trim().toLowerCase().replace(/\s+/g, ' '); if (n.startsWith('setbloxscanner')) return n.slice('setbloxscanner'.length).trim(); }
+  return undefined;
+}
+
 export const bloxscanner: Command = {
-  data: new SlashCommandBuilder().setName('bloxscanner').setDescription('Deep-scan a Blox Fruits trade screenshot for W/F/L').addSubcommand(s => s.setName('enable').setDescription('Enable automatic screenshot scanning in this channel')).addSubcommand(s => s.setName('disable').setDescription('Disable automatic screenshot scanning')).addSubcommand(s => s.setName('status').setDescription('Show the scanner status')).addSubcommand(s => s.setName('scan').setDescription('Deep-scan your latest saved screenshot')),
+  data: new SlashCommandBuilder().setName('bloxscanner').setDescription('Deep-scan a Blox Fruits trade screenshot for W/F/L')
+    .addSubcommand(s => s.setName('enable').setDescription('Enable automatic screenshot scanning in this channel'))
+    .addSubcommand(s => s.setName('disable').setDescription('Disable automatic screenshot scanning'))
+    .addSubcommand(s => s.setName('status').setDescription('Show scanner status'))
+    .addSubcommand(s => s.setName('scan').setDescription('Deep-scan your latest saved screenshot')),
   async execute(interaction) {
     if (!interaction.guildId) { await interaction.reply({ content: '❌ Server only.', ephemeral: true }); return; }
     const sub = interaction.options.getSubcommand(); const configured = loadGuild(interaction.guildId).config.bloxScannerChannelId;
     if (sub === 'status') { await interaction.reply(configured ? `🔎 **Blox scanner:** enabled in <#${configured}>` : '🔎 **Blox scanner:** disabled.'); return; }
     const allowed = interaction.guild?.ownerId === interaction.user.id || interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
-    if (sub === 'enable' || sub === 'disable') { if (!allowed) { await interaction.reply({ content: '❌ **Manage Server** permission required.', ephemeral: true }); return; } updateGuild(interaction.guildId, data => { data.config.bloxScannerChannelId = sub === 'enable' ? interaction.channelId : undefined; }); await interaction.reply(sub === 'enable' ? `🔎 **Deep scanner enabled in <#${interaction.channelId}>.**\nUpload a trade screenshot and it will scan immediately.` : '🔎 **Deep scanner disabled.**'); return; }
-    if (configured && configured !== interaction.channelId) { await interaction.reply({ content: `❌ Use the scanner in <#${configured}>.`, ephemeral: true }); return; }
-    const saved = latest(interaction.guildId, interaction.user.id); if (!saved) { await interaction.reply({ content: '❌ Upload a trade screenshot first.', ephemeral: true }); return; }
+    if (sub === 'enable' || sub === 'disable') {
+      if (!allowed) { await interaction.reply({ content: '❌ Manage Server required.', ephemeral: true }); return; }
+      updateGuild(interaction.guildId, d => { d.config.bloxScannerChannelId = sub === 'enable' ? interaction.channelId : undefined; });
+      await interaction.reply(sub === 'enable' ? `🔎 **Deep scanner enabled in <#${interaction.channelId}>.** Upload a trade screenshot; it scans automatically.` : '🔎 **Scanner disabled.**'); return;
+    }
+    const channel = configured;
+    if (channel && channel !== interaction.channelId) { await interaction.reply({ content: `❌ Use the scanner in <#${channel}>.`, ephemeral: true }); return; }
+    const saved = latest(interaction.guildId, interaction.user.id);
+    if (!saved) { await interaction.reply({ content: '❌ No screenshot saved yet. Upload one first.', ephemeral: true }); return; }
     await interaction.deferReply();
-    try { const result = await analyze(saved.url); await interaction.editReply({ embeds: [buildEmbed(interaction.user.id, result, saved.messageId)] }); } catch (error) { console.error('[BloxScanner]', error); await interaction.editReply('❌ Deep scan failed. Check GEMINI_API_KEY and upload a clear screenshot.'); }
+    try { const result = await analyze(saved.url); await interaction.editReply({ embeds: [buildEmbed(interaction.user.id, result, saved.messageId)] }); }
+    catch { await interaction.editReply('❌ Deep scan failed. Check GEMINI_API_KEY and try again.'); }
   },
 };
+
 export function registerBloxScannerEvents(client: Client) {
-  if ((client as any)[REGISTERED]) return; (client as any)[REGISTERED] = true;
+  if ((client as any)[REGISTERED]) return;
+  (client as any)[REGISTERED] = true;
   client.on(Events.MessageCreate, async (message: Message) => {
     try {
       if (message.author.bot || !message.guild) return;
-      const channelId = loadGuild(message.guild.id).config.bloxScannerChannelId; if (!channelId || channelId !== message.channelId) return;
-      const attachments = [...message.attachments.values()].filter(isImage);
-      if (attachments.length) { if (!(await claimMessageEvent(`bloxscanner:image:${message.id}`))) return; const attachment = attachments[0]; saveScreenshot(message, attachment); await scanMessage(message, attachment.url, message.id); return; }
-      if (isSs(message.content)) { if (!(await claimMessageEvent(`bloxscanner:ss:${message.id}`))) return; const saved = latest(message.guild.id, message.author.id); if (!saved) { await message.reply('❌ No saved screenshot. Upload a trade screenshot first.'); return; } await scanMessage(message, saved.url, saved.messageId); }
-    } catch (error) { console.error('[BloxScanner event]', error); }
+      const enabledChannel = loadGuild(message.guild.id).config.bloxScannerChannelId;
+      if (!enabledChannel || enabledChannel !== message.channelId) return;
+      const prefix = getGuildPrefix(message.guild.id);
+      const setup = setupCommand(message.content, prefix);
+      if (setup !== undefined) {
+        if (!(await claimMessageEvent(`bloxscanner:setup:${message.id}`))) return;
+        const allowed = message.member?.permissions.has(PermissionFlagsBits.ManageGuild) || message.member?.permissions.has(PermissionFlagsBits.Administrator) || message.guild.ownerId === message.author.id;
+        if (!allowed) { await message.reply('❌ Manage Server required.'); return; }
+        if (/^(on|enable)$/i.test(setup)) { updateGuild(message.guild.id, d => { d.config.bloxScannerChannelId = message.channelId; }); await message.reply(`🔎 **Deep scanner enabled in <#${message.channelId}>.**`); }
+        else if (/^(off|disable)$/i.test(setup)) { updateGuild(message.guild.id, d => { d.config.bloxScannerChannelId = undefined; }); await message.reply('🔎 **Scanner disabled.**'); }
+        else { const id = loadGuild(message.guild.id).config.bloxScannerChannelId; await message.reply(id ? `🔎 Scanner is enabled in <#${id}>.` : '🔎 Scanner is disabled.'); }
+        return;
+      }
+      const attachment = [...message.attachments.values()].find(isImage);
+      if (attachment) {
+        if (!(await claimMessageEvent(`bloxscanner:image:${message.id}`))) return;
+        saveScreenshot(message, attachment);
+        // IMPORTANT: upload itself is the trigger. No "saved, send ss" step anymore.
+        await scanMessage(message, attachment.url, message.id);
+        return;
+      }
+      if (isSs(message.content)) {
+        if (!(await claimMessageEvent(`bloxscanner:ss:${message.id}`))) return;
+        const saved = latest(message.guild.id, message.author.id);
+        if (!saved) { await message.reply('❌ No saved screenshot. Upload a trade screenshot first.'); return; }
+        await scanMessage(message, saved.url, saved.messageId);
+      }
+    } catch (error) { console.error('[BloxScanner message]', error); }
   });
 }
