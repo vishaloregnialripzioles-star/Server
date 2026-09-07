@@ -3,6 +3,7 @@ import { Events, AuditLogEvent } from 'discord.js';
 import { auditLog } from '../auditLogger.js';
 import { deleteGuild } from '../storage.js';
 import { registerBloxValueEvents } from '../bloxValueEvents.js';
+import { registerBloxValueIconEvents } from '../bloxValueIconEvents.js';
 
 function safe(name:string,fn:(...args:any[])=>any){return(...args:any[])=>{try{Promise.resolve(fn(...args)).catch((err:unknown)=>console.error(`[${name}]`,err));}catch(err){console.error(`[${name}]`,err);}};}
 
@@ -13,6 +14,7 @@ export function registerEvents(client:Client):void{
 if((client as any)[EVENTS_REGISTERED]){console.warn('[Events] registerEvents() called more than once; ignoring duplicate registration.');return;}
 (client as any)[EVENTS_REGISTERED]=true;
 registerBloxValueEvents(client);
+registerBloxValueIconEvents(client);
 client.once(Events.ClientReady,safe('ready',async(...args:any[])=>{const{handleReady}=await import('./ready.js');return handleReady(...args);}));
 client.on(Events.InteractionCreate,safe('tradeModal',async(interaction:any)=>{if(interaction?.isModalSubmit?.()&&String(interaction.customId).startsWith('tradecalc:')){const{handleTradeModal}=await import('../commands/trade.js');return handleTradeModal(interaction);}}));
 client.on(Events.InteractionCreate,safe('clearChannelsButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('clearchannels:')){const{handleClearChannelsButton}=await import('../commands/clearchannels.js');return handleClearChannelsButton(interaction);}}));
