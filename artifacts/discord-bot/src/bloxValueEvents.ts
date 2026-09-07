@@ -3,7 +3,7 @@ import { Events } from 'discord.js';
 import { loadGuild, claimMessageEvent } from './storage.js';
 import { BLOX_VALUES, buildBloxValueEmbed, findBloxValue } from './commands/bloxvalue.js';
 import { getGuildPrefix } from './prefixHandler.js';
-import { getBloxEmoji } from './bloxEmojiManager.js';
+import { getBloxEmoji, emojiNameForBlox } from './bloxEmojiManager.js';
 
 const CURRENT_OVERRIDES: Record<string, string> = { Buddha: '1.67B' };
 for (const entry of BLOX_VALUES) { const perm = CURRENT_OVERRIDES[entry.name]; if (perm) entry.perm = perm; }
@@ -25,7 +25,9 @@ export function registerBloxValueEvents(client: Client): void {
       const entry = findBloxValue(query); if (!entry) return;
       const embed = buildBloxValueEmbed(entry);
       const configuredEmoji = guildData.config.bloxValueEmojis?.[entry.name];
-      const emoji = configuredEmoji || await getBloxEmoji(client, entry);
+      const appEmoji = await getBloxEmoji(client, entry);
+      const guildEmoji = message.guild.emojis.cache.find(e => e.name?.toLowerCase() === emojiNameForBlox(entry.name).toLowerCase())?.toString() ?? '';
+      const emoji = configuredEmoji || appEmoji || guildEmoji;
       if (emoji) embed.setTitle(`${emoji} ${entry.name}`);
       await message.reply({ embeds:[embed], allowedMentions:{parse:[]} });
     } catch (error) { console.error('[BloxValue] Message lookup failed:', error); }
