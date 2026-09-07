@@ -28,6 +28,7 @@ export function findBloxValue(query:string):BloxValueEntry|undefined{
 }
 
 export function buildBloxValueEmbed(entry:BloxValueEntry):EmbedBuilder{
+  // Keep the compact two-emoji header only. Do NOT attach a fruit image/thumbnail.
   const embed=new EmbedBuilder().setColor(0xF4C430).setTitle(`🍈 ${entry.name}`).setDescription(`🟡 **${entry.rarity}**  ·  🐾 **${entry.type}**\n\n━━━━━━━━━━━━━━━━━━`);
   if(entry.type==='Skin')embed.addFields({name:'💎 Value',value:`\`${entry.regular}\``},{name:'📊 Demand',value:`🟢 **${entry.demand}**`},{name:'⚖️ Trend',value:`📈 **${entry.trend}**`},{name:'🏆 Best Used For',value:entry.bestFor},{name:'🎯 How to Obtain',value:entry.obtain??'Limited release; tradeable now'});
   else if(entry.type==='Gamepass')embed.addFields({name:'💎 Trade Value',value:`\`${entry.regular}\``},{name:'💰 Robux Price',value:`\`${entry.robux??'—'} R$\``,},{name:'📊 Demand',value:`🟢 **${entry.demand}**`},{name:'⚖️ Trend',value:`📈 **${entry.trend}**`},{name:'🏆 Best Used For',value:entry.bestFor});
