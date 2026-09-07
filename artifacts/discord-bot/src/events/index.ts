@@ -4,18 +4,14 @@ import { auditLog } from '../auditLogger.js';
 import { deleteGuild } from '../storage.js';
 import { registerBloxValueEvents } from '../bloxValueEvents.js';
 import { registerBloxValueIconEvents } from '../bloxValueIconEvents.js';
-
+import { handleBloxEmojiInteraction, handleBloxEmojiModal } from '../commands/bloxemoji.js';
 function safe(name:string,fn:(...args:any[])=>any){return(...args:any[])=>{try{Promise.resolve(fn(...args)).catch((err:unknown)=>console.error(`[${name}]`,err));}catch(err){console.error(`[${name}]`,err);}};}
-
-const EVENTS_REGISTERED = Symbol.for('sparxie.events.registered');
-const MESSAGE_PROCESSED = Symbol.for('sparxie.message.processed');
-
+const EVENTS_REGISTERED = Symbol.for('sparxie.events.registered'); const MESSAGE_PROCESSED = Symbol.for('sparxie.message.processed');
 export function registerEvents(client:Client):void{
 if((client as any)[EVENTS_REGISTERED]){console.warn('[Events] registerEvents() called more than once; ignoring duplicate registration.');return;}
-(client as any)[EVENTS_REGISTERED]=true;
-registerBloxValueEvents(client);
-registerBloxValueIconEvents(client);
+(client as any)[EVENTS_REGISTERED]=true; registerBloxValueEvents(client); registerBloxValueIconEvents(client);
 client.once(Events.ClientReady,safe('ready',async(...args:any[])=>{const{handleReady}=await import('./ready.js');return handleReady(...args);}));
+client.on(Events.InteractionCreate,safe('bloxEmoji',async(interaction:any)=>{if(interaction?.isModalSubmit?.()&&String(interaction.customId).startsWith('bloxemoji:modal:'))return handleBloxEmojiModal(interaction);if((interaction?.isButton?.()||interaction?.isStringSelectMenu?.())&&String(interaction.customId).startsWith('bloxemoji:'))return handleBloxEmojiInteraction(interaction);}));
 client.on(Events.InteractionCreate,safe('tradeModal',async(interaction:any)=>{if(interaction?.isModalSubmit?.()&&String(interaction.customId).startsWith('tradecalc:')){const{handleTradeModal}=await import('../commands/trade.js');return handleTradeModal(interaction);}}));
 client.on(Events.InteractionCreate,safe('clearChannelsButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('clearchannels:')){const{handleClearChannelsButton}=await import('../commands/clearchannels.js');return handleClearChannelsButton(interaction);}}));
 client.on(Events.InteractionCreate,safe('giveawayPreselectButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('gwcfg_selectwinner:')){const{handleGiveawayPreselectButton}=await import('./giveawayPreselect.js');return handleGiveawayPreselectButton(interaction);}if(interaction?.isUserSelectMenu?.()&&String(interaction.customId).startsWith('gwcfg_selectwinner_user:')){const{handleGiveawayPreselectUser}=await import('./giveawayPreselect.js');return handleGiveawayPreselectUser(interaction);}}));
@@ -32,5 +28,4 @@ client.on(Events.MessageReactionRemove,safe('messageReactionRemove',async(...arg
 client.on(Events.GuildMemberAdd,safe('guildMemberAdd',async(...args:any[])=>{const{handleGuildMemberAdd}=await import('./guildMemberAdd.js');return handleGuildMemberAdd(...args);}));
 client.on(Events.GuildMemberRemove,safe('guildMemberRemove',async(...args:any[])=>{const{handleGuildMemberRemove}=await import('./guildMemberRemove.js');return handleGuildMemberRemove(...args);}));
 client.on(Events.GuildAuditLogEntryCreate,safe('guildAuditLogEntryCreate',async(entry:any,guild:any)=>{try{const{handleAntiNukeAudit}=await import('./antiNuke.js');await handleAntiNukeAudit(entry,guild);}catch(err){console.error('[antiNuke]',err);}const map:any={[AuditLogEvent.GuildUpdate]:'serverChanges',[AuditLogEvent.ChannelCreate]:'channelChanges',[AuditLogEvent.ChannelUpdate]:'channelChanges',[AuditLogEvent.ChannelDelete]:'channelChanges',[AuditLogEvent.RoleCreate]:'roleChanges',[AuditLogEvent.RoleUpdate]:'roleChanges',[AuditLogEvent.RoleDelete]:'roleChanges',[AuditLogEvent.MemberKick]:'moderation',[AuditLogEvent.MemberBanAdd]:'moderation',[AuditLogEvent.MemberBanRemove]:'moderation',[AuditLogEvent.MemberUpdate]:'memberChanges',[AuditLogEvent.BotAdd]:'memberChanges'};const category=map[entry.action];if(category)await auditLog(guild,category,`📋 ${category.replace(/([A-Z])/g,' $1')}`,`Discord audit event **${entry.action}** was recorded.`,entry.executor?([{name:'Executor',value:`<@${entry.executor.id}>`,inline:true}]):[]);}));
-client.on(Events.GuildDelete,safe('guildDelete',async(guild:any)=>{console.log(`[Storage] Bot left guild ${guild.id}; removing persisted progression.`);await deleteGuild(String(guild.id));}));
-}
+client.on(Events.GuildDelete,safe('guildDelete',async(guild:any)=>{console.log(`[Storage] Bot left guild ${guild.id}; removing persisted progression.`);await deleteGuild(String(guild.id));})); }
