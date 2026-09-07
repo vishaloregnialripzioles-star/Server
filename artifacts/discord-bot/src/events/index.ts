@@ -4,12 +4,13 @@ import { auditLog } from '../auditLogger.js';
 import { deleteGuild } from '../storage.js';
 import { registerBloxValueEvents } from '../bloxValueEvents.js';
 import { registerBloxValueIconEvents } from '../bloxValueIconEvents.js';
+import { registerBloxValueSync } from '../bloxValueSync.js';
 import { handleBloxEmojiInteraction, handleBloxEmojiModal } from '../commands/bloxemoji.js';
 function safe(name:string,fn:(...args:any[])=>any){return(...args:any[])=>{try{Promise.resolve(fn(...args)).catch((err:unknown)=>console.error(`[${name}]`,err));}catch(err){console.error(`[${name}]`,err);}};}
 const EVENTS_REGISTERED = Symbol.for('sparxie.events.registered'); const MESSAGE_PROCESSED = Symbol.for('sparxie.message.processed');
 export function registerEvents(client:Client):void{
 if((client as any)[EVENTS_REGISTERED]){console.warn('[Events] registerEvents() called more than once; ignoring duplicate registration.');return;}
-(client as any)[EVENTS_REGISTERED]=true; registerBloxValueEvents(client); registerBloxValueIconEvents(client);
+(client as any)[EVENTS_REGISTERED]=true; registerBloxValueEvents(client); registerBloxValueIconEvents(client); registerBloxValueSync(client);
 client.once(Events.ClientReady,safe('ready',async(...args:any[])=>{const{handleReady}=await import('./ready.js');return handleReady(...args);}));
 client.on(Events.InteractionCreate,safe('bloxEmoji',async(interaction:any)=>{if(interaction?.isModalSubmit?.()&&String(interaction.customId).startsWith('bloxemoji:modal:'))return handleBloxEmojiModal(interaction);if((interaction?.isButton?.()||interaction?.isStringSelectMenu?.())&&String(interaction.customId).startsWith('bloxemoji:'))return handleBloxEmojiInteraction(interaction);}));
 client.on(Events.InteractionCreate,safe('tradeModal',async(interaction:any)=>{if(interaction?.isModalSubmit?.()&&String(interaction.customId).startsWith('tradecalc:')){const{handleTradeModal}=await import('../commands/trade.js');return handleTradeModal(interaction);}}));
