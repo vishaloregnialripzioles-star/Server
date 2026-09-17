@@ -1,25 +1,137 @@
 import { ActionRowBuilder, EmbedBuilder, SlashCommandBuilder, StringSelectMenuBuilder } from 'discord.js';
 import type { Command } from '../types.js';
+
 export const HELP_SELECT_CUSTOM_ID='sparxie_help_category';
-const CUSTOM_EMOJI_IDS:Record<string,string>={Setup:'1537371555754020924',Moderation:'1537383211611594913',Security:'1550141081780224010',Channels:'1537383650008633344',Restrictions:'1537383867965636638',Utility:'1537384138758168676',Leveling:'1537384379234394172',Tickets:'1537384597158101092',Economy:'1550135030150594662',Games:'1537384591638274081',Fun:'1537384590098956318',Giveaways:'1537384585325846578',Music:'1537384708491575347',Social:'1550135055408697414','Blox Fruits':'1550135075297824828',AI:'1550135960556281968',Other:'1550135112484786347',Premium:'1550136370746359908',Profiles:'1550141116647743571'};
-const FALLBACK_EMOJIS:Record<string,string>={Setup:'⚙️',Moderation:'🔨',Security:'🛡️',Channels:'📢',Restrictions:'🚫',Utility:'🛠️',Leveling:'📈',Roles:'🎭',Tickets:'🎫',Economy:'⚡',Games:'🎮',Fun:'🎉',Giveaways:'🎁',Music:'🎵',Social:'🌐','Blox Fruits':'🍎',AI:'🤖',Other:'✨'};
-const CUSTOM_EMOJIS:Record<string,string>={...FALLBACK_EMOJIS};
+
+const CUSTOM_EMOJI_IDS:Record<string,string>={
+  Setup:'1537371555754020924',
+  Moderation:'1537383211611594913',
+  Security:'1550141081780224010',
+  Channels:'1537383650008633344',
+  Restrictions:'1537383867965636638',
+  Utility:'1537384138758168676',
+  Leveling:'1537384379234394172',
+  Tickets:'1537384597158101092',
+  Economy:'1550135030150594662',
+  Games:'1537384591638274081',
+  Fun:'1537384590098956318',
+  Giveaways:'1537384585325846578',
+  Music:'1537384708491575347',
+  Social:'1550135055408697414',
+  'Blox Fruits':'1550135075297824828',
+  AI:'1550135960556281968',
+  Other:'1550135112484786347',
+  Premium:'1550136370746359908',
+  Profiles:'1550141116647743571'
+};
+
+const CUSTOM_EMOJI_NAMES:Record<string,string>={
+  Setup:'setup',
+  Moderation:'moderation',
+  Security:'security',
+  Channels:'channels',
+  Restrictions:'restrictions',
+  Utility:'utility',
+  Leveling:'leveling',
+  Tickets:'ticket',
+  Economy:'economy',
+  Games:'games',
+  Fun:'fun',
+  Giveaways:'giveaway',
+  Music:'music',
+  Social:'social',
+  'Blox Fruits':'bloxfruits',
+  AI:'ai',
+  Other:'others',
+  Premium:'premium',
+  Profiles:'profiles'
+};
+
+const FALLBACK_EMOJIS:Record<string,string>={
+  Setup:'⚙️',Moderation:'🔨',Security:'🛡️',Channels:'📢',Restrictions:'🚫',Utility:'🛠️',
+  Leveling:'📈',Roles:'🎭',Tickets:'🎫',Economy:'⚡',Games:'🎮',Fun:'🎉',Giveaways:'🎁',
+  Music:'🎵',Social:'🌐','Blox Fruits':'🍎',AI:'🤖',Other:'✨'
+};
+
 const CATEGORY_ORDER=['Setup','Moderation','Security','Channels','Restrictions','Utility','Leveling','Roles','Tickets','Economy','Games','Fun','Giveaways','Music','Social','Blox Fruits','AI','Other'];
 const PREMIUM_SET=new Set((process.env.SPARXIE_PREMIUM_COMMANDS??'').split(/[\s,]+/i).map(x=>x.trim().toLowerCase()).filter(Boolean));
 const CATEGORY_MAP:Record<string,string>={setup:'Setup',autosetup:'Setup',setprefix:'Setup',levelconfig:'Leveling',embed:'Setup',welcome:'Setup',greet:'Setup',ban:'Moderation',kick:'Moderation',mute:'Moderation',unmute:'Moderation',timeout:'Moderation',warn:'Moderation',warnings:'Moderation',clearwarns:'Moderation',warnsleaderboard:'Moderation',nick:'Moderation',temprole:'Moderation',automod:'Security',antinuke:'Security',recovery:'Security',clearchannels:'Security',purge:'Channels',purgebots:'Channels',lock:'Channels',unlock:'Channels',slowmode:'Channels',invitelog:'Channels',chatban:'Restrictions',unchatban:'Restrictions',jail:'Restrictions',unjail:'Restrictions',afk:'Utility',remindme:'Utility',poll:'Utility',snipe:'Utility',editsnipe:'Utility',userinfo:'Utility',serverinfo:'Utility',autoresponder:'Utility',help:'Utility',ping:'Utility',uptime:'Utility',av:'Utility',banner:'Utility',rank:'Leveling',leaderboard:'Leveling',createrole:'Roles',roleassign:'Roles',joinrole:'Roles',reactionrole:'Roles',roleconnection:'Roles',inviterole:'Roles',extraowner:'Roles',uploademoji:'Roles',setbloxemojis:'Roles',ticket:'Tickets',closeticket:'Tickets',ticketpanel:'Tickets',coinleaderboard:'Economy',shop:'Economy',removeshop:'Economy',trade:'Economy',game:'Games',games:'Games',gamepolicy:'Games',roast:'Fun',gay:'Fun',pro:'Fun',noob:'Fun',ship:'Fun',cool:'Fun',aura:'Fun',funny:'Fun',sad:'Fun',angry:'Fun',legend:'Fun',giveaway:'Giveaways',giveawaydaily:'Giveaways',music:'Music',socialnotification:'Social',bloxemoji:'Blox Fruits',bloxscanner:'Blox Fruits',bloxvalue:'Blox Fruits',ai:'AI'};
+
 let commandRegistry:Command[]=[];
-let emojisResolved=false;
 export function setHelpCommandRegistry(commands:Command[]):void{commandRegistry=commands;}
-export async function resolveHelpEmojis(client:any):Promise<void>{if(emojisResolved)return;let resolvedAny=false;for(const [category,id] of Object.entries(CUSTOM_EMOJI_IDS)){try{const emoji=await client.emojis.fetch(id);if(emoji){CUSTOM_EMOJIS[category]=emoji.toString();resolvedAny=true;}}catch{}}if(resolvedAny)emojisResolved=true;}
+
+function customEmojiMarkup(category:string):string{
+  const id=CUSTOM_EMOJI_IDS[category];
+  const name=CUSTOM_EMOJI_NAMES[category]??category.toLowerCase().replace(/\s+/g,'');
+  return id?`<:${name}:${id}>`:(FALLBACK_EMOJIS[category]??FALLBACK_EMOJIS.Other);
+}
+
+function emojiFor(category:string):string{return customEmojiMarkup(category);}
+function menuEmojiFor(category:string):{id:string;name:string}|string{
+  const id=CUSTOM_EMOJI_IDS[category];
+  return id?{id,name:CUSTOM_EMOJI_NAMES[category]??category.toLowerCase().replace(/\s+/g,'')}:(FALLBACK_EMOJIS[category]??FALLBACK_EMOJIS.Other);
+}
 function categoryFor(name:string):string{return CATEGORY_MAP[name.toLowerCase()]??'Other';}
-function emojiFor(category:string):string{return CUSTOM_EMOJIS[category]??FALLBACK_EMOJIS.Other;}
 function resolveCommands(value:any):Command[]{if(Array.isArray(value)&&value.length&&value[0]?.data?.toJSON)return value as Command[];return commandRegistry;}
 function optionEntries(data:any,prefix:string){const out:{name:string;description:string}[]=[];for(const option of data.options??[]){if(option.type===1)out.push({name:`${prefix}${data.name} ${option.name}`,description:option.description??'Command option'});else if(option.type===2)for(const sub of option.options??[])if(sub.type===1)out.push({name:`${prefix}${data.name} ${option.name} ${sub.name}`,description:sub.description??'Command option'});}return out;}
-export type HelpEntry={name:string;description:string;premium:boolean};export type HelpCategory={name:string;emoji:string;commands:HelpEntry[]};
-export function getHelpCategories(commands:any=commandRegistry,prefix='.'):HelpCategory[]{const list=resolveCommands(commands);const buckets=new Map<string,HelpEntry[]>();for(const c of CATEGORY_ORDER)buckets.set(c,[]);for(const command of list){const data:any=command.data.toJSON();const name=String(data.name);const category=categoryFor(name);const premium=PREMIUM_SET.has(name.toLowerCase());buckets.get(category)!.push({name:`${prefix}${name}`,description:String(data.description??'No description available.'),premium});for(const sub of optionEntries(data,prefix))buckets.get(category)!.push({name:sub.name,description:sub.description,premium});}buckets.get('Utility')!.push({name:`${prefix}help <category>`,description:'Open a category directly',premium:false});buckets.get('Games')!.push({name:`${prefix}buy role <name>`,description:'Buy a configured shop role with ⚡ sparks',premium:false},{name:`${prefix}buy colour <name>`,description:'Buy a configured colour with ⚡ sparks',premium:false});return CATEGORY_ORDER.map(name=>({name,emoji:emojiFor(name),commands:buckets.get(name)!.sort((a,b)=>a.name.localeCompare(b.name))})).filter(c=>c.commands.length>0);}
-export const HELP_CATEGORIES:HelpCategory[]=[];export const HELP_COMMAND_COUNT=0;
-export function findHelpCategory(category?:string|null,commands:any=commandRegistry,prefix='.'):HelpCategory|undefined{if(!category||category.toLowerCase()==='all')return undefined;return getHelpCategories(commands,prefix).find(c=>c.name.toLowerCase()===category.toLowerCase());}
+
+export type HelpEntry={name:string;description:string;premium:boolean};
+export type HelpCategory={name:string;emoji:string;commands:HelpEntry[]};
+
+export function getHelpCategories(commands:any=commandRegistry,prefix='.'):HelpCategory[]{
+  const list=resolveCommands(commands);
+  const buckets=new Map<string,HelpEntry[]>();
+  for(const c of CATEGORY_ORDER)buckets.set(c,[]);
+  for(const command of list){
+    const data:any=command.data.toJSON();
+    const name=String(data.name);
+    const category=categoryFor(name);
+    const premium=PREMIUM_SET.has(name.toLowerCase());
+    buckets.get(category)!.push({name:`${prefix}${name}`,description:String(data.description??'No description available.'),premium});
+    for(const sub of optionEntries(data,prefix))buckets.get(category)!.push({name:sub.name,description:sub.description,premium});
+  }
+  buckets.get('Utility')!.push({name:`${prefix}help <category>`,description:'Open a category directly',premium:false});
+  buckets.get('Games')!.push({name:`${prefix}buy role <name>`,description:'Buy a configured shop role with ⚡ sparks',premium:false},{name:`${prefix}buy colour <name>`,description:'Buy a configured colour with ⚡ sparks',premium:false});
+  return CATEGORY_ORDER.map(name=>({name,emoji:emojiFor(name),commands:buckets.get(name)!.sort((a,b)=>a.name.localeCompare(b.name))})).filter(c=>c.commands.length>0);
+}
+
+export const HELP_CATEGORIES:HelpCategory[]=[];
+export const HELP_COMMAND_COUNT=0;
+
+export function findHelpCategory(category?:string|null,commands:any=commandRegistry,prefix='.'):HelpCategory|undefined{
+  if(!category||category.toLowerCase()==='all')return undefined;
+  return getHelpCategories(commands,prefix).find(c=>c.name.toLowerCase()===category.toLowerCase());
+}
 function formatCommand(entry:HelpEntry):string{return`• ${entry.name}${entry.premium?' 🟨':''} — ${entry.description}`;}
-export function buildHelpEmbed(category?:string|null,prefix='.',commands:any=commandRegistry):EmbedBuilder{const categories=getHelpCategories(commands,prefix);const selected=category?categories.find(c=>c.name.toLowerCase()===category.toLowerCase()):undefined;const count=categories.reduce((n,c)=>n+c.commands.length,0);const embed=new EmbedBuilder().setColor(0x12d9d3).setAuthor({name:'Sparxie Help Center'}).setFooter({text:'Sparxie • Complete command directory'}).setTimestamp();if(!selected)embed.setTitle('✨ Welcome to Sparxie').setDescription(`Your complete command directory, organized by category.\n\n**Prefix:** \`${prefix}\`\n**Command entries:** \`${count}\`\n**🟨:** Premium feature when premium metadata is configured.\n\n${categories.map(c=>`${c.emoji} **${c.name}** — ${c.commands.length}`).join('\n')}\n\nUse \`${prefix}help <category>\` or the selector below.`);else{embed.setTitle(`${selected.emoji} ${selected.name}`).setDescription(`${selected.commands.length} command entries.\n🟨 = Premium.`);for(let i=0;i<selected.commands.length;i+=10)embed.addFields({name:i?'More commands':'Commands',value:selected.commands.slice(i,i+10).map(formatCommand).join('\n').slice(0,1024)});}return embed;}
-export function buildHelpMenu(category?:string|null,commands:any=commandRegistry,prefix='.'):ActionRowBuilder<StringSelectMenuBuilder>{const categories=getHelpCategories(commands,prefix);return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId(HELP_SELECT_CUSTOM_ID).setPlaceholder('Select a category…').addOptions({label:'All commands',description:'Browse the complete command directory',value:'all',default:!category||category==='all',emoji:'📚'},...categories.slice(0,24).map(c=>({label:c.name,description:`${c.commands.length} entries`,value:c.name.toLowerCase(),default:category?.toLowerCase()===c.name.toLowerCase(),emoji:c.emoji}))));}
-export const help:Command={data:new SlashCommandBuilder().setName('help').setDescription('Open the complete Sparxie command directory').addStringOption(o=>o.setName('category').setDescription('Show one category').addChoices(...CATEGORY_ORDER.map(c=>({name:`${emojiFor(c)} ${c}`.slice(0,100),value:c.toLowerCase()})))),async execute(interaction){await resolveHelpEmojis(interaction.client);const prefix=(await import('../prefixHandler.js')).getGuildPrefix(interaction.guild?.id??'');const commands=Array.from(interaction.client.commands?.values?.()??commandRegistry);const filter=interaction.options.getString('category');if(filter&&!findHelpCategory(filter,commands,prefix)){await interaction.reply({content:'❌ Unknown help category.',ephemeral:true});return;}await interaction.reply({embeds:[buildHelpEmbed(filter,prefix,commands)],components:[buildHelpMenu(filter,commands,prefix)]});}};
+
+export function buildHelpEmbed(category?:string|null,prefix='.',commands:any=commandRegistry):EmbedBuilder{
+  const categories=getHelpCategories(commands,prefix);
+  const selected=category?categories.find(c=>c.name.toLowerCase()===category.toLowerCase()):undefined;
+  const count=categories.reduce((n,c)=>n+c.commands.length,0);
+  const embed=new EmbedBuilder().setColor(0x12d9d3).setAuthor({name:'Sparxie Help Center'}).setFooter({text:'Sparxie • Complete command directory'}).setTimestamp();
+  if(!selected)embed.setTitle('✨ Welcome to Sparxie').setDescription(`Your complete command directory, organized by category.\n\n**Prefix:** \`${prefix}\`\n**Command entries:** \`${count}\`\n**🟨:** Premium feature when premium metadata is configured.\n\n${categories.map(c=>`${c.emoji} **${c.name}** — ${c.commands.length}`).join('\n')}\n\nUse \`${prefix}help <category>\` or the selector below.`);
+  else{
+    embed.setTitle(`${selected.emoji} ${selected.name}`).setDescription(`${selected.commands.length} command entries.\n🟨 = Premium.`);
+    for(let i=0;i<selected.commands.length;i+=10)embed.addFields({name:i?'More commands':'Commands',value:selected.commands.slice(i,i+10).map(formatCommand).join('\n').slice(0,1024)});
+  }
+  return embed;
+}
+
+export function buildHelpMenu(category?:string|null,commands:any=commandRegistry,prefix='.'):ActionRowBuilder<StringSelectMenuBuilder>{
+  const categories=getHelpCategories(commands,prefix);
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId(HELP_SELECT_CUSTOM_ID).setPlaceholder('Select a category…').addOptions(
+    {label:'All commands',description:'Browse the complete command directory',value:'all',default:!category||category==='all',emoji:'📚'},
+    ...categories.slice(0,24).map(c=>({label:c.name,description:`${c.commands.length} entries`,value:c.name.toLowerCase(),default:category?.toLowerCase()===c.name.toLowerCase(),emoji:menuEmojiFor(c.name)}))
+  ));
+}
+
+export const help:Command={
+  data:new SlashCommandBuilder().setName('help').setDescription('Open the complete Sparxie command directory').addStringOption(o=>o.setName('category').setDescription('Show one category').addChoices(...CATEGORY_ORDER.map(c=>({name:`${emojiFor(c)} ${c}`.slice(0,100),value:c.toLowerCase()})))),
+  async execute(interaction){
+    const prefix=(await import('../prefixHandler.js')).getGuildPrefix(interaction.guild?.id??'');
+    const commands=Array.from(interaction.client.commands?.values?.()??commandRegistry);
+    const filter=interaction.options.getString('category');
+    if(filter&&!findHelpCategory(filter,commands,prefix)){await interaction.reply({content:'❌ Unknown help category.',ephemeral:true});return;}
+    await interaction.reply({embeds:[buildHelpEmbed(filter,prefix,commands)],components:[buildHelpMenu(filter,commands,prefix)]});
+  }
+};
