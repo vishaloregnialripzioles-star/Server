@@ -32,7 +32,7 @@ const CUSTOM_EMOJI_IDS:Record<string,string>={
 const FALLBACK_EMOJIS:Record<string,string>={
   Setup:'⚙️',Moderation:'🔨',Security:'🛡️',Channels:'📢',Restrictions:'🚫',Utility:'🛠️',
   Leveling:'📈',Roles:'🎭',Tickets:'🎫',Economy:'⚡',Games:'🎮',Fun:'🎉',Giveaways:'🎁',
-  Music:'🎵',Social:'🌐','Blox Fruits':'🍎',AI:'🤖',Other:'✨'
+  Music:'🎵',Social:'🌐','Blox Fruits':'🍎',AI:'🤖',Other:'✨',Premium:'🟨'
 };
 
 const CATEGORY_ORDER=['Setup','Moderation','Security','Channels','Restrictions','Utility','Leveling','Roles','Tickets','Economy','Games','Fun','Giveaways','Music','Social','Blox Fruits','AI','Other'];
@@ -107,16 +107,17 @@ export function findHelpCategory(category?:string|null,commands:any=commandRegis
   if(!category||category.toLowerCase()==='all')return undefined;
   return getHelpCategories(commands,prefix).find(c=>c.name.toLowerCase()===category.toLowerCase());
 }
-function formatCommand(entry:HelpEntry):string{return`• ${entry.name}${entry.premium?' 🟨':''} — ${entry.description}`;}
+function formatCommand(entry:HelpEntry):string{return`• ${entry.name}${entry.premium?' '+emojiFor('Premium'):''} — ${entry.description}`;}
 
 export function buildHelpEmbed(category?:string|null,prefix='.',commands:any=commandRegistry):EmbedBuilder{
   const categories=getHelpCategories(commands,prefix);
   const selected=category?categories.find(c=>c.name.toLowerCase()===category.toLowerCase()):undefined;
   const count=categories.reduce((n,c)=>n+c.commands.length,0);
+  const premiumEmoji=emojiFor('Premium');
   const embed=new EmbedBuilder().setColor(0x12d9d3).setAuthor({name:'Sparxie Help Center'}).setFooter({text:'Sparxie • Complete command directory'}).setTimestamp();
-  if(!selected)embed.setTitle('✨ Welcome to Sparxie').setDescription(`Your complete command directory, organized by category.\n\n**Prefix:** \`${prefix}\`\n**Command entries:** \`${count}\`\n**🟨:** Premium feature when premium metadata is configured.\n\n${categories.map(c=>`${c.emoji} **${c.name}** — ${c.commands.length}`).join('\n')}\n\nUse \`${prefix}help <category>\` or the selector below.`);
+  if(!selected)embed.setTitle('✨ Welcome to Sparxie').setDescription(`Your complete command directory, organized by category.\n\n**Prefix:** \`${prefix}\`\n**Command entries:** \`${count}\`\n**${premiumEmoji}:** Premium feature when premium metadata is configured.\n\n${categories.map(c=>`${c.emoji} **${c.name}** — ${c.commands.length}`).join('\n')}\n\nUse \`${prefix}help <category>\` or the selector below.`);
   else{
-    embed.setTitle(`${selected.emoji} ${selected.name}`).setDescription(`${selected.commands.length} command entries.\n🟨 = Premium.`);
+    embed.setTitle(`${selected.emoji} ${selected.name}`).setDescription(`${selected.commands.length} command entries.\n${premiumEmoji} = Premium.`);
     for(let i=0;i<selected.commands.length;i+=10)embed.addFields({name:i?'More commands':'Commands',value:selected.commands.slice(i,i+10).map(formatCommand).join('\n').slice(0,1024)});
   }
   return embed;
