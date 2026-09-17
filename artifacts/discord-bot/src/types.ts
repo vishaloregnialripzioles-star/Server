@@ -2,7 +2,7 @@ import type { ChatInputCommandInteraction, SlashCommandBuilder, SlashCommandOpti
 export interface Command { data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder | Omit<SlashCommandBuilder, 'addSubcommand' | 'addSubcommandGroup'>; execute(interaction: ChatInputCommandInteraction): Promise<void>; }
 declare module 'discord.js' { interface Client { commands: Collection<string, Command>; } }
 export type AutoModAction = 'delete' | 'warn' | 'timeout' | 'delete_timeout' | 'dm_warn' | 'kick' | 'ban';
-export interface AutoModRule { enabled?: boolean; windowSeconds?: number; maxCount?: number; action?: AutoModAction; templateId?: string; charLimit?: number; lineLimit?: number; }
+export interface AutoModRule { enabled?: boolean; windowSeconds?: number; maxCount?: number; action?: AutoModAction; templateId?: string; charLimit?: number; lineLimit?: number; timeoutSeconds?: number; }
 export interface AutoModConfig { enabled: boolean; antiSpam?: boolean; antiScam?: boolean; massMentions?: boolean; suspiciousLinks?: boolean; spaceSpam?: boolean; bannedWords: string[]; hinglishCursedWords?: string[]; antiScamWords?: string[]; action: AutoModAction; spam?: AutoModRule; mentions?: AutoModRule; emoji?: AutoModRule; ping?: AutoModRule; lines?: AutoModRule; space?: AutoModRule; bannedWordsRule?: AutoModRule; hinglishCursedWordsRule?: AutoModRule; antiScamRule?: AutoModRule; suspiciousLinksRule?: AutoModRule; }
 export interface ModerationTemplate { id: string; name: string; message: string; }
 export type LoggingCategorySetting = boolean | string;
