@@ -2,7 +2,9 @@ import { ChannelType, type Guild, type GuildChannel, type OverwriteData } from '
 import type { RecoveryBackup, RecoveryChannel, RecoveryEmoji, RecoveryRole } from './types.js';
 
 function serializeOverwrites(channel: GuildChannel): RecoveryChannel['permissionOverwrites'] {
-  return channel.permissionOverwrites.cache.map(overwrite => ({
+  const overwrites = channel.permissionOverwrites?.cache;
+  if (!overwrites) return [];
+  return overwrites.map(overwrite => ({
     id: overwrite.id,
     type: overwrite.type,
     allow: overwrite.allow.bitfield.toString(),
@@ -46,33 +48,38 @@ function serializeRole(role: any): RecoveryRole {
 }
 
 function serializeEmoji(emoji: any): RecoveryEmoji {
+  const roleIds = emoji.roles?.cache ? [...emoji.roles.cache.keys()] : [];
   return {
     id: emoji.id,
     name: emoji.name ?? 'emoji',
     url: emoji.url,
     animated: Boolean(emoji.animated),
-    roles: emoji.roles?.cache?.map((r: any) => r.id) ?? [],
+    roles: roleIds,
   };
 }
 
 export async function createRecoveryBackup(guild: Guild): Promise<RecoveryBackup> {
-  await guild.channels.fetch();
-  await guild.roles.fetch();
-  await guild.emojis.fetch().catch(() => undefined);
+  // Use the collections returned by fetch() instead of assuming every manager's
+  // cache is populated. This also makes manual saves safe during startup/reconnects.
+  const fetchedChannels = await guild.channels.fetch();
+  const fetchedRoles = await guild.roles.fetch();
+  const fetchedEmojis = await guild.emojis.fetch().catch(() => null);
 
-  const channels = [...guild.channels.cache.values()]
+  const channels = [...fetchedChannels.values()]
     .filter(channel => channel.type !== ChannelType.GuildDirectory)
     .map(serializeChannel)
     .sort((a, b) => a.position - b.position);
 
-  const roles = [...guild.roles.cache.values()]
+  const roles = [...fetchedRoles.values()]
     .filter(role => !role.managed && role.id !== guild.id)
     .map(serializeRole)
     .sort((a, b) => a.position - b.position);
 
-  const emojis = [...guild.emojis.cache.values()]
-    .filter(emoji => Boolean(emoji.url))
-    .map(serializeEmoji);
+  const emojis = fetchedEmojis
+    ? [...fetchedEmojis.values()]
+      .filter(emoji => Boolean(emoji.url))
+      .map(serializeEmoji)
+    : [];
 
   return {
     id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
