@@ -13,7 +13,7 @@ export const setup: Command = {
   data: new SlashCommandBuilder().setName('setup').setDescription('Configure bot settings for this server')
     .addSubcommand(sub=>sub.setName('logs').setDescription('Configure message, moderation, invite, member, role, channel, voice and server logs')
       .addStringOption(o=>o.setName('type').setDescription('Log group to configure').addChoices(
-        {name:'All logs',value:'all'},{name:'Message logs',value:'message'},{name:'Moderation logs',value:'moderation'},{name:'Invite logs',value:'invite'},{name:'Member join/leave logs',value:'member'},{name:'Role logs',value:'role'},{name:'Channel logs',value:'channel'},{name:'Voice logs',value:'voice'},{name:'Server update logs',value:'server'},{name:'Other logs',value:'other'})),
+        {name:'All logs',value:'all'},{name:'Message logs',value:'message'},{name:'Moderation logs',value:'moderation'},{name:'Invite logs',value:'invite'},{name:'Member join/leave logs',value:'member'},{name:'Role logs',value:'role'},{name:'Channel logs',value:'channel'},{name:'Voice logs',value:'voice'},{name:'Server update logs',value:'server'},{name:'Other logs',value:'other'}))
       .addChannelOption(o=>o.setName('channel').setDescription('Channel for this log group'))
       .addBooleanOption(o=>o.setName('enabled').setDescription('Enable or disable this log group')))
     .addSubcommand(sub=>sub.setName('muterole').setDescription('Set the Muted role').addRoleOption(o=>o.setName('role').setDescription('Muted role').setRequired(true)))
