@@ -65,8 +65,8 @@ client.once('ready', async () => {
   } catch (err) { console.error('[Slash sync failed]', err); }
 
   try {
-    const [{ startLoops }, { registerGlobalGameEvents }, { primeHelpApplicationEmojis }] = await Promise.all([import('./loops.js'), import('./globalGameEvents.js'), import('./commands/help.js')]);
-    registerGlobalGameEvents(client); startLoops(client); void primeHelpApplicationEmojis(client).catch(err => console.error('[Help emoji cache]', err));
+    const [{ startLoops }, { registerGlobalGameEvents }] = await Promise.all([import('./loops.js'), import('./globalGameEvents.js')]);
+    registerGlobalGameEvents(client); startLoops(client);
   } catch (err) { console.error('[Background startup failed]', err); }
 });
 
