@@ -3,6 +3,8 @@ import type { Command } from '../types.js';
 
 export const HELP_SELECT_CUSTOM_ID='sparxie_help_category';
 
+// These are APPLICATION EMOJI IDs supplied by the bot owner.
+// Do not guess their names: Discord is the source of truth for the emoji name.
 const CUSTOM_EMOJI_IDS:Record<string,string>={
   Setup:'1537371555754020924',
   Moderation:'1537383211611594913',
@@ -25,28 +27,8 @@ const CUSTOM_EMOJI_IDS:Record<string,string>={
   Profiles:'1550141116647743571'
 };
 
-const CUSTOM_EMOJI_NAMES:Record<string,string>={
-  Setup:'setup',
-  Moderation:'moderation',
-  Security:'security',
-  Channels:'channels',
-  Restrictions:'restrictions',
-  Utility:'utility',
-  Leveling:'leveling',
-  Tickets:'ticket',
-  Economy:'economy',
-  Games:'games',
-  Fun:'fun',
-  Giveaways:'giveaway',
-  Music:'music',
-  Social:'social',
-  'Blox Fruits':'bloxfruits',
-  AI:'ai',
-  Other:'others',
-  Premium:'premium',
-  Profiles:'profiles'
-};
-
+// Fallback names are only used if Discord cannot resolve an ID. They are NOT
+// used to build the primary custom emoji markup anymore.
 const FALLBACK_EMOJIS:Record<string,string>={
   Setup:'⚙️',Moderation:'🔨',Security:'🛡️',Channels:'📢',Restrictions:'🚫',Utility:'🛠️',
   Leveling:'📈',Roles:'🎭',Tickets:'🎫',Economy:'⚡',Games:'🎮',Fun:'🎉',Giveaways:'🎁',
@@ -57,19 +39,42 @@ const CATEGORY_ORDER=['Setup','Moderation','Security','Channels','Restrictions',
 const PREMIUM_SET=new Set((process.env.SPARXIE_PREMIUM_COMMANDS??'').split(/[\s,]+/i).map(x=>x.trim().toLowerCase()).filter(Boolean));
 const CATEGORY_MAP:Record<string,string>={setup:'Setup',autosetup:'Setup',setprefix:'Setup',levelconfig:'Leveling',embed:'Setup',welcome:'Setup',greet:'Setup',ban:'Moderation',kick:'Moderation',mute:'Moderation',unmute:'Moderation',timeout:'Moderation',warn:'Moderation',warnings:'Moderation',clearwarns:'Moderation',warnsleaderboard:'Moderation',nick:'Moderation',temprole:'Moderation',automod:'Security',antinuke:'Security',recovery:'Security',clearchannels:'Security',purge:'Channels',purgebots:'Channels',lock:'Channels',unlock:'Channels',slowmode:'Channels',invitelog:'Channels',chatban:'Restrictions',unchatban:'Restrictions',jail:'Restrictions',unjail:'Restrictions',afk:'Utility',remindme:'Utility',poll:'Utility',snipe:'Utility',editsnipe:'Utility',userinfo:'Utility',serverinfo:'Utility',autoresponder:'Utility',help:'Utility',ping:'Utility',uptime:'Utility',av:'Utility',banner:'Utility',rank:'Leveling',leaderboard:'Leveling',createrole:'Roles',roleassign:'Roles',joinrole:'Roles',reactionrole:'Roles',roleconnection:'Roles',inviterole:'Roles',extraowner:'Roles',uploademoji:'Roles',setbloxemojis:'Roles',ticket:'Tickets',closeticket:'Tickets',ticketpanel:'Tickets',coinleaderboard:'Economy',shop:'Economy',removeshop:'Economy',trade:'Economy',game:'Games',games:'Games',gamepolicy:'Games',roast:'Fun',gay:'Fun',pro:'Fun',noob:'Fun',ship:'Fun',cool:'Fun',aura:'Fun',funny:'Fun',sad:'Fun',angry:'Fun',legend:'Fun',giveaway:'Giveaways',giveawaydaily:'Giveaways',music:'Music',socialnotification:'Social',bloxemoji:'Blox Fruits',bloxscanner:'Blox Fruits',bloxvalue:'Blox Fruits',ai:'AI'};
 
+// Discord application emojis have their own canonical names. The old code
+// guessed names such as "setup", which can produce literal :setup: text when
+// the actual application emoji has a different name. Resolve the IDs once
+// from Discord and then use the returned emoji object's toString()/name.
+type ResolvedEmoji={id:string;name:string;animated:boolean;markup:string};
+const resolvedApplicationEmojis=new Map<string,ResolvedEmoji>();
+
+export async function primeHelpApplicationEmojis(client:any):Promise<void>{
+  try{
+    const manager=client?.application?.emojis;
+    if(!manager?.fetch)return;
+    const emojis=await manager.fetch();
+    for(const [category,id] of Object.entries(CUSTOM_EMOJI_IDS)){
+      const emoji=emojis.get(id);
+      if(emoji?.name){
+        resolvedApplicationEmojis.set(category,{id:emoji.id,name:emoji.name,animated:Boolean(emoji.animated),markup:emoji.toString()});
+      }else{
+        console.warn(`[Help] Application emoji not found for ${category}: ${id}`);
+      }
+    }
+  }catch(error){
+    console.warn('[Help] Could not fetch application emojis; using Unicode fallbacks.',error);
+  }
+}
+
 let commandRegistry:Command[]=[];
 export function setHelpCommandRegistry(commands:Command[]):void{commandRegistry=commands;}
 
 function customEmojiMarkup(category:string):string{
-  const id=CUSTOM_EMOJI_IDS[category];
-  const name=CUSTOM_EMOJI_NAMES[category]??category.toLowerCase().replace(/\s+/g,'');
-  return id?`<:${name}:${id}>`:(FALLBACK_EMOJIS[category]??FALLBACK_EMOJIS.Other);
+  return resolvedApplicationEmojis.get(category)?.markup ?? (FALLBACK_EMOJIS[category]??FALLBACK_EMOJIS.Other);
 }
 
 function emojiFor(category:string):string{return customEmojiMarkup(category);}
-function menuEmojiFor(category:string):{id:string;name:string}|string{
-  const id=CUSTOM_EMOJI_IDS[category];
-  return id?{id,name:CUSTOM_EMOJI_NAMES[category]??category.toLowerCase().replace(/\s+/g,'')}:(FALLBACK_EMOJIS[category]??FALLBACK_EMOJIS.Other);
+function menuEmojiFor(category:string):{id:string;name:string;animated?:boolean}|string{
+  const resolved=resolvedApplicationEmojis.get(category);
+  return resolved?{id:resolved.id,name:resolved.name,animated:resolved.animated}: (FALLBACK_EMOJIS[category]??FALLBACK_EMOJIS.Other);
 }
 function categoryFor(name:string):string{return CATEGORY_MAP[name.toLowerCase()]??'Other';}
 function resolveCommands(value:any):Command[]{if(Array.isArray(value)&&value.length&&value[0]?.data?.toJSON)return value as Command[];return commandRegistry;}
@@ -128,6 +133,10 @@ export function buildHelpMenu(category?:string|null,commands:any=commandRegistry
 export const help:Command={
   data:new SlashCommandBuilder().setName('help').setDescription('Open the complete Sparxie command directory').addStringOption(o=>o.setName('category').setDescription('Show one category').addChoices(...CATEGORY_ORDER.map(c=>({name:`${emojiFor(c)} ${c}`.slice(0,100),value:c.toLowerCase()})))),
   async execute(interaction){
+    // Resolve the actual application emoji names before constructing the embed/menu.
+    // This is the critical fix: the IDs stay exactly as supplied, while Discord
+    // supplies the canonical names needed for valid <name:id> markup.
+    await primeHelpApplicationEmojis(interaction.client);
     const prefix=(await import('../prefixHandler.js')).getGuildPrefix(interaction.guild?.id??'');
     const commands=Array.from(interaction.client.commands?.values?.()??commandRegistry);
     const filter=interaction.options.getString('category');
