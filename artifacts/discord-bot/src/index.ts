@@ -4,6 +4,7 @@ import { registerEvents } from './events/index.js';
 import { handleDashboardApi } from './dashboardApi.js';
 import { initStorage } from './storage.js';
 import { initGlobalAfk } from './globalAfk.js';
+import { startRecoveryScheduler } from './recoveryScheduler.js';
 
 const port = Number(process.env.PORT ?? 3000);
 const token = process.env.DISCORD_BOT_TOKEN?.trim();
@@ -22,6 +23,7 @@ registerEvents(client);
 
 client.once('ready', async () => {
   console.log(`✅ DISCORD ONLINE: logged in as ${client.user?.tag}`);
+  startRecoveryScheduler(client);
 
   try {
     const { game } = await import('./commands/games.js');
