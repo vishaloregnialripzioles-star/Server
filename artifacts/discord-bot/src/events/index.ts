@@ -1,20 +1,38 @@
 import type { Client } from 'discord.js';
-import { Events, AuditLogEvent } from 'discord.js';
+import { Events, AuditLogEvent, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, UserSelectMenuBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { auditLog } from '../auditLogger.js';
-import { deleteGuild } from '../storage.js';
+import { deleteGuild, loadGuild } from '../storage.js';
 import { registerBloxValueEvents } from '../bloxValueEvents.js';
 import { registerBloxValueIconEvents } from '../bloxValueIconEvents.js';
 import { registerBloxValueSync } from '../bloxValueSync.js';
 import { handleBloxEmojiInteraction, handleBloxEmojiModal } from '../commands/bloxemoji.js';
 import { registerEnhancedAutoMod } from './enhancedAutoMod.js';
 import { handleSecurityPrefix } from '../securityPrefix.js';
+import { closeTicketById, setTicketClaim } from '../ticketUtils.js';
 function safe(name:string,fn:(...args:any[])=>any){return(...args:any[])=>{try{Promise.resolve(fn(...args)).catch((err:unknown)=>console.error(`[${name}]`,err));}catch(err){console.error(`[${name}]`,err);}};}
 const EVENTS_REGISTERED=Symbol.for('sparxie.events.registered');const MESSAGE_PROCESSED=Symbol.for('sparxie.message.processed');const SECURITY_PREFIX_PROCESSED=Symbol.for('sparxie.security.prefix.processed');
 export function registerEvents(client:Client):void{
-if((client as any)[EVENTS_REGISTERED]){console.warn('[Events] registerEvents() called more than once; ignoring duplicate registration.');return;}
-(client as any)[EVENTS_REGISTERED]=true;registerBloxValueEvents(client);registerBloxValueIconEvents(client);registerBloxValueSync(client);registerEnhancedAutoMod(client);
+if((client as any)[EVENTS_REGISTERED]){console.warn('[Events] registerEvents() called more than once; ignoring duplicate registration.');return;} (client as any)[EVENTS_REGISTERED]=true;registerBloxValueEvents(client);registerBloxValueIconEvents(client);registerBloxValueSync(client);registerEnhancedAutoMod(client);
 client.once(Events.ClientReady,safe('ready',async(...args:any[])=>{const{handleReady}=await import('./ready.js');return handleReady(...args);}));
 client.on(Events.InteractionCreate,safe('bloxEmoji',async(interaction:any)=>{if(interaction?.isModalSubmit?.()&&String(interaction.customId).startsWith('bloxemoji:modal:'))return handleBloxEmojiModal(interaction);if((interaction?.isButton?.()||interaction?.isStringSelectMenu?.())&&String(interaction.customId).startsWith('bloxemoji:'))return handleBloxEmojiInteraction(interaction);}));
+client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=>{
+  const id=String(interaction?.customId??'');if(!interaction?.guild||!id.startsWith('ticket:'))return;
+  const parts=id.split(':');const action=parts[1],ticketId=parts[2];if(!action||!ticketId)return;
+  const data=loadGuild(interaction.guild.id),ticket=data.tickets[ticketId];if(!ticket||ticket.closed){await interaction.reply({content:'❌ This ticket is already closed or missing.',ephemeral:true}).catch(()=>undefined);return;}
+  const isStaff=Boolean(interaction.member?.permissions?.has?.(8n)||interaction.member?.permissions?.has?.(16n));
+  if(action==='open'&&interaction.isButton()){
+    const panel=(data.config.ticketPanels??{})[ticketId]??Object.values(data.config.ticketPanels??{}).find(p=>p.id===ticketId);const questions=panel?.questions??[];
+    if(!questions.length){const{createTicketForUser}=await import('../ticketUtils.js');const result=await createTicketForUser(interaction.guild,interaction.user,interaction.client,'Opened from ticket panel',panel?.name);await interaction.reply({content:result.success?`✅ Ticket created: <#${result.channel.id}>`:`❌ ${result.message}`,ephemeral:true});return;}
+    const modal=new ModalBuilder().setCustomId(`ticket:modal:${ticketId}`).setTitle((panel?.title??'Ticket Questions').slice(0,45));questions.slice(0,5).forEach((q,index)=>{const input=new TextInputBuilder().setCustomId(`q${index}`).setLabel(q.slice(0,45)).setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000);modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input));});await interaction.showModal(modal);return;
+  }
+  if(action==='claim'||action==='unclaim'){
+    if(!isStaff){await interaction.reply({content:'❌ Staff only.',ephemeral:true});return;}const result=await setTicketClaim(interaction.guild,ticketId,action==='claim'?interaction.user.id:null);await interaction.reply({content:result.message,ephemeral:true});return;
+  }
+  if(action==='close'){
+    if(!isStaff&&ticket.creatorId!==interaction.user.id){await interaction.reply({content:'❌ Only the ticket owner or staff can close this ticket.',ephemeral:true});return;}await interaction.deferReply({ephemeral:true});await closeTicketById(interaction.guild,ticketId,'Closed from ticket controls',interaction.user.tag);await interaction.editReply('🔒 Ticket closed. It will be deleted shortly.');return;
+  }
+}));
+client.on(Events.InteractionCreate,safe('ticketModal',async(interaction:any)=>{if(!interaction?.isModalSubmit?.()||!String(interaction.customId).startsWith('ticket:modal:')||!interaction.guild)return;const ticketId=String(interaction.customId).split(':')[2];const data=loadGuild(interaction.guild.id),ticket=data.tickets[ticketId];if(!ticket||ticket.closed){await interaction.reply({content:'❌ This ticket is no longer open.',ephemeral:true});return;}const panel=(data.config.ticketPanels??{})[ticket.panelId??''];const answers:Record<string,string>={};(panel?.questions??[]).slice(0,5).forEach((q,i)=>{answers[q]=interaction.fields.getTextInputValue(`q${i}`);});const{createTicketForUser}=await import('../ticketUtils.js');const result=await createTicketForUser(interaction.guild,interaction.user,'Opened from ticket panel',interaction.user.username,answers);await interaction.reply({content:result.success?`✅ Ticket created: <#${result.channel.id}>`:`❌ ${result.message}`,ephemeral:true});}));
 client.on(Events.InteractionCreate,safe('tradeModal',async(interaction:any)=>{if(interaction?.isModalSubmit?.()&&String(interaction.customId).startsWith('tradecalc:')){const{handleTradeModal}=await import('../commands/trade.js');return handleTradeModal(interaction);}}));
 client.on(Events.InteractionCreate,safe('clearChannelsButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('clearchannels:')){const{handleClearChannelsButton}=await import('../commands/clearchannels.js');return handleClearChannelsButton(interaction);}}));
 client.on(Events.InteractionCreate,safe('giveawayPreselectButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('gwcfg_selectwinner:')){const{handleGiveawayPreselectButton}=await import('./giveawayPreselect.js');return handleGiveawayPreselectButton(interaction);}if(interaction?.isUserSelectMenu?.()&&String(interaction.customId).startsWith('gwcfg_selectwinner_user:')){const{handleGiveawayPreselectUser}=await import('./giveawayPreselect.js');return handleGiveawayPreselectUser(interaction);}}));
