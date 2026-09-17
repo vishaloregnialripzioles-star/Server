@@ -1,3 +1,68 @@
-import type { Command } from '../types.js'; import { setup } from './setup.js'; import { invitelog } from './invitelog.js'; import { ban } from './ban.js'; import { kick } from './kick.js'; import { mute } from './mute.js'; import { unmute } from './unmute.js'; import { timeoutCommand } from './timeout.js'; import { warn } from './warn.js'; import { warnings } from './warnings.js'; import { clearwarns } from './clearwarns.js'; import { warnsLeaderboard } from './warnsleaderboard.js'; import { invites } from './invites.js'; import { inviterole } from './inviterole.js'; import { purge } from './purge.js'; import { purgebots } from './purgebots.js'; import { lock } from './lock.js'; import { unlock } from './unlock.js'; import { slowmode } from './slowmode.js'; import { chatban } from './chatban.js'; import { unchatban } from './unchatban.js'; import { jail } from './jail.js'; import { unjail } from './unjail.js'; import { nick } from './nick.js'; import { afk } from './afk.js'; import { remindme } from './remindme.js'; import { poll } from './poll.js'; import { snipe } from './snipe.js'; import { editsnipe } from './editsnipe.js'; import { userinfo } from './userinfo.js'; import { serverinfo } from './serverinfo.js'; import { temprole } from './temprole.js'; import { rank } from './rank.js'; import { leaderboard } from './leaderboard.js'; import { ticket } from './ticket.js'; import { closeticket } from './closeticket.js'; import { ticketpanel } from './ticketpanel.js'; import { roast } from './roast.js'; import { setprefix } from './setprefix.js'; import { gay } from './gay.js'; import { pro } from './pro.js'; import { noob } from './noob.js'; import { ship } from './ship.js'; import { autoresponder } from './autoresponder.js'; import { help } from './help.js'; import { levelconfig } from './levelconfig.js'; import { createrole } from './createrole.js'; import { roleassign } from './roleassign.js'; import { giveaway } from './giveaway.js'; import { giveawayDaily } from './giveawaydaily.js'; import { automod } from './automod.js'; import { music } from './music.js'; import { embedCmd } from './embed.js'; import { welcome } from './welcome.js'; import { greet } from './greet.js'; import { gamePolicy } from './gamePolicy.js'; import { game } from './games.js'; import { games } from './gamesInfo.js'; import { coinLeaderboard } from './sparks.js'; import { shop } from './shop.js'; import { removeshop } from './removeshop.js'; import { antinuke } from './antinuke.js'; import { extraowner } from './extraowner.js'; import { recovery } from './recovery.js'; import { joinrole } from './joinrole.js'; import { reactionrole } from './reactionrole.js'; import { socialnotification } from './socialnotification.js'; import { roleconnection } from './roleconnection.js'; import { ai } from './ai.js'; import { autosetup } from './autosetup.js'; import { clearchannels } from './clearchannels.js'; import { trade } from './trade.js'; import { uploademoji } from './uploademoji.js'; import { bloxemoji } from './bloxemoji.js'; import { setbloxemojis } from './setbloxemojis.js'; import { bloxscanner } from '../bloxScanner.js'; import { av } from './av.js'; import { banner } from './banner.js'; import { ping } from './ping.js'; import { uptime } from './uptime.js'; import { cool, aura, funny, sad, angry, legend } from './funCommands.js'; import { memberactivity, activity } from './memberactivity.js'; import { setHelpCommandRegistry } from './help.js';
-export const allCommands: Command[] = [setup,invitelog,ban,kick,mute,unmute,timeoutCommand,warn,warnings,clearwarns,warnsLeaderboard,invites,inviterole,purge,purgebots,lock,unlock,slowmode,chatban,unchatban,jail,unjail,nick,afk,remindme,poll,snipe,editsnipe,userinfo,serverinfo,temprole,rank,leaderboard,ticket,closeticket,ticketpanel,roast,setprefix,gay,pro,noob,ship,autoresponder,help,levelconfig,createrole,roleassign,giveaway,giveawayDaily,automod,music,embedCmd,welcome,greet,gamePolicy,game,games,coinLeaderboard,shop,removeshop,antinuke,extraowner,recovery,joinrole,reactionrole,socialnotification,roleconnection,ai,autosetup,clearchannels,trade,uploademoji,bloxemoji,setbloxemojis,bloxscanner,av,banner,ping,uptime,cool,aura,funny,sad,angry,legend,memberactivity,activity];
-setHelpCommandRegistry(allCommands);
+import type { Command } from '../types.js';
+
+/**
+ * Load commands one module at a time so one broken/optional command cannot
+ * prevent the rest of the slash commands from being registered.
+ */
+async function load(path: string, exportName: string): Promise<Command | null> {
+  try {
+    const module = await import(path) as Record<string, unknown>;
+    const command = module[exportName] as Command | undefined;
+    if (!command?.data?.toJSON) {
+      console.error(`[Command loader] ${path} does not export ${exportName}`);
+      return null;
+    }
+    return command;
+  } catch (error) {
+    console.error(`[Command loader] Failed to load ${path} (${exportName})`, error);
+    return null;
+  }
+}
+
+const definitions: Array<[string, string]> = [
+  ['./setup.js', 'setup'], ['./invitelog.js', 'invitelog'], ['./ban.js', 'ban'], ['./kick.js', 'kick'],
+  ['./mute.js', 'mute'], ['./unmute.js', 'unmute'], ['./timeout.js', 'timeoutCommand'], ['./warn.js', 'warn'],
+  ['./warnings.js', 'warnings'], ['./clearwarns.js', 'clearwarns'], ['./warnsleaderboard.js', 'warnsLeaderboard'],
+  ['./invites.js', 'invites'], ['./inviterole.js', 'inviterole'], ['./purge.js', 'purge'], ['./purgebots.js', 'purgebots'],
+  ['./lock.js', 'lock'], ['./unlock.js', 'unlock'], ['./slowmode.js', 'slowmode'], ['./chatban.js', 'chatban'],
+  ['./unchatban.js', 'unchatban'], ['./jail.js', 'jail'], ['./unjail.js', 'unjail'], ['./nick.js', 'nick'],
+  ['./afk.js', 'afk'], ['./remindme.js', 'remindme'], ['./poll.js', 'poll'], ['./snipe.js', 'snipe'],
+  ['./editsnipe.js', 'editsnipe'], ['./userinfo.js', 'userinfo'], ['./serverinfo.js', 'serverinfo'], ['./temprole.js', 'temprole'],
+  ['./rank.js', 'rank'], ['./leaderboard.js', 'leaderboard'], ['./ticket.js', 'ticket'], ['./closeticket.js', 'closeticket'],
+  ['./ticketpanel.js', 'ticketpanel'], ['./roast.js', 'roast'], ['./setprefix.js', 'setprefix'], ['./gay.js', 'gay'],
+  ['./pro.js', 'pro'], ['./noob.js', 'noob'], ['./ship.js', 'ship'], ['./autoresponder.js', 'autoresponder'],
+  ['./help.js', 'help'], ['./levelconfig.js', 'levelconfig'], ['./createrole.js', 'createrole'], ['./roleassign.js', 'roleassign'],
+  ['./giveaway.js', 'giveaway'], ['./giveawaydaily.js', 'giveawayDaily'], ['./automod.js', 'automod'], ['./music.js', 'music'],
+  ['./embed.js', 'embedCmd'], ['./welcome.js', 'welcome'], ['./greet.js', 'greet'], ['./gamePolicy.js', 'gamePolicy'],
+  ['./games.js', 'game'], ['./gamesInfo.js', 'games'], ['./sparks.js', 'coinLeaderboard'], ['./shop.js', 'shop'],
+  ['./removeshop.js', 'removeshop'], ['./antinuke.js', 'antinuke'], ['./extraowner.js', 'extraowner'], ['./recovery.js', 'recovery'],
+  ['./joinrole.js', 'joinrole'], ['./reactionrole.js', 'reactionrole'], ['./socialnotification.js', 'socialnotification'],
+  ['./roleconnection.js', 'roleconnection'], ['./ai.js', 'ai'], ['./autosetup.js', 'autosetup'], ['./clearchannels.js', 'clearchannels'],
+  ['./trade.js', 'trade'], ['./uploademoji.js', 'uploademoji'], ['./bloxemoji.js', 'bloxemoji'], ['./setbloxemojis.js', 'setbloxemojis'],
+  ['../bloxScanner.js', 'bloxscanner'], ['./av.js', 'av'], ['./banner.js', 'banner'], ['./ping.js', 'ping'], ['./uptime.js', 'uptime'],
+  ['./funCommands.js', 'cool'], ['./funCommands.js', 'aura'], ['./funCommands.js', 'funny'], ['./funCommands.js', 'sad'],
+  ['./funCommands.js', 'angry'], ['./funCommands.js', 'legend'], ['./memberactivity.js', 'memberactivity'], ['./memberactivity.js', 'activity'],
+];
+
+const loaded: Command[] = [];
+for (const [path, exportName] of definitions) {
+  const command = await load(path, exportName);
+  if (command) loaded.push(command);
+}
+
+// De-duplicate command names in case a module is intentionally loaded twice.
+const seen = new Set<string>();
+export const allCommands: Command[] = loaded.filter(command => {
+  const name = command.data.name;
+  if (seen.has(name)) return false;
+  seen.add(name);
+  return true;
+});
+
+const helpCommand = allCommands.find(command => command.data.name === 'help');
+if (helpCommand) {
+  const { setHelpCommandRegistry } = await import('./help.js');
+  setHelpCommandRegistry(allCommands);
+}
+
+console.log(`📦 Command loader ready: ${allCommands.length}/${definitions.length} commands loaded`);
