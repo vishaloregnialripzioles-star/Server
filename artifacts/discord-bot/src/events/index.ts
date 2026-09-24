@@ -1,5 +1,5 @@
 import type { Client } from 'discord.js';
-import { Events, AuditLogEvent, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
+import { Events, AuditLogEvent, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, type TextChannel } from 'discord.js';
 import { auditLog } from '../auditLogger.js';
 import { deleteGuild, loadGuild } from '../storage.js';
 import { registerBloxValueEvents } from '../bloxValueEvents.js';
@@ -8,7 +8,7 @@ import { registerBloxValueSync } from '../bloxValueSync.js';
 import { handleBloxEmojiInteraction, handleBloxEmojiModal } from '../commands/bloxemoji.js';
 import { registerEnhancedAutoMod } from './enhancedAutoMod.js';
 import { handleSecurityPrefix } from '../securityPrefix.js';
-import { closeTicketById, setTicketClaim, createTicketForUser } from '../ticketUtils.js';
+import { closeTicketById, setTicketClaim, createTicketForUser, reopenTicketById, buildTicketTranscript } from '../ticketUtils.js';
 function safe(name:string,fn:(...args:any[])=>any){return(...args:any[])=>{try{Promise.resolve(fn(...args)).catch((err:unknown)=>console.error(`[${name}]`,err));}catch(err){console.error(`[${name}]`,err);}};}
 const EVENTS_REGISTERED=Symbol.for('sparxie.events.registered');const MESSAGE_PROCESSED=Symbol.for('sparxie.message.processed');const SECURITY_PREFIX_PROCESSED=Symbol.for('sparxie.security.prefix.processed');
 export function registerEvents(client:Client):void{
@@ -32,9 +32,31 @@ client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=
     questions.slice(0,5).forEach((q,index)=>modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('q'+index).setLabel(q.slice(0,45)).setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000))));
     await interaction.showModal(modal);return;
   }
-  const ticket=data.tickets[targetId];if(!ticket||ticket.closed){await interaction.reply({content:'❌ This ticket is already closed or missing.',ephemeral:true});return;}
+  const ticket=data.tickets[targetId];
+  if(!ticket){await interaction.reply({content:'❌ This ticket no longer exists.',ephemeral:true});return;}
   const isStaff=Boolean(interaction.member?.permissions?.has?.(8n)||interaction.member?.permissions?.has?.(16n));
-  if(action==='claim'||action==='unclaim'){if(!isStaff){await interaction.reply({content:'❌ Staff only.',ephemeral:true});return;}const result=await setTicketClaim(interaction.guild,targetId,action==='claim'?interaction.user.id:null);await interaction.reply({content:result.message,ephemeral:true});return;}
+  if(action==='save'){
+    if(!isStaff&&ticket.creatorId!==interaction.user.id){await interaction.reply({content:'❌ Only staff or the ticket owner can save a transcript.',ephemeral:true});return;}
+    const logId=data.config.transcriptLogChannel;
+    const logChannel=logId?await interaction.guild.channels.fetch(logId).catch(()=>null) as TextChannel|null:null;
+    if(!logChannel?.isTextBased?.()){await interaction.reply({content:'❌ No valid transcript logging channel is configured. Use /transcripts set first.',ephemeral:true});return;}
+    await interaction.deferReply({ephemeral:true});
+    const attachment=await buildTicketTranscript(interaction.channel as TextChannel,ticket.id);
+    await logChannel.send({embeds:[new EmbedBuilder().setColor(0x5865F2).setTitle('📄 Ticket Transcript').setDescription('Transcript for ticket '+ticket.id+' from <#'+ticket.channelId+'>.').addFields({name:'Ticket Owner',value:'<@'+ticket.creatorId+'>',inline:true},{name:'Saved By',value:'<@'+interaction.user.id+'>',inline:true}).setTimestamp()],files:[attachment]});
+    await interaction.editReply('✅ Transcript saved to <#'+logId+'>.');return;
+  }
+  if(action==='reopen'){
+    if(!ticket.closed){await interaction.reply({content:'❌ This ticket is already open.',ephemeral:true});return;}
+    if(!isStaff&&ticket.creatorId!==interaction.user.id){await interaction.reply({content:'❌ Only staff or the ticket owner can reopen this ticket.',ephemeral:true});return;}
+    const ok=await reopenTicketById(interaction.guild,targetId);await interaction.reply({content:ok?'🔓 Ticket reopened successfully.':'❌ I could not reopen this ticket.',ephemeral:true});return;
+  }
+  if(action==='delete'){
+    if(!ticket.closed){await interaction.reply({content:'❌ Close the ticket first.',ephemeral:true});return;}
+    if(!isStaff){await interaction.reply({content:'❌ Staff only.',ephemeral:true});return;}
+    await interaction.reply({content:'🗑️ Closing this ticket permanently…',ephemeral:true});
+    await interaction.channel?.delete('Ticket permanently closed by '+interaction.user.tag).catch(()=>undefined);return;
+  }
+  if(ticket.closed){await interaction.reply({content:'❌ This ticket is closed. Use Reopen to continue.',ephemeral:true});return;}  if(action==='claim'||action==='unclaim'){if(!isStaff){await interaction.reply({content:'❌ Staff only.',ephemeral:true});return;}const result=await setTicketClaim(interaction.guild,targetId,action==='claim'?interaction.user.id:null);await interaction.reply({content:result.message,ephemeral:true});return;}
   if(action==='close'){if(!isStaff&&ticket.creatorId!==interaction.user.id){await interaction.reply({content:'❌ Only the ticket owner or staff can close this ticket.',ephemeral:true});return;}await interaction.deferReply({ephemeral:true});await closeTicketById(interaction.guild,targetId,'Closed from ticket controls',interaction.user.tag);await interaction.editReply('🔒 Ticket closed. It will be deleted shortly.');return;}
 }));
 client.on(Events.InteractionCreate,safe('ticketModal',async(interaction:any)=>{if(!interaction?.isModalSubmit?.()||!String(interaction.customId).startsWith('ticket:modal:')||!interaction.guild)return;const modalParts=String(interaction.customId).split(':');const panelId=modalParts[2];const optionId=modalParts[3];const data=loadGuild(interaction.guild.id);const panel=Object.values(data.config.ticketPanels??{}).find(p=>p.id===panelId)||(data.config.ticketPanels??{})[panelId];if(!panel){await interaction.reply({content:'❌ This ticket panel no longer exists.',ephemeral:true});return;}const option=optionId?panel.options?.find(item=>item.id===optionId):undefined;if(optionId&&!option){await interaction.reply({content:'❌ That ticket category is no longer available.',ephemeral:true});return;}const questions=option?.questions??panel.questions;const answers:Record<string,string>={};questions.slice(0,5).forEach((q,i)=>{answers[q]=interaction.fields.getTextInputValue('q'+i);});const reason=answers[questions[0]]??'Opened from ticket panel';const result=await createTicketForUser(interaction.guild,interaction.user,interaction.client,reason,panel.name,answers,option?.id);await interaction.reply({content:result.success?'✅ Ticket created: <#'+result.channel.id+'>':'❌ '+result.message,ephemeral:true});}));
