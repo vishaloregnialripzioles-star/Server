@@ -25,6 +25,7 @@ const mentionedBot=!!botId&&message.mentions.users.has(botId);
 if(aiConfig.aiChannelId===message.channelId&&mentionedBot&&!message.content.startsWith('/')&&!message.content.startsWith(commandPrefix)){
 const prompt=botId?message.content.replace(new RegExp('<@!?' + botId + '>','g'),'').trim():message.content.trim();
 if(prompt){
+await message.channel.sendTyping().catch(()=>undefined);
 const answer=await askAI(message.guild.id,message.author.id,prompt);
 await message.reply({content:answer.slice(0,1900),allowedMentions:{parse:[]}}).catch(error=>console.error('[AI] Discord reply failed:',error));
 return;
