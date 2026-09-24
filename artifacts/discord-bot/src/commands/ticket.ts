@@ -23,7 +23,6 @@ export const ticket: Command = {
   data: new SlashCommandBuilder()
     .setName('ticket')
     .setDescription('Create, send and manage ticket panels')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addSubcommand(s => s.setName('create').setDescription('Create a ticket panel')
       .addStringOption(o => o.setName('name').setDescription('Unique panel name').setRequired(true).setMaxLength(32))
       .addStringOption(o => o.setName('title').setDescription('Panel title').setRequired(true).setMaxLength(256))
@@ -72,6 +71,11 @@ export const ticket: Command = {
     if (!interaction.guild) return;
     await interaction.deferReply({ ephemeral: true });
     const sub=interaction.options.getSubcommand();
+    const managementSubcommands=new Set(['create','send','edit','delete','list','option-add','option-list','option-remove']);
+    if (managementSubcommands.has(sub) && !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+      await interaction.editReply('❌ You need Manage Server permission to manage ticket panels.');
+      return;
+    }
 
     if (sub==='create') {
       const name=cleanPanelName(interaction.options.getString('name', true));
