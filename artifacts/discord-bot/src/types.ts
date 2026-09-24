@@ -28,7 +28,7 @@ export interface Reminder { id: string; userId: string; channelId: string; guild
 export interface StarboardEntry { starboardMessageId: string; count: number; }
 export interface SnipedMessage { content: string; authorId: string; authorName: string; authorAvatar: string | null; timestamp: number; imageUrl?: string; }
 export interface TempRole { id: string; guildId: string; userId: string; roleId: string; position: number; expiresAt: number; }
-export interface Ticket { id: string; channelId: string; creatorId: string; createdAt: number; closed: boolean; panelId?: string; assignedStaffId?: string; }
+export interface Ticket { id: string; channelId: string; creatorId: string; createdAt: number; closed: boolean; panelId?: string; panelOptionId?: string; assignedStaffId?: string; }
 export interface AutoResponder { trigger: string; response: string; }
 export interface EmbedField { name: string; value: string; inline?: boolean; }
 export interface SavedEmbed { name: string; title?: string; description?: string; color?: number; thumbnailUrl?: string; imageUrl?: string; footerText?: string; footerIconUrl?: string; authorName?: string; authorIconUrl?: string; timestamp?: boolean; fields?: EmbedField[]; }
