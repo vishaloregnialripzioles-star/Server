@@ -1,0 +1,5 @@
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import type { Command } from '../types.js';
+import { loadGuild } from '../storage.js';
+import { buildEmbedPreview } from '../welcomeUtils.js';
+export const embedpreview: Command = { data:new SlashCommandBuilder().setName('embedpreview').setDescription('Preview a saved embed').setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).addStringOption(o=>o.setName('name').setDescription('Embed name').setRequired(true)), async execute(i){if(!i.guild)return;await i.deferReply({ephemeral:true});const name=i.options.getString('name',true).toLowerCase().trim(),saved=loadGuild(i.guild.id).savedEmbeds?.[name];if(!saved){await i.editReply('Embed not found.');return;}await i.editReply({content:'Preview: '+name,embeds:[buildEmbedPreview(saved)]});} };
