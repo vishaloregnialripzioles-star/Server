@@ -9,7 +9,8 @@ export type LoggingCategorySetting = boolean | string;
 export interface LoggingConfig { enabled?: boolean; channelId?: string; categories?: Record<string, LoggingCategorySetting>; channels?: Record<string, string>; }
 export interface GiveawayDailyConfig { enabled: boolean; channelId?: string; message?: string; }
 export interface JoinRoleConfig { enabled: boolean; roleId?: string; }
-export interface SocialNotificationConfig { enabled: boolean; platform?: string; channelId?: string; message?: string; source?: string; lastVideoId?: string; channelIds?: string[]; }\nexport interface YouTubeNotification { id: string; channelId: string; channelName: string; source: string; discordChannelId: string; message: string; enabled: boolean; lastVideoId?: string; }
+export interface SocialNotificationConfig { enabled: boolean; platform?: string; channelId?: string; message?: string; source?: string; lastVideoId?: string; channelIds?: string[]; }
+export interface YouTubeNotification { id: string; channelId: string; channelName: string; source: string; discordChannelId: string; message: string; enabled: boolean; lastVideoId?: string; }
 export interface ReactionRoleConfig { [messageId: string]: Record<string, string>; }
 export interface RoleConnectionConfig { enabled: boolean; channelId?: string; roleId?: string; message?: string; }
 export interface BloxScannerScreenshot { url: string; messageId: string; createdAt: number; }
