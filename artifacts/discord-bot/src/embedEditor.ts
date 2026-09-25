@@ -100,16 +100,38 @@ function makeEmojiModal(s:Session){
   return m;
 }
 
+async function emojiMarkup(i:Interaction,id:string):Promise<string|null>{
+  const clean=id.trim().match(/^<a?:[^:>]+:(\d+)>$/)?.[1]??id.trim();
+  if(!/^\d{17,20}$/.test(clean))return null;
+  try{
+    const currentGuild=(i as any).guild;
+    const cached=currentGuild?.emojis?.cache?.get(clean);
+    if(cached)return cached.toString();
+    const fetched=await currentGuild?.emojis?.fetch?.(clean).catch(()=>null);
+    if(fetched)return fetched.toString();
+  }catch{}
+  try{
+    const appEmoji=await (i.client as any).application?.emojis?.fetch(clean);
+    if(appEmoji)return appEmoji.toString();
+  }catch{}
+  try{
+    for(const guild of i.client.guilds.cache.values()){
+      const cached=guild.emojis.cache.get(clean);
+      if(cached)return cached.toString();
+    }
+  }catch{}
+  return null;
+}
+
 async function replaceEmojiIdsInText(i:Interaction,text:string):Promise<string>{
   let out=text;
-  const ids=[...new Set([...text.matchAll(/(?<!\\d)(\\d{17,20})(?!\\d)/g)].map(m=>m[1]))];
+  const ids=[...new Set([...text.matchAll(/(?<!\d)(\d{17,20})(?!\d)/g)].map(m=>m[1]))];
   for(const id of ids){
     const token=await emojiMarkup(i,id);
     if(token)out=out.split(id).join(token);
   }
   return out;
 }
-
 
 async function normalize(s:SavedEmbed,i:Interaction){
   for(const field of allTextFields(s)){
@@ -240,7 +262,13 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
         s.draft.title=i.fields.getTextInputValue('title').trim()||undefined;
         s.draft.description=i.fields.getTextInputValue('description').trim()||undefined;
       }
-      await i.deferUpdate();await render(i,sid);
+      await i.deferReply({ephemeral:true});
+      if(i.isModalSubmit() && i.message){
+        await i.message.edit(renderPayload(s));
+        await i.deleteReply().catch(()=>undefined);
+      }else{
+        await i.editReply({content:'✅ Changes staged in the embed editor.'});
+      }
     }catch(error){await i.reply({content:'❌ '+(error instanceof Error?error.message:'Could not apply that change.'),ephemeral:true}).catch(()=>undefined);}
     return true;
   }
@@ -248,7 +276,15 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
   if(!s){await i.reply({content:'❌ This editor session expired. Run /embed-edit again.',ephemeral:true}).catch(()=>undefined);return true;}
   if(i.user.id!==s.userId||i.guildId!==s.guildId||!isEmbedEditorOwner(i.user.id)){await i.reply({content:'🔒 This editor belongs to an authorized user only.',ephemeral:true}).catch(()=>undefined);return true;}
   if(action==='done'&&i.isButton()){
-    try{await normalize(s.draft,i);updateGuild(s.guildId,d=>{d.savedEmbeds??={};d.savedEmbeds[s.name]=savedFromDraft(s.name,s.sourceKey,s.draft,s.original);});const saved=loadGuild(s.guildId).savedEmbeds[s.name];sessions.delete(sid);await i.update({content:'✅ **'+s.name+'** was updated successfully and saved permanently.\nEveryone using this command will now receive the edited embed.',embeds:[buildEmbedPreview(saved)],components:[]});}
+    try{
+      await normalize(s.draft,i);
+      const savedDraft=savedFromDraft(s.name,s.sourceKey,s.draft,s.original);
+      savedDraft.placeholder=false;
+      updateGuild(s.guildId,d=>{d.savedEmbeds??={};d.savedEmbeds[s.name]=savedDraft;});
+      const saved=loadGuild(s.guildId).savedEmbeds[s.name];
+      sessions.delete(sid);
+      await i.update({content:'✅ **'+s.name+'** was updated successfully and saved permanently.\nEveryone using this command will now receive the edited embed.',embeds:[buildEmbedPreview(saved)],components:[]});
+    }
     catch(error){console.error('[EmbedEditor] Save failed:',error);await i.reply({content:'❌ I could not save this embed. No permanent changes were made.',ephemeral:true}).catch(()=>undefined);}
     return true;
   }
