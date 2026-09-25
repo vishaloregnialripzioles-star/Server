@@ -1,6 +1,6 @@
 import { EmbedBuilder, type ChatInputCommandInteraction } from 'discord.js';
 import type { SavedEmbed } from './types.js';
-import { loadGuild } from './storage.js';
+import { loadGuild, updateGuild } from './storage.js';
 
 export type EditableEmbedDefinition = {
   name: string;
@@ -195,5 +195,5 @@ export function captureCommandEmbed(guildId:string,commandName:string,embed:Embe
   const base=toSaved(name,sourceKey,embed);
   // Auto-register the first real embed a command emits so the editor grows with the bot.
   // It is intentionally stored only as an editable baseline, not as a user override.
-  loadGuild(guildId).savedEmbeds[name]=base;
+  updateGuild(guildId,d=>{d.savedEmbeds??={};if(!d.savedEmbeds[name])d.savedEmbeds[name]=base;});
 }
