@@ -145,11 +145,6 @@ export async function buildCurrentEditableEmbed(i:ChatInputCommandInteraction,na
   const saved=loadGuild(i.guildId!).savedEmbeds?.[def.name];
   if(!saved)return {draft:original,original,sourceKey:def.sourceKey};
   if(Array.isArray(saved.overrideFields)){
-    const current:any=original,d:any=merged;
-    for(const key of Object.keys(current) as Array<keyof SavedEmbed>){
-      if(key==='name'||key==='sourceKey'||key==='overrideFields')continue;
-      if(!saved.overrideFields.includes(key))delete (d as any)[key];
-    }
     const normalized:SavedEmbed={...original,name:def.name,sourceKey:def.sourceKey,overrideFields:saved.overrideFields};
     for(const key of saved.overrideFields)if(key in saved)(normalized as any)[key]=(saved as any)[key];
     return {draft:normalized,original,sourceKey:def.sourceKey};
@@ -191,7 +186,8 @@ export function captureCommandEmbed(guildId:string,commandName:string,embed:Embe
   const sourceKey=commandName==='ticket'?'ticket:create':commandName==='closeticket'?'ticket:close':commandName;
   const current=loadGuild(guildId).savedEmbeds?.[name];
   if(current)return;
-  const base=toSaved(name,sourceKey,embed);\n  base.overrideFields=[];
+  const base=toSaved(name,sourceKey,embed);
+  base.overrideFields=[];
   // Auto-register the first real embed a command emits so the editor grows with the bot.
   // It is intentionally stored only as an editable baseline, not as a user override.
   updateGuild(guildId,d=>{d.savedEmbeds??={};if(!d.savedEmbeds[name])d.savedEmbeds[name]=base;});
