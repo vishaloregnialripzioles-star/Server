@@ -134,14 +134,12 @@ export function buildHelpMenu(category?:string|null,commands:any=commandRegistry
 export const help:Command={
   data:new SlashCommandBuilder().setName('help').setDescription('Open the complete Sparxie command directory').addStringOption(o=>o.setName('category').setDescription('Show one category').addChoices(...CATEGORY_ORDER.map(c=>({name:`${emojiFor(c)} ${c}`.slice(0,100),value:c.toLowerCase()})))),
   async execute(interaction){
-    // Resolve the actual application emoji names before constructing the embed/menu.
-    // This is the critical fix: the IDs stay exactly as supplied, while Discord
-    // supplies the canonical names needed for valid <name:id> markup.
+    await interaction.deferReply();
     await primeHelpApplicationEmojis(interaction.client);
     const prefix=(await import('../prefixHandler.js')).getGuildPrefix(interaction.guild?.id??'');
     const commands=Array.from(interaction.client.commands?.values?.()??commandRegistry);
     const filter=interaction.options.getString('category');
-    if(filter&&!findHelpCategory(filter,commands,prefix)){await interaction.reply({content:'❌ Unknown help category.',ephemeral:true});return;}
-    await interaction.reply({embeds:[buildHelpEmbed(filter,prefix,commands)],components:[buildHelpMenu(filter,commands,prefix)]});
+    if(filter&&!findHelpCategory(filter,commands,prefix)){await interaction.editReply({content:'❌ Unknown help category.',embeds:[],components:[]});return;}
+    await interaction.editReply({embeds:[buildHelpEmbed(filter,prefix,commands)],components:[buildHelpMenu(filter,commands,prefix)]});
   }
 };
