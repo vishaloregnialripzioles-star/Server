@@ -125,23 +125,18 @@ async function emojiMarkup(i:Interaction,id:string):Promise<string|null>{
 
 async function replaceEmojiIdsInText(i:Interaction,text:string):Promise<string>{
   let out=text;
-  const ids=[...new Set([...text.matchAll(/(?<!\d)(\d{17,20})(?!\d)/g)].map(m=>m[1]))];
+  const ids=[...new Set([...text.matchAll(/(?<!\\d)(\\d{17,20})(?!\\d)/g)].map(m=>m[1]))];
   for(const id of ids){
     const token=await emojiMarkup(i,id);
-    // If the emoji is not cached/fetchable, still convert the numeric ID into
-    // Discord custom-emoji markup. Discord resolves the ID when the bot can
-    // use that emoji, and the editor keeps the exact position the user typed.
-    if(token)out=out.split(id).join(token);
-    else out=out.split(id).join('<:emoji:'+id+'>');
+    if(!token)throw new Error('Emoji ID '+id+' could not be resolved in this server or the bot application. Make sure the bot can use that emoji.');
+    out=out.split(id).join(token);
   }
   return out;
 }
 
 async function normalize(s:SavedEmbed,i:Interaction){
-  for(const field of allTextFields(s)){
-    const value=field.get();if(!value)continue;
-    field.set(await replaceEmojiIdsInText(i,value));
-  }
+  if(s.title)s.title=await replaceEmojiIdsInText(i,s.title);
+  if(s.description)s.description=await replaceEmojiIdsInText(i,s.description);
 }
 
 function input(id:string,label:string,value:string,style:TextInputStyle,required=false,maxLength=4000){
