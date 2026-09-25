@@ -1,7 +1,29 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import type { Command } from '../types.js';
 import { loadGuild } from '../storage.js';
 import { levelFromXp } from '../utils.js';
+const KEY_PERMISSIONS=[
+  ['Administrator',PermissionFlagsBits.Administrator],
+  ['Manage Server',PermissionFlagsBits.ManageGuild],
+  ['Manage Channels',PermissionFlagsBits.ManageChannels],
+  ['Manage Roles',PermissionFlagsBits.ManageRoles],
+  ['Manage Messages',PermissionFlagsBits.ManageMessages],
+  ['Kick Members',PermissionFlagsBits.KickMembers],
+  ['Ban Members',PermissionFlagsBits.BanMembers],
+  ['Timeout Members',PermissionFlagsBits.ModerateMembers],
+  ['Manage Nicknames',PermissionFlagsBits.ManageNicknames],
+  ['Manage Webhooks',PermissionFlagsBits.ManageWebhooks],
+  ['View Audit Log',PermissionFlagsBits.ViewAuditLog],
+  ['Mention Everyone',PermissionFlagsBits.MentionEveryone],
+  ['Manage Threads',PermissionFlagsBits.ManageThreads],
+] as const;
+
+function permissionSummary(member:any,guildOwnerId:string):string{
+  if(member.id===guildOwnerId)return 'Server Owner';
+  const granted=KEY_PERMISSIONS.filter(([,bit])=>member.permissions.has(bit)).map(([name])=>name);
+  return granted.length?granted.map(name=>`**${name}**`).join(', '):'No key permissions';
+}
+
 
 export const userinfo: Command = {
   data: new SlashCommandBuilder()
@@ -31,23 +53,42 @@ export const userinfo: Command = {
           .join(' ') || 'None'
       : 'N/A';
 
+    const roles = member
+      ? [...member.roles.cache.values()]
+          .filter(r => r.id !== interaction.guild!.id)
+          .sort((a, b) => b.position - a.position)
+      : [];
+    const roleText = roles.length
+      ? roles.slice(0, 12).map(r => `<@&${r.id}>`).join(' ') + (roles.length > 12 ? ` +${roles.length - 12} more` : '')
+      : 'None';
+
     const embed = new EmbedBuilder()
-      .setColor(member?.displayHexColor ?? 0x5865F2)
-      .setTitle(`👤 ${target.tag}`)
+      .setColor(member?.displayHexColor ?? 0x111827)
+      .setAuthor({ name: member?.displayName ?? target.username, iconURL: target.displayAvatarURL({ size: 128 }) })
+      .setTitle('User Information')
       .setThumbnail(target.displayAvatarURL({ size: 256 }))
       .addFields(
-        { name: '🆔 User ID', value: target.id, inline: true },
-        { name: '🤖 Bot', value: target.bot ? 'Yes' : 'No', inline: true },
-        { name: '📅 Account Created', value: `<t:${Math.floor(target.createdTimestamp / 1000)}:D>`, inline: true },
+        { name: 'Username', value: `@${target.username}`, inline: true },
+        { name: 'User ID', value: `\\${target.id}\\`, inline: true },
+        { name: 'Account Type', value: target.bot ? 'Bot' : 'User', inline: true },
+        { name: 'Account Created', value: `<t:${Math.floor(target.createdTimestamp / 1000)}:F>`, inline: true },
         ...(member ? [
-          { name: '📥 Joined Server', value: `<t:${Math.floor((member.joinedTimestamp ?? 0) / 1000)}:D>`, inline: true },
-          { name: '🎨 Display Name', value: member.displayName, inline: true },
-          { name: '📈 Level', value: `${level} (${xp.toLocaleString()} XP)`, inline: true },
-          { name: '⚠️ Warnings', value: `${warnCount}`, inline: true },
-          { name: `🎭 Roles [${member.roles.cache.size - 1}]`, value: roles },
+          { name: 'Joined Server', value: member.joinedTimestamp ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:F>` : 'Unknown', inline: true },
+          { name: 'Highest Role', value: member.roles.highest.id === interaction.guild.id ? '@everyone' : `<@&${member.roles.highest.id}>`, inline: true },
+          { name: 'Key Permissions', value: permissionSummary(member, interaction.guild.ownerId), inline: false },
+          { name: `Roles (${roles.length})`, value: roleText, inline: false },
+          { name: 'Level', value: `${level} • ${xp.toLocaleString()} XP`, inline: true },
+          { name: 'Warnings', value: String(warnCount), inline: true },
+          { name: 'Server Boost', value: member.premiumSince ? 'Yes' : 'No', inline: true },
+          { name: 'Voice', value: member.voice.channelId ? 'Connected' : 'Not in voice', inline: true },
         ] : []),
       )
+      .setFooter({ text: `Sparxie • ${interaction.guild.name}` })
       .setTimestamp();
+
+    if (member?.communicationDisabledUntilTimestamp) {
+      embed.addFields({ name: 'Timeout Until', value: `<t:${Math.floor(member.communicationDisabledUntilTimestamp / 1000)}:F>`, inline: true });
+    }
 
     await interaction.editReply({ embeds: [embed] });
   },
