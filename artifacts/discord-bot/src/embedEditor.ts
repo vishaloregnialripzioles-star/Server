@@ -26,7 +26,8 @@ export async function createEmbedEditorSession(i:ChatInputCommandInteraction,nam
 export function buildEmbedEditorSelection(guildId:string,client:ChatInputCommandInteraction['client'],page=0){
   const saved=loadGuild(guildId).savedEmbeds??{};
   const definitions=getEditableEmbedDefinitions(client);
-  const savedNames=Object.keys(saved).filter(name=>name.toLowerCase()!=='welcome'&&saved[name]?.sourceKey!=='welcome');\n  const names=[...new Set([...definitions.map(x=>x.name),...savedNames])].sort((a,b)=>a.localeCompare(b));
+  const savedNames=Object.keys(saved).filter(name=>name.toLowerCase()!=='welcome'&&saved[name]?.sourceKey!=='welcome');
+  const names=[...new Set([...definitions.map(x=>x.name),...savedNames])].sort((a,b)=>a.localeCompare(b));
   const totalPages=Math.max(1,Math.ceil(names.length/25));
   const current=Math.min(Math.max(page,0),totalPages-1);
   const pageNames=names.slice(current*25,current*25+25);
@@ -42,7 +43,7 @@ export function buildEmbedEditorSelection(guildId:string,client:ChatInputCommand
       new ButtonBuilder().setCustomId('embededit:page:'+(current+1)).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(current>=totalPages-1)
     ));
   }
-  return {content:'🛠️ **Sparxie Embed Editor**\\nSelect an existing command embed below.\\n📄 Page '+(current+1)+'/'+totalPages+' • '+names.length+' embed'+(names.length===1?'':'s'),embeds:[],components:rows};
+  return {content:'🛠️ **Sparxie Embed Editor**\nSelect an existing command embed below.\n📄 Page '+(current+1)+'/'+totalPages+' • '+names.length+' embed'+(names.length===1?'':'s'),embeds:[],components:rows};
 }
 
 function components(id:string,d:SavedEmbed){
@@ -127,7 +128,7 @@ async function render(i:Interaction,id:string){
   if(!s){if(i.isRepliable())await i.reply({content:'❌ This editor session expired. Run /embed-edit again.',ephemeral:true}).catch(()=>undefined);return;}
   if(i.guildId!==s.guildId||i.user.id!==s.userId||!isEmbedEditorOwner(i.user.id)){if(i.isRepliable())await i.reply({content:'🔒 Only the two authorized embed editors can use this editor.',ephemeral:true}).catch(()=>undefined);return;}
   try{
-    const payload={content:'🛠️ **Editing: '+s.name+'**\\n\\n'+details(s.draft)+'\\n\\nUse the buttons below to edit the complete embed. Custom emoji IDs can be placed directly into text fields; **Submit / Save** makes everything permanent.',embeds:[buildEmbedPreview(s.draft)],components:components(id,s.draft)};
+    const payload={content:'🛠️ **Editing: '+s.name+'**\n\n'+details(s.draft)+'\n\nUse the buttons below to edit the complete embed. Custom emoji IDs can be placed directly into text fields; **Submit / Save** makes everything permanent.',embeds:[buildEmbedPreview(s.draft)],components:components(id,s.draft)};
     if(i.isButton()||i.isStringSelectMenu())await i.update(payload);
     else if(i.isRepliable())await i.editReply(payload);
   }catch(error){
@@ -239,7 +240,7 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
   if(!s){await i.reply({content:'❌ This editor session expired. Run /embed-edit again.',ephemeral:true}).catch(()=>undefined);return true;}
   if(i.user.id!==s.userId||i.guildId!==s.guildId||!isEmbedEditorOwner(i.user.id)){await i.reply({content:'🔒 This editor belongs to an authorized user only.',ephemeral:true}).catch(()=>undefined);return true;}
   if(action==='done'&&i.isButton()){
-    try{await normalize(s.draft,i);updateGuild(s.guildId,d=>{d.savedEmbeds??={};d.savedEmbeds[s.name]=savedFromDraft(s.name,s.sourceKey,s.draft,s.original);});const saved=loadGuild(s.guildId).savedEmbeds[s.name];sessions.delete(sid);await i.update({content:'✅ **'+s.name+'** was updated successfully and saved permanently.\\nEveryone using this command will now receive the edited embed.',embeds:[buildEmbedPreview(saved)],components:[]});}
+    try{await normalize(s.draft,i);updateGuild(s.guildId,d=>{d.savedEmbeds??={};d.savedEmbeds[s.name]=savedFromDraft(s.name,s.sourceKey,s.draft,s.original);});const saved=loadGuild(s.guildId).savedEmbeds[s.name];sessions.delete(sid);await i.update({content:'✅ **'+s.name+'** was updated successfully and saved permanently.\nEveryone using this command will now receive the edited embed.',embeds:[buildEmbedPreview(saved)],components:[]});}
     catch(error){console.error('[EmbedEditor] Save failed:',error);await i.reply({content:'❌ I could not save this embed. No permanent changes were made.',ephemeral:true}).catch(()=>undefined);}
     return true;
   }
