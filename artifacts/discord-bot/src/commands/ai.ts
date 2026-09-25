@@ -5,7 +5,20 @@ import { loadGuild, updateGuild } from '../storage.js';
 const MODES = ['funny', 'roaster', 'chill', 'nerd', 'savage'] as const;
 type Mode = typeof MODES[number];
 
-const AI_COOLDOWN_MS = 20_000;
+const AI_COOLDOWN_MS = 5_000;
+const AI_QUEUE_DELAY_MS = 1_200;
+const AI_MAX_RETRIES = 2;
+
+type AIQueueJob = {
+  guildId: string;
+  userId: string;
+  message: string;
+  resolve: (answer: string) => void;
+};
+
+const queues = new Map<string, AIQueueJob[]>();
+const queueRunning = new Set<string>();
+const lastAIRequestAt = new Map<string, number>();
 const cooldowns = new Map<string, number>();
 const histories = new Map<string, { role: 'user' | 'assistant'; content: string }[]>();
 
@@ -68,14 +81,9 @@ export function getAICooldown(guildId: string, userId: string): string | undefin
   return checkCooldown(guildId, userId);
 }
 
-export async function askAI(guildId: string, userId: string, message: string): Promise<string> {
+async function runAIRequest(guildId: string, userId: string, message: string): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY?.trim();
   if (!apiKey) return '🤖 AI abhi setup nahi hua bro 💀 **GROQ_API_KEY** Render mein set karo.';
-
-  const blocked = checkCooldown(guildId, userId);
-  if (blocked) return blocked;
-
-  cooldowns.set(key(guildId, userId), Date.now());
 
   const data = loadGuild(guildId);
   const mode = (data.config.aiPersonality ?? 'funny') as Mode;
@@ -102,29 +110,39 @@ Mode: ${modePrompts[mode] ?? modePrompts.funny}`;
 
   const model = process.env.GROQ_MODEL?.trim() || 'openai/gpt-oss-20b';
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10_000);
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: 0.7,
-        max_completion_tokens: 180,
-      }),
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout));
+  for (let attempt = 0; attempt <= AI_MAX_RETRIES; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15_000);
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.7,
+          max_completion_tokens: 180,
+        }),
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeout));
 
-    if (!response.ok) return safeApiError(response.status, await response.text());
+      if (response.status === 429 || response.status >= 500) {
+        const body = await response.text();
+        if (attempt < AI_MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 1_500 * (attempt + 1)));
+          continue;
+        }
+        return safeApiError(response.status, body);
+      }
 
-    const body = await response.json() as {
-      choices?: { message?: { content?: string | null } }[];
-    };
+      if (!response.ok) return safeApiError(response.status, await response.text());
+
+      const body = await response.json() as {
+        choices?: { message?: { content?: string | null } }[];
+      };
     const answer = trimResponse(body.choices?.[0]?.message?.content ?? '');
 
     if (!answer) return '😅 AI ko abhi response nahi mila. Phir se ping karo.';
@@ -136,11 +154,57 @@ Mode: ${modePrompts[mode] ?? modePrompts.funny}`;
     ].slice(-10);
     histories.set(key(guildId, userId), next);
 
-    return answer;
-  } catch (error) {
-    console.error('[AI] Groq request failed:', error);
-    return '⚠️ AI response nahi de paaya abhi. Thodi der baad ping karna.';
+      return answer;
+    } catch (error) {
+      if (attempt < AI_MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, 1_000 * (attempt + 1)));
+        continue;
+      }
+      console.error('[AI] Groq request failed:', error);
+      return '⚠️ AI response nahi de paaya abhi. Thodi der baad ping karna.';
+    }
   }
+
+  return '⚠️ AI response nahi de paaya abhi. Thodi der baad ping karna.';
+}
+
+async function processAIQueue(guildId: string): Promise<void> {
+  if (queueRunning.has(guildId)) return;
+  queueRunning.add(guildId);
+
+  try {
+    while (true) {
+      const queue = queues.get(guildId);
+      const job = queue?.shift();
+      if (!job) break;
+      if (queue && queue.length === 0) queues.delete(guildId);
+
+      const previous = lastAIRequestAt.get(guildId) ?? 0;
+      const wait = AI_QUEUE_DELAY_MS - (Date.now() - previous);
+      if (wait > 0) await new Promise(resolve => setTimeout(resolve, wait));
+      lastAIRequestAt.set(guildId, Date.now());
+
+      const answer = await runAIRequest(job.guildId, job.userId, job.message);
+      job.resolve(answer);
+    }
+  } finally {
+    queueRunning.delete(guildId);
+    if (queues.has(guildId)) void processAIQueue(guildId);
+  }
+}
+
+export async function askAI(guildId: string, userId: string, message: string): Promise<string> {
+  const blocked = checkCooldown(guildId, userId);
+  if (blocked) return blocked;
+
+  cooldowns.set(key(guildId, userId), Date.now());
+
+  return new Promise(resolve => {
+    const queue = queues.get(guildId) ?? [];
+    queue.push({ guildId, userId, message, resolve });
+    queues.set(guildId, queue);
+    void processAIQueue(guildId);
+  });
 }
 
 export const ai: Command = {
