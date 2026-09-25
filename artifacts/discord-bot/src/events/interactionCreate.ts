@@ -95,6 +95,7 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
     const originalReply=rawInteraction.reply?.bind(rawInteraction);
     const originalEditReply=rawInteraction.editReply?.bind(rawInteraction);
     const originalFollowUp=rawInteraction.followUp?.bind(rawInteraction);
+    const originalUpdate=rawInteraction.update?.bind(rawInteraction);
     const patchPayload=async(payload:any)=>{
       if(!payload||!interaction.guildId||!Array.isArray(payload.embeds))return payload;
       const next={...payload,embeds:payload.embeds.map((raw:any)=>{
@@ -109,6 +110,7 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
     if(originalReply)rawInteraction.reply=async(payload:any)=>originalReply(await patchPayload(payload));
     if(originalEditReply)rawInteraction.editReply=async(payload:any)=>originalEditReply(await patchPayload(payload));
     if(originalFollowUp)rawInteraction.followUp=async(payload:any)=>originalFollowUp(await patchPayload(payload));
+    if(originalUpdate)rawInteraction.update=async(payload:any)=>originalUpdate(await patchPayload(payload));
     try {
       await command.execute(interaction);
     } catch (err) {
@@ -123,6 +125,7 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
       if(originalReply)rawInteraction.reply=originalReply;
       if(originalEditReply)rawInteraction.editReply=originalEditReply;
       if(originalFollowUp)rawInteraction.followUp=originalFollowUp;
+      if(originalUpdate)rawInteraction.update=originalUpdate;
     }
     return;
   }
