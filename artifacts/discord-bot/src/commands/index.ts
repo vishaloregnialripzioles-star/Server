@@ -33,7 +33,7 @@ const definitions: Array<[string, string]> = [
   ['./pro.js', 'pro'], ['./noob.js', 'noob'], ['./ship.js', 'ship'], ['./autoresponder.js', 'autoresponder'],
   ['./help.js', 'help'], ['./levelconfig.js', 'levelconfig'], ['./createrole.js', 'createrole'], ['./roleassign.js', 'roleassign'],
   ['./giveaway.js', 'giveaway'], ['./giveawaydaily.js', 'giveawayDaily'], ['./automod.js', 'automod'], ['./music.js', 'music'],
-  ['./embed.js', 'embedCmd'], ['./embedSeparate.js', 'embedCreate'], ['./embedSeparate.js', 'embedEdit'], ['./embedSeparate.js', 'embedList'], ['./embedSeparate.js', 'embedDelete'], ['./embedSeparate.js', 'embedPreview'], ['./embedSeparate.js', 'embedFieldAdd'], ['./embedSeparate.js', 'embedFieldRemove'], ['./welcome.js', 'welcome'], ['./greet.js', 'greet'], ['./gamePolicy.js', 'gamePolicy'],
+  ['./embedSeparate.js', 'embedEdit'], ['./welcome.js', 'welcome'], ['./greet.js', 'greet'], ['./gamePolicy.js', 'gamePolicy'],
   ['./games.js', 'game'], ['./gamesInfo.js', 'games'], ['./sparks.js', 'coinLeaderboard'], ['./shop.js', 'shop'],
   ['./removeshop.js', 'removeshop'], ['./antinuke.js', 'antinuke'], ['./extraowner.js', 'extraowner'], ['./recovery.js', 'recovery'],
   ['./joinrole.js', 'joinrole'], ['./reactionrole.js', 'reactionrole'], ['./socialnotification.js', 'socialnotification'],
