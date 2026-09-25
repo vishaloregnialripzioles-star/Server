@@ -102,7 +102,7 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
         try{
           const embed=raw instanceof EmbedBuilder?raw:new EmbedBuilder(raw);
           captureCommandEmbed(interaction.guildId!,interaction.commandName,embed);
-          return applyEditableEmbed(interaction.guildId!,interaction.commandName==='ticket'?'ticket:create':interaction.commandName==='closeticket'?'ticket:close':interaction.commandName,embed);
+          const sourceKey=interaction.commandName==='ticket'?'ticket:create':interaction.commandName==='closeticket'?'ticket:close':interaction.commandName==='reopen'?'ticket:reopen':interaction.commandName==='ticketpanel'?'ticket:panel':interaction.commandName;\n          return applyEditableEmbed(interaction.guildId!,sourceKey,embed);
         }catch{return raw;}
       })};
       return next;
