@@ -106,6 +106,8 @@ function toSaved(name:string, sourceKey:string, embed:EmbedBuilder):SavedEmbed {
   };
 }
 
+function cloneSaved(s:SavedEmbed):SavedEmbed{return JSON.parse(JSON.stringify(s));}
+
 function fromSaved(s:SavedEmbed):EmbedBuilder {
   const out:any={};
   if(s.title!==undefined)out.title=s.title;
@@ -131,7 +133,14 @@ export function getEditableEmbedDefinition(name:string):EditableEmbedDefinition|
 
 export async function buildCurrentEditableEmbed(i:ChatInputCommandInteraction,name:string):Promise<{draft:SavedEmbed;original:SavedEmbed;sourceKey:string}|undefined> {
   const def=byName.get(name.toLowerCase());
-  if(!def)return undefined;
+  if(!def){
+    const saved=loadGuild(i.guildId!).savedEmbeds?.[name];
+    if(!saved)return undefined;
+    const sourceKey=saved.sourceKey??name.toLowerCase();
+    const original=cloneSaved(saved);
+    const draft=cloneSaved(saved);
+    return {draft,original,sourceKey};
+  }
   let base=def.build(i);
   if(name.toLowerCase()==='help'){
     try{
