@@ -23,16 +23,17 @@ export async function createEmbedEditorSession(i:ChatInputCommandInteraction,nam
   return id;
 }
 
-export function buildEmbedEditorSelection(guildId:string,page=0){
+export function buildEmbedEditorSelection(guildId:string,client:ChatInputCommandInteraction['client'],page=0){
   const saved=loadGuild(guildId).savedEmbeds??{};
-  const names=[...new Set([...getEditableEmbedDefinitions().map(x=>x.name),...Object.keys(saved)])].sort((a,b)=>a.localeCompare(b));
+  const definitions=getEditableEmbedDefinitions(client);
+  const names=[...new Set([...definitions.map(x=>x.name),...Object.keys(saved)])].sort((a,b)=>a.localeCompare(b));
   const totalPages=Math.max(1,Math.ceil(names.length/25));
   const current=Math.min(Math.max(page,0),totalPages-1);
   const pageNames=names.slice(current*25,current*25+25);
   const rows:any[]=[];
   if(pageNames.length){
     const select=new StringSelectMenuBuilder().setCustomId('embededit:select:'+current).setPlaceholder('Select an embed/command to edit');
-    select.addOptions(pageNames.map(n=>({label:n.slice(0,100),value:n,description:(getEditableEmbedDefinitions().find(x=>x.name===n)?.description??'Saved command embed').slice(0,100)})));
+    select.addOptions(pageNames.map(n=>({label:n.slice(0,100),value:n,description:(definitions.find(x=>x.name===n)?.description??'Saved command embed').slice(0,100)})));
     rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
   }
   if(totalPages>1){
@@ -61,17 +62,64 @@ function components(id:string,d:SavedEmbed){
   ];
 }
 
-function details(d:SavedEmbed):string{
+function memberVisibleText(d:SavedEmbed):string{
   const lines:string[]=[];
-  lines.push(d.title?'**Title:** '+d.title:'**Title:** —');
-  lines.push(d.description?'**Description:** '+d.description.slice(0,300)+(d.description.length>300?'…':''):'**Description:** —');
-  lines.push(d.authorName?'**Author:** '+d.authorName:'**Author:** —');
-  lines.push(d.thumbnailUrl?'**Thumbnail:** '+d.thumbnailUrl:'**Thumbnail:** —');
-  lines.push(d.imageUrl?'**Image:** '+d.imageUrl:'**Image:** —');
-  lines.push(d.footerText?'**Footer:** '+d.footerText:'**Footer:** —');
+  if(d.authorName)lines.push(d.authorName);
+  if(d.title)lines.push(d.title);
+  if(d.description)lines.push(d.description);
+  for(const [index,f] of (d.fields??[]).entries())lines.push('[Field '+(index+1)+'] '+f.name+'\n'+f.value);
+  if(d.footerText)lines.push(d.footerText);
+  return lines.join('\n\n')||'— No visible embed text —';
+}
+
+function details(d:SavedEmbed):string{
+  const visible=memberVisibleText(d).replace(new RegExp(String.fromCharCode(96),'g'),'ˋ');
+  const clipped=visible.length>1200?visible.slice(0,1200)+'…':visible;
+  const lines:string[]=[];
+  lines.push('**Member-visible text:**');
+  lines.push(String.fromCharCode(96).repeat(3)+'text\n'+clipped+'\n'+String.fromCharCode(96).repeat(3));
+  lines.push('**Media:** '+([d.thumbnailUrl?'thumbnail':'',d.imageUrl?'image':''].filter(Boolean).join(' + ')||'—'));
   lines.push('**Fields:** '+(d.fields?.length??0)+'/25');
   lines.push('**Timestamp:** '+(d.timestamp===false?'Off':'On'));
-  return lines.join('\\n');
+  return lines.join('\n');
+}
+
+function serializeEditableText(d:SavedEmbed):string{
+  const parts:string[]=[];
+  const add=(label:string,value:string|undefined)=>{parts.push('['+label+']',value??'');};
+  add('TITLE',d.title);
+  add('DESCRIPTION',d.description);
+  add('AUTHOR',d.authorName);
+  for(const [index,f] of (d.fields??[]).entries()){
+    add('FIELD '+(index+1)+' NAME',f.name);
+    add('FIELD '+(index+1)+' VALUE',f.value);
+  }
+  add('FOOTER',d.footerText);
+  parts.push('[END]');
+  return parts.join('\n');
+}
+
+function parseEditableText(d:SavedEmbed,text:string){
+  const matches=[...text.matchAll(/^\[([^\]]+)\]\s*$/gm)];
+  const sections=new Map<string,string>();
+  for(let n=0;n<matches.length;n++){
+    const key=matches[n][1].trim().toUpperCase();
+    const start=(matches[n].index??0)+matches[n][0].length;
+    const end=n+1<matches.length?(matches[n+1].index??text.length):text.length;
+    sections.set(key,text.slice(start,end).trim());
+  }
+  const value=(key:string)=>sections.get(key);
+  d.title=value('TITLE')||undefined;
+  d.description=value('DESCRIPTION')||undefined;
+  d.authorName=value('AUTHOR')||undefined;
+  d.footerText=value('FOOTER')||undefined;
+  const fields:typeof d.fields=[];
+  for(let n=1;n<=25;n++){
+    const name=value('FIELD '+n+' NAME');
+    const fieldValue=value('FIELD '+n+' VALUE');
+    if(name!==undefined||fieldValue!==undefined)fields.push({name:name||('Field '+n),value:fieldValue||'',inline:d.fields?.[n-1]?.inline??false});
+  }
+  d.fields=fields;
 }
 
 async function render(i:Interaction,id:string){
@@ -102,7 +150,11 @@ function makeModal(s:Session,section:string){
   if(section==='media')m.addComponents(input('thumbnail','Thumbnail URL',d.thumbnailUrl),input('image','Image URL',d.imageUrl));
   if(section==='footer')m.addComponents(input('footer','Footer text',d.footerText,TextInputStyle.Paragraph,false,2048),input('footer_icon','Footer icon URL',d.footerIconUrl));
   if(section==='fields')m.addComponents(input('index','Field number (blank = add)','',TextInputStyle.Short,false,3),input('field_name','Field name','',TextInputStyle.Short,false,256),input('field_value','Field value','',TextInputStyle.Paragraph,false,1024),input('inline','Inline on/off','off'));
-  if(section==='emojis')m.addComponents(input('action','Action: add or remove','add',TextInputStyle.Short,true,6),input('emoji_id','Application emoji ID','',TextInputStyle.Short,true,25),input('text','Location: description/title/field1/all','description',TextInputStyle.Short,false,32));
+  if(section==='emojis')m.addComponents(
+    input('action','Action: add or remove','add',TextInputStyle.Short,true,6),
+    input('emoji_id','Emoji ID','',TextInputStyle.Short,false,25),
+    input('full_text','Full member-visible text • place IDs anywhere',serializeEditableText(d),TextInputStyle.Paragraph,true,4000)
+  );
   return m;
 }
 
@@ -115,32 +167,29 @@ function allTextFields(s:SavedEmbed):Array<{get:()=>string|undefined;set:(v:stri
 
 async function emojiMarkup(i:Interaction,id:string):Promise<string|null>{try{const emoji=await i.client.application.emojis.fetch(id);return emoji.toString();}catch{return null;}}
 
-async function applyEmojiAction(s:SavedEmbed,i:Interaction,action:string,id:string,location:string){
-  const normalizedAction=action.trim().toLowerCase();
-  const tokenMatch=id.trim().match(/^<a?:[^:>]+:(\\d+)>$/);
-  const cleanId=(tokenMatch?.[1]??id.trim());
-  if(!/^\\d{17,20}$/.test(cleanId))throw new Error('Enter a valid application emoji ID or full emoji token.');
-  const token=await emojiMarkup(i,cleanId);
-  if(!token)throw new Error('That emoji ID was not found in the bot application emojis.');
-  if(normalizedAction==='add'){
-    const loc=location.trim().toLowerCase();
-    if(loc==='all'){
-      const current=s.description??s.title??'';
-      if(s.description!==undefined)s.description=(current?current+' ':'')+token;else s.description=token;
-    }else if(loc==='title'||loc==='description'||loc==='authorName'||loc==='author'||loc==='footer'||loc==='footerText'||loc==='thumbnail'||loc==='image'){
-      const map:any={title:'title',description:'description',author:'authorName',authorname:'authorName',footer:'footerText',footertext:'footerText',thumbnail:'thumbnailUrl',image:'imageUrl'};
-      const key=map[loc];
-      const current=(s as any)[key] as string|undefined;
-      (s as any)[key]=(current?current+' ':'')+token;
-    }else if(/^field[._-]?\\d+$/.test(loc)){
-      const n=Number(loc.match(/\\d+/)?.[0]??0)-1;const f=s.fields?.[n];if(!f)throw new Error('That field number does not exist.');f.value=(f.value?f.value+' ':'')+token;
-    }else throw new Error('Location must be title, description, author, footer, thumbnail, image, field1, field2, or all.');
-  }else if(normalizedAction==='remove'){
-    const escaped=cleanId.replace(/[-/\\^$*+?.()|[\\]{}]/g,'\\\\$&');
-    const tokenRegex=new RegExp('(<a?:[^:>]+:'+escaped+'>)|'+escaped,'g');
-    for(const field of allTextFields(s)){const value=field.get();if(value)field.set(value.replace(tokenRegex,'').replace(/[ \\t]{2,}/g,' ').trim());}
-  }else throw new Error('Action must be add or remove.');
+function removeEmojiId(text:string,id:string):string{
+  const clean=id.trim().replace(/^<a?:[^:>]+:(\d+)>$/,'$1');
+  if(!/^\d{17,20}$/.test(clean))throw new Error('Enter a valid application emoji ID or full emoji token.');
+  const escaped=clean.replace(/[-/\^$*+?.()|[\]{}]/g,'\\$&');
+  return text.replace(new RegExp('(<a?:[^:>]+:'+escaped+'>)|'+escaped,'g'),'').replace(/[ \t]{2,}/g,' ').trim();
 }
+
+async function applyEmojiTextAction(s:SavedEmbed,i:Interaction,action:string,id:string,text:string){
+  let edited=text;
+  const normalizedAction=action.trim().toLowerCase();
+  const clean=id.trim().match(/^<a?:[^:>]+:(\d+)>$/)?.[1]??id.trim();
+  if(normalizedAction==='add'){
+    if(!/^\d{17,20}$/.test(clean))throw new Error('Enter a valid application emoji ID.');
+    const token=await emojiMarkup(i,clean);
+    if(!token)throw new Error('That emoji ID was not found in the bot application emojis.');
+    if(!edited.includes(clean)&&!edited.includes(token))edited=edited+'\n'+token;
+  }else if(normalizedAction==='remove'){
+    if(!/^\d{17,20}$/.test(clean))throw new Error('Enter a valid application emoji ID.');
+    edited=removeEmojiId(edited,clean);
+  }else throw new Error('Action must be add or remove.');
+  parseEditableText(s,edited);
+}
+
 
 async function normalize(s:SavedEmbed,i:Interaction){
   for(const field of allTextFields(s)){
@@ -156,7 +205,7 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
   const customId=String((i as any).customId??'');
   if((i.isButton()||i.isStringSelectMenu()||i.isModalSubmit())&&!isEmbedEditorOwner(i.user.id)){if(customId.startsWith('embededit:')&&i.isRepliable())await i.reply({content:'🔒 This embed editor is private to the two authorized users.',ephemeral:true}).catch(()=>undefined);return customId.startsWith('embededit:');}
   if(customId.startsWith('embededit:page:')&&i.isButton()){const page=Number(customId.split(':')[2]);await i.update(buildEmbedEditorSelection(i.guildId,Number.isFinite(page)?page:0));return true;}
-  if(customId.startsWith('embededit:select:')&&i.isStringSelectMenu()){const name=i.values[0]?.trim();if(!name||(!loadGuild(i.guildId).savedEmbeds?.[name]&&!getEditableEmbedDefinitions().some(x=>x.name===name))){await i.reply({content:'❌ That embed no longer exists.',ephemeral:true});return true;}const sid=await createEmbedEditorSession(i as any,name);await render(i,sid);return true;}
+  if(customId.startsWith('embededit:select:')&&i.isStringSelectMenu()){const name=i.values[0]?.trim();if(!name||(!loadGuild(i.guildId).savedEmbeds?.[name]&&!getEditableEmbedDefinitions(i.client).some(x=>x.name===name))){await i.reply({content:'❌ That embed no longer exists.',ephemeral:true});return true;}const sid=await createEmbedEditorSession(i as any,name);await render(i,sid);return true;}
   if(!customId.startsWith('embededit:'))return false;
   if(customId.startsWith('embededit:modal:')&&i.isModalSubmit()){
     const section=customId.split(':')[2];
@@ -176,7 +225,12 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
         if(!name||!value)throw new Error('Field name and value are required.');s.draft.fields??=[];
         if(raw){const n=Number(raw)-1;if(!Number.isInteger(n)||n<0||n>=s.draft.fields.length)throw new Error('That field number does not exist.');s.draft.fields[n]={name,value,inline};}
         else{if(s.draft.fields.length>=25)throw new Error('Maximum 25 fields.');s.draft.fields.push({name,value,inline});}
-      }else if(section==='emojis'){await applyEmojiAction(s.draft,i,i.fields.getTextInputValue('action'),i.fields.getTextInputValue('emoji_id'),i.fields.getTextInputValue('text'));}
+      }else if(section==='emojis'){
+        const action=i.fields.getTextInputValue('action').trim();
+        const emojiId=i.fields.getTextInputValue('emoji_id').trim();
+        const fullText=i.fields.getTextInputValue('full_text');
+        await applyEmojiTextAction(s.draft,i,action,emojiId,fullText);
+      }
       await i.deferUpdate();await render(i,sid);
     }catch(error){await i.reply({content:'❌ '+(error instanceof Error?error.message:'Could not apply that change.'),ephemeral:true}).catch(()=>undefined);}
     return true;
