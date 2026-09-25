@@ -59,7 +59,7 @@ export const userinfo: Command = {
       .setThumbnail(target.displayAvatarURL({ size: 256 }))
       .addFields(
         { name: 'Username', value: `@${target.username}`, inline: true },
-        { name: 'User ID', value: `\\${target.id}\\`, inline: true },
+        { name: 'User ID', value: `\`${target.id}\`, inline: true },
         { name: 'Account Type', value: target.bot ? 'Bot' : 'User', inline: true },
         { name: 'Account Created', value: `<t:${Math.floor(target.createdTimestamp / 1000)}:F>`, inline: true },
         ...(member ? [
