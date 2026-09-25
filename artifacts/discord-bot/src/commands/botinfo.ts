@@ -50,7 +50,7 @@ export const botinfo:Command={
         inline:false,
       })
       .setThumbnail(client.user?.displayAvatarURL({size:256})??'')
-      .setFooter({text:'Sparxie • Vishalezz & Karanezz'})
+      .setFooter({text:'Sparxie | Vishalezz & Karanezz'})
       .setTimestamp();
 
     await interaction.reply({embeds:[embed]});
