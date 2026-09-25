@@ -23,7 +23,7 @@ function permissionSummary(member:any,guildOwnerId:string):string{
     .filter(([,bit])=>member.permissions.has(bit))
     .map(([name])=>name);
   return granted.length
-    ? granted.map(name=>`• **${name}**`).join('\\n')
+    ? granted.map(name=>`**${name}**`).join(' • ')
     : '• No key permissions';
 }
 
