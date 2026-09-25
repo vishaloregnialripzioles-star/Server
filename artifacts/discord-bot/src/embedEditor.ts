@@ -295,15 +295,20 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
   if(i.user.id!==s.userId||i.guildId!==s.guildId||!isEmbedEditorOwner(i.user.id)){await i.reply({content:'🔒 This editor belongs to an authorized user only.',ephemeral:true}).catch(()=>undefined);return true;}
   if(action==='done'&&i.isButton()){
     try{
+      // Acknowledge immediately because emoji resolution can call Discord's API.
+      await i.deferUpdate();
       await normalize(s.draft,i);
       const savedDraft=savedFromDraft(s.name,s.sourceKey,s.draft,s.original);
       savedDraft.placeholder=false;
       updateGuild(s.guildId,d=>{d.savedEmbeds??={};d.savedEmbeds[s.name]=savedDraft;});
       const saved=loadGuild(s.guildId).savedEmbeds[s.name];
       sessions.delete(sid);
-      await i.update({content:'✅ **'+s.name+'** was updated successfully and saved permanently.\nEveryone using this command will now receive the edited embed.',embeds:[buildEmbedPreview(saved)],components:[]});
+      await i.editReply({content:'✅ **'+s.name+'** was updated successfully and saved permanently.\\nEveryone using this command will now receive the edited embed.',embeds:[buildEmbedPreview(saved)],components:[]});
     }
-    catch(error){console.error('[EmbedEditor] Save failed:',error);await i.reply({content:'❌ I could not save this embed. No permanent changes were made.',ephemeral:true}).catch(()=>undefined);}
+    catch(error){
+      console.error('[EmbedEditor] Save failed:',error);
+      await i.editReply({content:'❌ I could not save this embed. '+(error instanceof Error?error.message:'No permanent changes were made.'),embeds:[],components:[]}).catch(()=>undefined);
+    }
     return true;
   }
   if(action==='cancel'&&i.isButton()){sessions.delete(sid);await i.update({content:'🗑️ Editor cancelled. No staged changes were saved.',embeds:[],components:[]});return true;}
