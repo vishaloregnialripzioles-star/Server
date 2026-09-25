@@ -1,6 +1,8 @@
 import { EmbedBuilder, type ChatInputCommandInteraction } from 'discord.js';
 import type { SavedEmbed } from './types.js';
 import { loadGuild, updateGuild } from './storage.js';
+import { buildHelpEmbed } from './commands/help.js';
+import { getGuildPrefix } from './prefixHandler.js';
 
 export type EditableEmbedDefinition = {
   name: string;
@@ -177,8 +179,6 @@ export async function buildCurrentEditableEmbed(i:ChatInputCommandInteraction,na
   let base=def.build(i);
   if(name.toLowerCase()==='help'){
     try{
-      const {buildHelpEmbed}=await import('./commands/help.js');
-      const {getGuildPrefix}=await import('./prefixHandler.js');
       const commands=Array.from(i.client.commands?.values?.()??[]);
       base=buildHelpEmbed(null,getGuildPrefix(i.guildId??''),commands as any);
     }catch{}
@@ -189,7 +189,7 @@ export async function buildCurrentEditableEmbed(i:ChatInputCommandInteraction,na
 
   // A captured embed is the real member-visible baseline. Keep it even when
   // later edits override only selected properties.
-  const baseline=saved.base ? cloneSaved(saved.base) : cloneSaved(saved);
+  const baseline=saved.captured && saved.base ? cloneSaved(saved.base) : cloneSaved(saved);
   baseline.name=def.name;
   baseline.sourceKey=def.sourceKey;
   baseline.placeholder=false;
@@ -204,6 +204,7 @@ export async function buildCurrentEditableEmbed(i:ChatInputCommandInteraction,na
   draft.sourceKey=def.sourceKey;
   draft.overrideFields=saved.overrideFields;
   draft.base=undefined;
+  draft.captured=saved.captured;
   return {draft,original:baseline,sourceKey:def.sourceKey};
 }
 
@@ -217,6 +218,7 @@ export function savedFromDraft(name:string,sourceKey:string,draft:SavedEmbed,ori
     overrideFields:changed,
     base:cloneSaved(original),
     placeholder:false,
+    captured:original.captured??false,
   };
 }
 
@@ -255,6 +257,6 @@ export function captureCommandEmbed(guildId:string,commandName:string,embed:Embe
   updateGuild(guildId,d=>{
     d.savedEmbeds??={};
     const existing=d.savedEmbeds[name];
-    if(!existing || existing.placeholder)d.savedEmbeds[name]=base;
+    if(!existing || existing.placeholder || existing.captured===false)d.savedEmbeds[name]=base;
   });
 }
