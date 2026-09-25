@@ -1,0 +1,4 @@
+import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+import type { Command } from '../types.js';
+import { loadGuild } from '../storage.js';
+export const embedlist: Command = { data:new SlashCommandBuilder().setName('embedlist').setDescription('List all saved embed names').setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild), async execute(i){if(!i.guild)return;await i.deferReply({ephemeral:true});const names=Object.keys(loadGuild(i.guild.id).savedEmbeds??{});if(!names.length){await i.editReply('No saved embeds. Use /embedcreate first.');return;}const e=new EmbedBuilder().setTitle('Saved Embeds').setDescription(names.map((n,x)=>(x+1)+'. '+n).join('\n')).setFooter({text:names.length+' embed(s) • Use /embededit to select one'});await i.editReply({embeds:[e]});} };
