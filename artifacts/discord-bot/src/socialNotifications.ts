@@ -10,15 +10,26 @@ const MAX_CATCHUP = 5;
 function clean(v: unknown): string { return String(v ?? '').trim(); }
 
 function decodeHtml(value: string): string {
-  return value.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
 }
 
 function extractChannelId(html: string): string | null {
+  // YouTube changes its page JSON markup periodically, so keep several
+  // independent selectors instead of relying on one exact JSON shape.
   const patterns = [
-    /"channelId":"(UC[\w-]{20,})"/,
-    /"externalId":"(UC[\w-]{20,})"/,
-    /"browseId":"(UC[\w-]{20,})"/,
-    /"channelRenderer":\{[\s\S]*?"channelId":"(UC[\w-]{20,})"/,
+    /<meta[^>]+itemprop=["']channelId["'][^>]+content=["'](UC[\w-]{20,})["']/i,
+    /<meta[^>]+content=["'](UC[\w-]{20,})["'][^>]+itemprop=["']channelId["']/i,
+    /["']channelId["']\s*:\s*["'](UC[\w-]{20,})["']/i,
+    /["']externalId["']\s*:\s*["'](UC[\w-]{20,})["']/i,
+    /["']browseId["']\s*:\s*["'](UC[\w-]{20,})["']/i,
+    /<link[^>]+itemprop=["']url["'][^>]+href=["'][^"']*youtube\.com\/channel\/(UC[\w-]{20,})[^"']*["']/i,
   ];
   for (const pattern of patterns) {
     const match = html.match(pattern);
@@ -27,38 +38,100 @@ function extractChannelId(html: string): string | null {
   return null;
 }
 
+async function fetchYouTubePage(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36',
+        accept: 'text/html,application/xhtml+xml',
+        'accept-language': 'en-US,en;q=0.9',
+      },
+      redirect: 'follow',
+    });
+    if (!response.ok) return null;
+    return await response.text();
+  } catch {
+    return null;
+  }
+}
+
+function normalizeYouTubeUrl(value: string): string | null {
+  let raw = value.trim();
+  if (!raw) return null;
+  if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+  try {
+    const url = new URL(raw);
+    if (!/(^|\.)youtube\.com$/i.test(url.hostname) && url.hostname !== 'www.youtube-nocookie.com') return null;
+    url.hash = '';
+    url.search = '';
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveYouTubeChannel(input: string): Promise<{ channelId: string; channelName: string } | null> {
   const value = clean(input);
   if (!value) return null;
 
-  const direct = value.match(/(?:youtube\.com\/channel\/)(UC[\w-]{20,})/i) || value.match(/^(UC[\w-]{20,})$/i);
-  let channelId = direct?.[1] ?? null;
+  let channelId: string | null = null;
 
+  // 1) Exact channel ID.
+  const directId = value.match(/^(UC[\w-]{20,})$/i);
+  if (directId) channelId = directId[1];
+
+  // 2) /channel/UC... links.
   if (!channelId) {
-    const handle = value.match(/youtube\.com\/@([\w.-]+)/i)?.[1] ?? (value.startsWith('@') ? value.slice(1) : null);
+    const channelUrlId = value.match(/youtube\.com\/channel\/(UC[\w-]{20,})/i);
+    if (channelUrlId) channelId = channelUrlId[1];
+  }
+
+  // 3) @handle links or plain @handle.
+  if (!channelId) {
+    const handle = value.match(/(?:youtube\.com\/)?@([\w.-]+)/i)?.[1]
+      ?? (value.startsWith('@') ? value.slice(1) : null);
     if (handle) {
-      const response = await fetch('https://www.youtube.com/@' + encodeURIComponent(handle), { headers: { 'user-agent': 'Mozilla/5.0 SparxieBot/1.0' } });
-      if (response.ok) channelId = extractChannelId(await response.text());
+      const html = await fetchYouTubePage('https://www.youtube.com/@' + encodeURIComponent(handle));
+      if (html) channelId = extractChannelId(html);
     }
   }
 
-  if (!channelId && /^(https?:\/\/|youtube\.com\/)/i.test(value)) {
-    const response = await fetch(value.startsWith('http') ? value : 'https://' + value, { headers: { 'user-agent': 'Mozilla/5.0 SparxieBot/1.0' } });
-    if (response.ok) channelId = extractChannelId(await response.text());
+  // 4) /c/name, /user/name, or any other full YouTube channel URL.
+  if (!channelId && /(?:^|\.)youtube\.com\//i.test(value)) {
+    const url = normalizeYouTubeUrl(value);
+    if (url) {
+      const html = await fetchYouTubePage(url);
+      if (html) channelId = extractChannelId(html);
+    }
   }
 
+  // 5) Plain channel name fallback. Use YouTube search results and prefer
+  // explicit channelRenderer entries over unrelated video results.
   if (!channelId) {
-    const search = await fetch('https://www.youtube.com/results?search_query=' + encodeURIComponent(value), { headers: { 'user-agent': 'Mozilla/5.0 SparxieBot/1.0' } });
-    if (search.ok) channelId = extractChannelId(await search.text());
+    const searchUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(value);
+    const html = await fetchYouTubePage(searchUrl);
+    if (html) {
+      const renderer = html.match(/"channelRenderer"\s*:\s*\{[\s\S]{0,12000}?"channelId"\s*:\s*"(UC[\w-]{20,})"/i);
+      channelId = renderer?.[1] ?? extractChannelId(html);
+    }
   }
 
   if (!channelId) return null;
 
-  const feed = await fetch(YT_FEED + channelId, { headers: { 'user-agent': 'Mozilla/5.0 SparxieBot/1.0' } });
-  if (!feed.ok) return null;
+  // Validate the ID against the public Atom feed before accepting it.
+  const feed = await fetch(YT_FEED + encodeURIComponent(channelId), {
+    headers: { 'user-agent': 'Mozilla/5.0 SparxieBot/1.0', accept: 'application/atom+xml,application/xml,text/xml' },
+  }).catch(() => null);
+  if (!feed?.ok) return null;
+
   const xml = await feed.text();
   const author = xml.match(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>/i)?.[1];
-  return { channelId, channelName: decodeHtml(author ? author.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1') : value) };
+  const channelName = decodeHtml(
+    author
+      ? author.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+      : value.replace(/^https?:\/\/www\.youtube\.com\//i, '').split(/[/?#]/)[0],
+  );
+  return { channelId, channelName };
 }
 
 function tag(xml: string, name: string): string {
