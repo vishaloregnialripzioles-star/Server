@@ -668,8 +668,9 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
         return;
       }
 
+      const helpEmbed=buildHelpEmbed(category);
       await interaction.update({
-        embeds: [buildHelpEmbed(category)],
+        embeds: [applyEditableEmbed(interaction.guildId??'', 'help', helpEmbed)],
         components: [buildHelpMenu(category)],
       });
       return;
