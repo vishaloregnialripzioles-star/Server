@@ -23,30 +23,29 @@ export const botinfo:Command={
     const commandCount=client.commands.size;
 
     const embed=new EmbedBuilder()
-      .setColor(0x111827)
+      .setColor(0x0B0F19)
       .setAuthor({
         name:'SPARXIE',
         iconURL:client.user?.displayAvatarURL({size:128}),
       })
-      .setTitle('Bot Information')
-      .setDescription('Sparxie is a Discord bot focused on moderation, security, tickets, utilities, games and community features.')
+      .setTitle('Sparxie — Bot Information')
+      .setDescription('A clean overview of Sparxie, its creators, live statistics and runtime.')
       .addFields(
         {
           name:'Creators',
-          value:'[Vishalezz](https://discord.com/users/1504354088538869892)\n[Karanezz](https://discord.com/users/1323664778488582284)',
+          value:'[Vishalezz](https://discord.com/users/1504354088538869892)\\n[Karanezz](https://discord.com/users/1323664778488582284)',
           inline:false,
         },
         {name:'Servers',value:guilds.size.toLocaleString(),inline:true},
         {name:'Members',value:totalMembers.toLocaleString(),inline:true},
         {name:'Commands',value:commandCount.toLocaleString(),inline:true},
-        {name:'Uptime',value:`${formatUptime(uptime)}\n<t:${Math.floor(startedAt/1000)}:R>`,inline:true},
+        {name:'Uptime',value:`${formatUptime(uptime)}\\n<t:${Math.floor(startedAt/1000)}:R>`,inline:true},
         {name:'Latency',value:latency>=0?`${latency} ms`:'Calculating',inline:true},
         {name:'Status',value:'Online',inline:true},
         {name:'Runtime',value:`Node.js ${process.version}`,inline:true},
-        {name:'Bot ID',value:client.user?.id??'Unknown',inline:true},
       )
       .addFields({
-        name:'Support',
+        name:'Support Server',
         value:'[Join the Sparxie Support Server](https://discord.gg/UFvjK5Uy5e)',
         inline:false,
       })
