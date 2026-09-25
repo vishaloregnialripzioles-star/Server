@@ -32,7 +32,7 @@ export interface TempRole { id: string; guildId: string; userId: string; roleId:
 export interface Ticket { id: string; channelId: string; creatorId: string; createdAt: number; closed: boolean; panelId?: string; panelOptionId?: string; assignedStaffId?: string; }
 export interface AutoResponder { trigger: string; response: string; }
 export interface EmbedField { name: string; value: string; inline?: boolean; }
-export interface SavedEmbed { name: string; title?: string; description?: string; color?: number; thumbnailUrl?: string; imageUrl?: string; footerText?: string; footerIconUrl?: string; authorName?: string; authorIconUrl?: string; timestamp?: boolean; fields?: EmbedField[]; }
+export interface SavedEmbed { name: string; sourceKey?: string; overrideFields?: Array<'title'|'description'|'color'|'thumbnailUrl'|'imageUrl'|'footerText'|'footerIconUrl'|'authorName'|'authorIconUrl'|'timestamp'|'fields'>; title?: string; description?: string; color?: number; thumbnailUrl?: string; imageUrl?: string; footerText?: string; footerIconUrl?: string; authorName?: string; authorIconUrl?: string; timestamp?: boolean; fields?: EmbedField[]; }
 export interface WelcomeEmbed { enabled: boolean; title?: string; description?: string; color?: number; thumbnailUrl?: string; footerText?: string; }
 export interface WelcomeConfig { enabled: boolean; channelId?: string; message?: string; embed?: WelcomeEmbed; }
 export interface ExtraEntryRole { roleId: string; entries: number; }
