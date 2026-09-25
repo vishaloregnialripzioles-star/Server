@@ -149,18 +149,32 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
       await interaction.reply({ content: '❌ Help categories are only available inside a server.', flags: 64 });
       return;
     }
-    const value = interaction.values[0] ?? 'all';
-    const commands = Array.from(interaction.client.commands?.values?.() ?? []);
-    const prefix = (await import('../prefixHandler.js')).getGuildPrefix(interaction.guildId);
-    const category = value === 'all' ? undefined : findHelpCategory(value, commands, prefix);
-    if (value !== 'all' && !category) {
-      await interaction.reply({ content: '❌ That help category is no longer available.', flags: 64 });
-      return;
+    try {
+      // Acknowledge first so Discord cannot time out while the menu is being rebuilt.
+      await interaction.deferUpdate();
+      const value = interaction.values[0] ?? 'all';
+      const commands = Array.from(interaction.client.commands?.values?.() ?? []);
+      const prefix = (await import('../prefixHandler.js')).getGuildPrefix(interaction.guildId);
+      const category = value === 'all' ? undefined : findHelpCategory(value, commands, prefix);
+      if (value !== 'all' && !category) {
+        await interaction.editReply({ content: '❌ That help category is no longer available.', embeds: [], components: [] });
+        return;
+      }
+      const base = buildHelpEmbed(category?.name, prefix, commands);
+      const edited = applyEditableEmbed(interaction.guildId, 'help', base);
+      await interaction.editReply({
+        content: '',
+        embeds: [edited],
+        components: [buildHelpMenu(category?.name, commands, prefix)],
+      });
+    } catch (error) {
+      console.error('[Help] Category selector failed:', error);
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply({ content: '❌ I could not load that help category. Please run /help again.', embeds: [], components: [] }).catch(() => undefined);
+      } else {
+        await interaction.reply({ content: '❌ I could not load that help category. Please run /help again.', flags: 64 }).catch(() => undefined);
+      }
     }
-    await interaction.update({
-      embeds: [applyEditableEmbed(interaction.guildId, 'help', buildHelpEmbed(category?.name, prefix, commands))],
-      components: [buildHelpMenu(category?.name, commands, prefix)],
-    });
     return;
   }
 
