@@ -28,6 +28,7 @@ import { pendingGiveaways, buildConfigEmbed, buildConfigRows } from '../giveaway
 import type { PendingGiveaway } from '../giveawaySetup.js';
 import { parseDuration, generateId } from '../utils.js';
 import { captureCommandEmbed, applyEditableEmbed } from '../commandEmbedRegistry.js';
+import { handleEmbedEditorInteraction } from '../embedEditor.js';
 import {
   HELP_SELECT_CUSTOM_ID,
   buildHelpEmbed,
@@ -65,6 +66,14 @@ function text(id: string, label: string, placeholder?: string, required = false,
 
 export async function handleInteractionCreate(interaction: Interaction): Promise<void> {
   try {
+
+  // ── Private embed editor interactions ───────────────────────────────────────
+  // Handle these before the general button/select/modal routers so the editor
+  // always acknowledges Discord's interaction within the 3-second window.
+  if ((interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) && String((interaction as any).customId ?? '').startsWith('embededit:')) {
+    await handleEmbedEditorInteraction(interaction);
+    return;
+  }
 
   // ── Autocomplete ────────────────────────────────────────────────────────────
   if (interaction.isAutocomplete()) {
