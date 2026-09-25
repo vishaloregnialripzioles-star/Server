@@ -1,1 +1,178 @@
-import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';\nimport type { Command } from '../types.js';\nimport { loadGuild, updateGuild } from '../storage.js';\nimport { isOwnerOrExtraOwner } from '../security.js';\n\nconst RED=0xD30000;\nconst GREEN=0x57F287;\nconst YELLOW=0xFEE75C;\nconst EMOJIS={note:'1553041622491594873',setup:'1553048591805845529',check:'1553040385188569211',final:'1553039986159386657'} as const;\n\nasync function appEmoji(interaction:any,id:string,fallback:string):Promise<string>{try{return (await interaction.client.application.emojis.fetch(id)).toString();}catch{return fallback;}}\n\nasync function hierarchy(guild:any):Promise<{ok:boolean;blocking:any[];me:any}>{\n const me=guild.members.me??await guild.members.fetchMe().catch(()=>null);\n if(!me)return {ok:false,blocking:[],me:null};\n const members=await guild.members.fetch().catch(()=>guild.members.cache);\n const blocking=[...members.values()].filter((member:any)=>member.id!==guild.ownerId&&member.id!==guild.client.user?.id&&member.roles.highest.position>=me.roles.highest.position&&(member.permissions.has(PermissionFlagsBits.Administrator)||member.permissions.has(PermissionFlagsBits.ManageGuild)||member.permissions.has(PermissionFlagsBits.ManageRoles)||member.permissions.has(PermissionFlagsBits.BanMembers)||member.permissions.has(PermissionFlagsBits.KickMembers)));\n return {ok:me.roles.highest.position>0&&blocking.length===0,blocking,me};\n}\n\nasync function requiredPermissions(guild:any):Promise<bigint[]>{\n const me=guild.members.me??await guild.members.fetchMe().catch(()=>null);\n const required=[PermissionFlagsBits.ViewAuditLog,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageRoles,PermissionFlagsBits.KickMembers,PermissionFlagsBits.BanMembers];\n return me?required.filter(p=>!me.permissions.has(p)):required;\n}\n\nasync function finalEmbed(interaction:any,guild:any):Promise<EmbedBuilder>{\n const tick=await appEmoji(interaction,EMOJIS.final,'✅');\n const note=await appEmoji(interaction,EMOJIS.note,'➜');\n const text=['**Enabled Events**',tick+' Anti Ban',tick+' Anti Kick',tick+' Anti BotAdd',tick+' Anti Channel Create',tick+' Anti Channel Delete',tick+' Anti Channel Update',tick+' Anti @everyone / @here',tick+' Anti Guild Update',tick+' Anti Integration',tick+' Anti Member Update',tick+' Anti Role Create',tick+' Anti Role Delete',tick+' Anti Role Update',tick+' Anti Webhook','','**Special Events**',tick+' Anti Prune',tick+' Anti Link Role',tick+' Anti Dangerous Invites',tick+' Safe Onboarding',tick+' Anti Member Update With Dangerous Permissions',tick+' Anti Role Update With Dangerous Permissions','',''+note+' **Recovery:** malicious role/channel/member changes are automatically rolled back when Discord exposes enough state to restore them.',note+' **Enforcement:** the executor is instantly banned unless they are the server owner, bot, extra owner, or whitelist member.'].join('\n');\n return new EmbedBuilder().setColor(RED).setTitle(tick+' Enabled Antinuke in this Guild').setDescription(text).setThumbnail(guild.iconURL?.({size:256})??null).setFooter({text:'Sparxie • Anti-Nuke Security'}).setTimestamp();\n}\n\nasync function runSetup(interaction:any):Promise<void>{\n const guild=interaction.guild;\n const setup=await appEmoji(interaction,EMOJIS.setup,'⚙️');\n const bullet=await appEmoji(interaction,EMOJIS.note,'•');\n const check=await appEmoji(interaction,EMOJIS.check,'☑️');\n const steps=['Checking Sparxie role permissions','Creating and configuring Sparxie firewall protection','Checking and deleting malicious invites','Creating Anti-Nuke security logging','Creating security recovery handlers','Enabling Anti-Nuke for this server','Safeguarding changes'];\n const message=await interaction.editReply({embeds:[new EmbedBuilder().setColor(RED).setTitle(setup+' Antinuke Setup').setDescription('**Performing Quick Checks To Ensure Everything Goes Smoothly During Setup**\n\n'+steps.map(s=>bullet+' '+s).join('\n')).setFooter({text:'Sparxie • Security setup in progress'})],components:[]});\n for(let index=0;index<steps.length;index++){await new Promise(resolve=>setTimeout(resolve,450));const lines=steps.map((step,i)=>bullet+' '+step+(i<=index?' '+check:''));await message.edit({embeds:[new EmbedBuilder().setColor(RED).setTitle(setup+' Antinuke Setup').setDescription('**Performing Quick Checks To Ensure Everything Goes Smoothly During Setup**\n\n'+lines.join('\n')).setFooter({text:'Sparxie • Security setup in progress'})]});}\n updateGuild(guild.id,data=>{data.antiNuke.enabled=true;data.antiNuke.punishment='ban';});\n await message.edit({embeds:[await finalEmbed(interaction,guild)],components:[]});\n}\n\nfunction noteEmbed(body:string):EmbedBuilder{return new EmbedBuilder().setColor(RED).setTitle('Important Note').setDescription(body).setFooter({text:'Sparxie • Anti-Nuke Security'});}\n\nexport const antinuke:Command={\n data:new SlashCommandBuilder().setName('antinuke').setDescription('Protect the server from destructive actions').addSubcommand(s=>s.setName('enable').setDescription('Enable instant Anti-Nuke protection')).addSubcommand(s=>s.setName('disable').setDescription('Disable Anti-Nuke')).addSubcommand(s=>s.setName('status').setDescription('Show protection status')).addSubcommandGroup(g=>g.setName('whitelist').setDescription('Manage trusted members').addSubcommand(s=>s.setName('add').setDescription('Trust a member').addUserOption(o=>o.setName('user').setDescription('Member').setRequired(true))).addSubcommand(s=>s.setName('remove').setDescription('Untrust a member').addUserOption(o=>o.setName('user').setDescription('Member').setRequired(true)))),\n async execute(interaction){\n  if(!interaction.guild)return;\n  if(!isOwnerOrExtraOwner(interaction.guild,interaction.user.id)){await interaction.reply({embeds:[new EmbedBuilder().setColor(RED).setTitle('Anti-Nuke Locked').setDescription('Only the **server owner** or an **extra owner** can configure Anti-Nuke.')],ephemeral:true});return;}\n  const sub=interaction.options.getSubcommand();const group=interaction.options.getSubcommandGroup(false);const id=interaction.guild.id;\n  if(sub==='enable'){\n   const missing=await requiredPermissions(interaction.guild);\n   const h=await hierarchy(interaction.guild);\n   const blockingText=h.blocking.length?h.blocking.slice(0,10).map((m:any)=>'• '+m.user.tag+' — <@&'+m.roles.highest.id+'>').join('\n'):'• None detected';\n   const note=await appEmoji(interaction,EMOJIS.note,'➜');\n   const warning=[note+' **Sparxie does not guarantee protection** if a nuke actor has the same or higher role than the bot.',note+' **Whitelisted users are trusted** and are not automatically punished.','', '**Bot role check**',blockingText,'',note+' **For full protection, place the Sparxie role above all roles it may need to act against.**',missing.length?'\n**Missing permissions:** '+missing.map(String).join(', '):'','', 'To continue, click **Proceed**. Otherwise click **Don\'t Agree**.'].join('\n');\n   const row=new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('antinuke:proceed:'+interaction.user.id).setLabel('Proceed').setStyle(ButtonStyle.Success),new ButtonBuilder().setCustomId('antinuke:cancel:'+interaction.user.id).setLabel("Don't Agree").setStyle(ButtonStyle.Danger));\n   const message=await interaction.reply({embeds:[noteEmbed(warning)],components:[row],fetchReply:true});\n   const collector=message.createMessageComponentCollector({time:60000,filter:(i:any)=>i.user.id===interaction.user.id});\n   collector.on('collect',async(btn:any)=>{try{\n    if(btn.customId.startsWith('antinuke:cancel:')){await btn.update({embeds:[new EmbedBuilder().setColor(RED).setTitle('Anti-Nuke Setup Cancelled').setDescription('No changes were made.')],components:[]});collector.stop('cancel');return;}\n    const current=await hierarchy(interaction.guild);const currentMissing=await requiredPermissions(interaction.guild);\n    if(currentMissing.length||!current.ok){const blockers=current.blocking.length?current.blocking.slice(0,10).map((m:any)=>'• '+m.user.tag+' — <@&'+m.roles.highest.id+'>').join('\n'):'• None';await btn.update({embeds:[new EmbedBuilder().setColor(YELLOW).setTitle('Move Sparxie Role Higher First').setDescription('I did not enable Anti-Nuke because the bot is not high enough in the role hierarchy.\n\n**Blocking roles/members:**\n'+blockers+'\n\nMove the **Sparxie** role above those roles, then run `/antinuke enable` again.')],components:[]});collector.stop('blocked');return;}\n    await btn.deferUpdate();await runSetup(interaction);collector.stop('done');\n   }catch(error){console.error('[AntiNuke setup]',error);await btn.editReply?.({embeds:[new EmbedBuilder().setColor(RED).setTitle('Anti-Nuke Setup Failed').setDescription('The setup could not be completed. Check the bot permissions and role hierarchy, then try again.')],components:[]}).catch(()=>undefined);}});\n   collector.on('end',async(_,reason)=>{if(reason==='time')await interaction.editReply({embeds:[new EmbedBuilder().setColor(YELLOW).setTitle('Anti-Nuke Setup Expired').setDescription('The confirmation expired. Run **/antinuke enable** again.')],components:[]}).catch(()=>undefined);});\n   return;\n  }\n  if(sub==='disable'){updateGuild(id,d=>{d.antiNuke.enabled=false;});await interaction.reply({embeds:[new EmbedBuilder().setColor(YELLOW).setTitle('Anti-Nuke Disabled').setDescription('Protection is paused.')]});return;}\n  if(group==='whitelist'){const user=interaction.options.getUser('user',true);const add=sub==='add';updateGuild(id,d=>{if(add&&!d.antiNuke.whitelist.includes(user.id))d.antiNuke.whitelist.push(user.id);if(!add)d.antiNuke.whitelist=d.antiNuke.whitelist.filter(x=>x!==user.id);});await interaction.reply({embeds:[new EmbedBuilder().setColor(RED).setTitle(add?'Trusted Member Added':'Trusted Member Removed').setDescription((add?'Added ':'Removed ')+'<@'+user.id+'> '+(add?'to':'from')+' the Anti-Nuke whitelist.')]});return;}\n  const a=loadGuild(id).antiNuke;const tick=await appEmoji(interaction,EMOJIS.final,'✅');await interaction.reply({embeds:[new EmbedBuilder().setColor(RED).setTitle(tick+' Anti-Nuke Status').setDescription('**Status:** '+(a.enabled?'Enabled':'Disabled')+'\n**Enforcement:** Instant ban for non-whitelisted executors\n**Automatic recovery:** Enabled\n**Security logs:** '+(a.logChannelId?'<#'+a.logChannelId+'>':'Auto-created when needed')+'\n**Whitelist:** '+a.whitelist.length+' trusted member(s)')]});\n },\n};\n
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+  PermissionFlagsBits,
+  SlashCommandBuilder,
+} from 'discord.js';
+import type { Command } from '../types.js';
+import { loadGuild, updateGuild } from '../storage.js';
+import { isOwnerOrExtraOwner } from '../security.js';
+
+const RED = 0xd30000;
+const YELLOW = 0xfee75c;
+
+async function appEmoji(interaction: any, id: string, fallback: string): Promise<string> {
+  try { return (await interaction.client.application.emojis.fetch(id)).toString(); }
+  catch { return fallback; }
+}
+
+async function getBotMember(guild: any): Promise<any | null> {
+  return guild.members.me ?? await guild.members.fetchMe().catch(() => null);
+}
+
+async function missingPermissions(guild: any): Promise<bigint[]> {
+  const me = await getBotMember(guild);
+  const required = [PermissionFlagsBits.ViewAuditLog, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers];
+  return me ? required.filter(permission => !me.permissions.has(permission)) : required;
+}
+
+async function hierarchyBlockers(guild: any): Promise<any[]> {
+  const me = await getBotMember(guild);
+  if (!me) return [];
+  const members = await guild.members.fetch().catch(() => guild.members.cache);
+  return [...members.values()].filter((member: any) =>
+    member.id !== guild.ownerId &&
+    member.id !== guild.client.user?.id &&
+    member.roles.highest.position >= me.roles.highest.position &&
+    (member.permissions.has(PermissionFlagsBits.Administrator) ||
+      member.permissions.has(PermissionFlagsBits.ManageGuild) ||
+      member.permissions.has(PermissionFlagsBits.ManageRoles) ||
+      member.permissions.has(PermissionFlagsBits.BanMembers) ||
+      member.permissions.has(PermissionFlagsBits.KickMembers))
+  );
+}
+
+function statusEmbed(enabled: boolean): EmbedBuilder {
+  return new EmbedBuilder()
+    .setColor(enabled ? 0x57f287 : YELLOW)
+    .setTitle(enabled ? 'Anti-Nuke Enabled' : 'Anti-Nuke Disabled')
+    .setDescription(enabled ? ['**Protection:** Active', '**Enforcement:** Configured for destructive actions', '**Automatic recovery:** Enabled where recovery state is available', '', 'Use /antinuke status to check the current state.'].join('\n') : 'Anti-Nuke protection is currently paused.')
+    .setFooter({ text: 'Sparxie • Anti-Nuke Security' })
+    .setTimestamp();
+}
+
+export const antinuke: Command = {
+  data: new SlashCommandBuilder()
+    .setName('antinuke')
+    .setDescription('Protect the server from destructive actions')
+    .addSubcommand(sub => sub.setName('enable').setDescription('Enable Anti-Nuke protection'))
+    .addSubcommand(sub => sub.setName('disable').setDescription('Disable Anti-Nuke protection'))
+    .addSubcommand(sub => sub.setName('status').setDescription('Show Anti-Nuke status'))
+    .addSubcommandGroup(group => group.setName('whitelist').setDescription('Manage trusted members')
+      .addSubcommand(sub => sub.setName('add').setDescription('Trust a member').addUserOption(option => option.setName('user').setDescription('Member to trust').setRequired(true)))
+      .addSubcommand(sub => sub.setName('remove').setDescription('Remove a trusted member').addUserOption(option => option.setName('user').setDescription('Member to remove').setRequired(true)))
+    ),
+
+  async execute(interaction) {
+    if (!interaction.guild) return;
+    if (!isOwnerOrExtraOwner(interaction.guild, interaction.user.id)) {
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(RED).setTitle('Anti-Nuke Locked').setDescription('Only the server owner or an extra owner can configure Anti-Nuke.')], ephemeral: true });
+      return;
+    }
+
+    const guild = interaction.guild;
+    const subcommand = interaction.options.getSubcommand();
+    const group = interaction.options.getSubcommandGroup(false);
+
+    if (group === 'whitelist') {
+      const user = interaction.options.getUser('user', true);
+      const adding = subcommand === 'add';
+      updateGuild(guild.id, data => {
+        if (adding && !data.antiNuke.whitelist.includes(user.id)) data.antiNuke.whitelist.push(user.id);
+        if (!adding) data.antiNuke.whitelist = data.antiNuke.whitelist.filter(id => id !== user.id);
+      });
+      await interaction.reply({ embeds: [new EmbedBuilder().setColor(RED).setTitle(adding ? 'Trusted Member Added' : 'Trusted Member Removed').setDescription((adding ? 'Added ' : 'Removed ') + '<@' + user.id + '> ' + (adding ? 'to' : 'from') + ' the Anti-Nuke whitelist.')] });
+      return;
+    }
+
+    if (subcommand === 'status') {
+      const config = loadGuild(guild.id).antiNuke;
+      const check = await appEmoji(interaction, '1553040385188569211', '✓');
+      await interaction.reply({ embeds: [statusEmbed(config.enabled).setDescription([
+        '**Status:** ' + (config.enabled ? 'Enabled' : 'Disabled'),
+        '**Whitelist:** ' + config.whitelist.length + ' trusted member(s)',
+        '**Security logs:** ' + (config.logChannelId ? '<#' + config.logChannelId + '>' : 'Not configured'),
+        '', check + ' Anti-Nuke configuration is loaded.',
+      ].join('\n'))] });
+      return;
+    }
+
+    if (subcommand === 'disable') {
+      updateGuild(guild.id, data => { data.antiNuke.enabled = false; });
+      await interaction.reply({ embeds: [statusEmbed(false)] });
+      return;
+    }
+
+    const missing = await missingPermissions(guild);
+    const blockers = await hierarchyBlockers(guild);
+    const blockerText = blockers.length ? blockers.slice(0, 10).map((member: any) => '• ' + member.user.tag + ' — <@&' + member.roles.highest.id + '>').join('\n') : '• None detected';
+    const warning = [
+      '**Before enabling Anti-Nuke**',
+      '',
+      'Sparxie needs the required moderation permissions and a role high enough to act on protected roles.',
+      '',
+      '**Role hierarchy**',
+      blockerText,
+      '',
+      missing.length ? '**Missing permissions:** ' + missing.map(String).join(', ') : '✓ Required permissions detected.',
+      '',
+      'If everything is correct, press Proceed.',
+    ].join('\n');
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('antinuke:proceed:' + interaction.user.id).setLabel('Proceed').setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId('antinuke:cancel:' + interaction.user.id).setLabel("Don't Agree").setStyle(ButtonStyle.Danger),
+    );
+
+    const message = await interaction.reply({
+      embeds: [new EmbedBuilder().setColor(RED).setTitle('Anti-Nuke Setup').setDescription(warning).setFooter({ text: 'Sparxie • Security setup' })],
+      components: [row],
+      fetchReply: true,
+    });
+
+    const collector = message.createMessageComponentCollector({ time: 60000, filter: (component: any) => component.user.id === interaction.user.id });
+    collector.on('collect', async (component: any) => {
+      try {
+        if (component.customId.startsWith('antinuke:cancel:')) {
+          await component.update({ embeds: [new EmbedBuilder().setColor(YELLOW).setTitle('Anti-Nuke Setup Cancelled').setDescription('No changes were made.')], components: [] });
+          collector.stop('cancelled');
+          return;
+        }
+        const currentMissing = await missingPermissions(guild);
+        const currentBlockers = await hierarchyBlockers(guild);
+        if (currentMissing.length || currentBlockers.length) {
+          await component.update({
+            embeds: [new EmbedBuilder().setColor(YELLOW).setTitle('Anti-Nuke Cannot Be Enabled Yet').setDescription([
+              currentMissing.length ? '**Missing permissions:** ' + currentMissing.map(String).join(', ') : '✓ Required permissions detected.',
+              '', '**Blocking roles/members:**',
+              currentBlockers.length ? currentBlockers.slice(0, 10).map((member: any) => '• ' + member.user.tag + ' — <@&' + member.roles.highest.id + '>').join('\n') : '• None detected',
+              '', 'Move the Sparxie role above the protected roles and grant the required permissions, then run /antinuke enable again.',
+            ].join('\n'))],
+            components: [],
+          });
+          collector.stop('blocked');
+          return;
+        }
+        await component.deferUpdate();
+        updateGuild(guild.id, data => { data.antiNuke.enabled = true; data.antiNuke.punishment = 'ban'; });
+        await interaction.editReply({
+          embeds: [new EmbedBuilder().setColor(0x57f287).setTitle('Anti-Nuke Enabled').setDescription([
+            'Sparxie Anti-Nuke is now enabled for this server.',
+            '', '**Protection:** Active', '**Enforcement:** Configured for destructive actions', '**Whitelist:** Trusted members are excluded',
+          ].join('\n')).setFooter({ text: 'Sparxie • Anti-Nuke Security' }).setTimestamp()],
+          components: [],
+        });
+        collector.stop('enabled');
+      } catch (error) {
+        console.error('[AntiNuke interaction]', error);
+        await interaction.editReply({ embeds: [new EmbedBuilder().setColor(RED).setTitle('Anti-Nuke Setup Failed').setDescription('The setup could not be completed. Check the bot permissions and try again.')], components: [] }).catch(() => undefined);
+      }
+    });
+
+    collector.on('end', async (_, reason) => {
+      if (reason === 'time') await interaction.editReply({ embeds: [new EmbedBuilder().setColor(YELLOW).setTitle('Anti-Nuke Setup Expired').setDescription('The confirmation expired. Run /antinuke enable again.')], components: [] }).catch(() => undefined);
+    });
+  },
+};
