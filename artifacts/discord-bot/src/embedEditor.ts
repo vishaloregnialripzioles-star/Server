@@ -18,15 +18,18 @@ export function createEmbedEditorSession(i:ChatInputCommandInteraction,name:stri
   sessions.set(id,{guildId:i.guildId!,userId:i.user.id,name,draft:clone(saved)});
   return id;
 }
-export function buildEmbedEditorSelection(guildId:string){
-  const names=Object.keys(loadGuild(guildId).savedEmbeds??{}).slice(0,25);
-  const select=new StringSelectMenuBuilder().setCustomId('embededit:select').setPlaceholder(names.length?'Select an embed to edit':'No saved embeds').setDisabled(!names.length);
-  if(names.length)select.addOptions(names.map(n=>({label:n.slice(0,100),value:n,description:'Open the full embed editor'})));
-  return {
-    content:names.length?'🛠️ Embed Editor\nSelect an embed below. Every section can be edited, including fields and custom emojis.':'📭 No saved embeds. Create one first with /embed create.',
-    embeds:[],
-    components:[new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select)]
-  };
+export function buildEmbedEditorSelection(guildId:string,page=0){
+  const names=Object.keys(loadGuild(guildId).savedEmbeds??{}).sort((a,b)=>a.localeCompare(b));
+  const totalPages=Math.max(1,Math.ceil(names.length/25));
+  const current=Math.min(Math.max(page,0),totalPages-1);
+  const pageNames=names.slice(current*25,current*25+25);
+  const select=new StringSelectMenuBuilder().setCustomId('embededit:select:'+current).setPlaceholder(pageNames.length?'Select an embed to edit':'No saved embeds').setDisabled(!pageNames.length);
+  if(pageNames.length)select.addOptions(pageNames.map(n=>({label:n.slice(0,100),value:n,description:'Open and edit this saved embed'})));
+  const nav=new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder().setCustomId('embededit:page:'+(current-1)).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(current===0),
+    new ButtonBuilder().setCustomId('embededit:page:'+(current+1)).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(current>=totalPages-1),
+  );
+  return {content:names.length?'🛠️ **Embed Editor**\nSelect the embed/command you want to edit.\n📄 Page '+(current+1)+'/'+totalPages+' • '+names.length+' saved embeds':'📭 No saved embeds. Create one with `/embed-create`.',embeds:[],components:[new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),nav]};
 }
 function components(id:string,d:SavedEmbed){
   return [
@@ -46,7 +49,7 @@ function components(id:string,d:SavedEmbed){
 }
 async function render(i:Interaction,id:string){
   const s=sessions.get(id);
-  if(!s){if(i.isRepliable())await i.reply({content:'❌ This editor session expired. Run /embed editor again.',ephemeral:true});return;}
+  if(!s){if(i.isRepliable())await i.reply({content:'❌ This editor session expired. Run /embed-edit again.',ephemeral:true});return;}
   if(i.guildId!==s.guildId||i.user.id!==s.userId){if(i.isRepliable())await i.reply({content:'❌ This editor belongs to another user.',ephemeral:true});return;}
   const payload={
     content:'🛠️ Editing: '+s.name+'\nChanges are staged. Click Done / Save to make them permanent.\n\nCustom emoji: paste <:name:id> or <a:name:id>. You can also paste an application emoji ID; it will be resolved when saved.',
@@ -83,7 +86,15 @@ async function normalize(s:SavedEmbed,i:Interaction){
   for(const k of keys)if(typeof s[k]==='string')(s as any)[k]=await resolveEmojiIds(s[k] as string,i);
   for(const f of s.fields??[]){f.name=await resolveEmojiIds(f.name,i);f.value=await resolveEmojiIds(f.value,i);}
 }
-export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolean>{
+export async function handleEmbedEditorInteraction{
+  const customId=String((i as any).customId??'');
+  if(customId.startsWith('embededit:page:')&&i.isButton()){
+    if(!i.guildId){await i.reply({content:'❌ Server only.',ephemeral:true});return true;}
+    const page=Number(customId.split(':')[2]);
+    await i.update(buildEmbedEditorSelection(i.guildId,Number.isFinite(page)?page:0));
+    return true;
+  }
+  if(false){}(i:Interaction):Promise<boolean>{
   const id=String((i as any).customId??'');
   if(id==='embededit:select'&&i.isStringSelectMenu()){
     if(!i.guildId){await i.reply({content:'❌ Server only.',ephemeral:true});return true;}
@@ -96,7 +107,7 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
   if(id.startsWith('embededit:modal:')&&i.isModalSubmit()){
     const section=id.split(':')[2];
     const entry=[...sessions.entries()].reverse().find(([,s])=>s.userId===i.user.id&&s.guildId===i.guildId);
-    if(!entry){await i.reply({content:'❌ This editor session expired. Run /embed editor again.',ephemeral:true});return true;}
+    if(!entry){await i.reply({content:'❌ This editor session expired. Run /embed-edit again.',ephemeral:true});return true;}
     const [sid,s]=entry;
     if(section==='basic'){
       s.draft.title=i.fields.getTextInputValue('title').trim()||undefined;
@@ -123,7 +134,7 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
   }
 
   const parts=id.split(':');const sid=parts[1],action=parts[2];const s=sessions.get(sid);
-  if(!s){await i.reply({content:'❌ This editor session expired. Run /embed editor again.',ephemeral:true});return true;}
+  if(!s){await i.reply({content:'❌ This editor session expired. Run /embed-edit again.',ephemeral:true});return true;}
   if(i.user.id!==s.userId||i.guildId!==s.guildId){await i.reply({content:'❌ This editor belongs to another user.',ephemeral:true});return true;}
   if(action==='done'&&i.isButton()){
     await normalize(s.draft,i);
