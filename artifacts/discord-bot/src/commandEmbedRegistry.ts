@@ -249,10 +249,11 @@ export function captureCommandEmbed(guildId:string,commandName:string,embed:Embe
   const name=displayCommandName(commandName);
   const sourceKey=commandName==='ticket'?'ticket:create':commandName==='closeticket'?'ticket:close':commandName==='reopen'?'ticket:reopen':commandName==='ticketpanel'?'ticket:panel':commandName;
   const current=loadGuild(guildId).savedEmbeds?.[name];
-  if(current && !current.placeholder)return;
+  if(current && !current.placeholder && current.captured!==false)return;
   const base=toSaved(name,sourceKey,embed);
   base.overrideFields=[];
   base.placeholder=false;
+  base.captured=true;
   base.base=cloneSaved(base);
   updateGuild(guildId,d=>{
     d.savedEmbeds??={};
