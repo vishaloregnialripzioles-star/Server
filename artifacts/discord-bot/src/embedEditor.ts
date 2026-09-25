@@ -23,13 +23,19 @@ export function buildEmbedEditorSelection(guildId:string,page=0){
   const totalPages=Math.max(1,Math.ceil(names.length/25));
   const current=Math.min(Math.max(page,0),totalPages-1);
   const pageNames=names.slice(current*25,current*25+25);
-  const select=new StringSelectMenuBuilder().setCustomId('embededit:select:'+current).setPlaceholder(pageNames.length?'Select an embed to edit':'No saved embeds').setDisabled(!pageNames.length);
-  if(pageNames.length)select.addOptions(pageNames.map(n=>({label:n.slice(0,100),value:n,description:'Open and edit this saved embed'})));
-  const nav=new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId('embededit:page:'+(current-1)).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(current===0),
-    new ButtonBuilder().setCustomId('embededit:page:'+(current+1)).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(current>=totalPages-1),
-  );
-  return {content:names.length?'🛠️ **Embed Editor**\nSelect the embed/command you want to edit.\n📄 Page '+(current+1)+'/'+totalPages+' • '+names.length+' saved embeds':'📭 No saved embeds. Create one with `/embed-create`.',embeds:[],components:[new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select),nav]};
+  const rows: any[]=[];
+  if(pageNames.length){
+    const select=new StringSelectMenuBuilder().setCustomId('embededit:select:'+current).setPlaceholder('Select an embed/command to edit');
+    select.addOptions(pageNames.map(n=>({label:n.slice(0,100),value:n,description:'Edit '+n})));
+    rows.push(new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(select));
+  }
+  if(totalPages>1){
+    rows.push(new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId('embededit:page:'+(current-1)).setLabel('Previous').setStyle(ButtonStyle.Secondary).setDisabled(current===0),
+      new ButtonBuilder().setCustomId('embededit:page:'+(current+1)).setLabel('Next').setStyle(ButtonStyle.Secondary).setDisabled(current>=totalPages-1),
+    ));
+  }
+  return {content:names.length?'🛠️ **Embed Editor**\\nSelect the embed/command you want to edit.\\n📄 Page '+(current+1)+'/'+totalPages+' • '+names.length+' saved embeds':'📭 No saved embeds yet. Use \`/embed-create\` first.',embeds:[],components:rows};
 }
 function components(id:string,d:SavedEmbed){
   return [
@@ -51,12 +57,19 @@ async function render(i:Interaction,id:string){
   const s=sessions.get(id);
   if(!s){if(i.isRepliable())await i.reply({content:'❌ This editor session expired. Run /embed-edit again.',ephemeral:true});return;}
   if(i.guildId!==s.guildId||i.user.id!==s.userId){if(i.isRepliable())await i.reply({content:'❌ This editor belongs to another user.',ephemeral:true});return;}
-  const payload={
-    content:'🛠️ Editing: '+s.name+'\nChanges are staged. Click Done / Save to make them permanent.\n\nCustom emoji: paste <:name:id> or <a:name:id>. You can also paste an application emoji ID; it will be resolved when saved.',
-    embeds:[buildEmbedPreview(s.draft)],components:components(id,s.draft)
-  };
-  if(i.isButton()||i.isStringSelectMenu())await i.update(payload);
-  else if(i.isRepliable())await i.editReply(payload);
+  try{
+    const payload={
+      content:'🛠️ **Editing: '+s.name+'**\\nChanges are staged. Click **Done / Save** to make them permanent.\\n\\nCustom emojis are supported in text fields.',
+      embeds:[buildEmbedPreview(s.draft)],components:components(id,s.draft)
+    };
+    if(i.isButton()||i.isStringSelectMenu())await i.update(payload);
+    else if(i.isRepliable())await i.editReply(payload);
+  }catch(error){
+    console.error('[EmbedEditor] Render failed:',error);
+    const message='❌ I could not render this embed. One of its saved values (usually an image/icon URL) is invalid. Your saved data was not changed.';
+    if(i.isButton()||i.isStringSelectMenu())await i.reply({content:message,ephemeral:true}).catch(()=>undefined);
+    else if(i.isRepliable())await i.editReply({content:message,embeds:[],components:[]}).catch(()=>undefined);
+  }
 }
 function input(id:string,label:string,value:string|undefined,style=TextInputStyle.Short,required=false,max=4000){
   return new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label.slice(0,45)).setStyle(style).setRequired(required).setMaxLength(max).setValue((value??'').slice(0,max)));
