@@ -76,7 +76,7 @@ export const afk: Command = {
     const embed=applyEditableEmbed(interaction.guild.id,'afk',new EmbedBuilder()
       .setColor(0x5865F2)
       .setTitle('💤 Choose your AFK scope')
-      .setDescription(`**Reason:** ${reason}\\n\\n🏠 **Server AFK** — only this server will see your AFK status.\\n🌐 **Global AFK** — every server where Sparxie is present will see it.`)
+      .setDescription(`**Reason:** ${reason}\n\n🏠 **Server AFK** — only this server will see your AFK status.\n🌐 **Global AFK** — every server where Sparxie is present will see it.`)
       .setFooter({text:'Choose one option below • expires in 60 seconds'}));
     await interaction.reply({embeds:[embed],components:[row]});
   },
