@@ -202,11 +202,14 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
     await i.reply({content:'❌ That embed no longer exists.',ephemeral:true});return true;
   }
   try{
+    await i.deferUpdate();
     const sid=await createEmbedEditorSession(i as any,name);
-    await i.update(renderPayload(sessions.get(sid)!));
+    await i.editReply(renderPayload(sessions.get(sid)!));
   }catch(error){
     console.error('[EmbedEditor] Selection failed:',error);
-    if(i.isRepliable()&&!i.replied&&!i.deferred)await i.reply({content:'❌ Could not open that embed editor. Please try again.',ephemeral:true}).catch(()=>undefined);
+    if(i.isRepliable()&&(i.deferred||i.replied)){
+      await i.editReply({content:'❌ Could not open that embed editor. Please try again.',embeds:[],components:[]}).catch(()=>undefined);
+    }
   }
   return true;
 }
