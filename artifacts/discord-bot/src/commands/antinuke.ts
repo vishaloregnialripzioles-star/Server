@@ -230,9 +230,44 @@ export const antinuke: Command = {
         }
 
         await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Create/select the Anti-Nuke logging channel during setup so the
+        // enabled configuration is immediately ready to receive security logs.
+        let logChannelId = loadGuild(guild.id).antiNuke.logChannelId;
+        let logChannel = logChannelId
+          ? await guild.channels.fetch(logChannelId).catch(() => null)
+          : null;
+
+        if (!logChannel || !logChannel.isTextBased()) {
+          const existing = guild.channels.cache.find(
+            (channel: any) => channel.isTextBased() && channel.name === 'antinuke-logs'
+          );
+          logChannel = existing ?? await guild.channels.create({
+            name: 'antinuke-logs',
+            type: 0,
+            reason: 'Anti-Nuke security logging channel',
+          }).catch(() => null);
+        }
+
+        if (!logChannel) {
+          await interaction.editReply({
+            embeds: [new EmbedBuilder()
+              .setColor(YELLOW)
+              .setTitle('Anti-Nuke Setup Could Not Finish')
+              .setDescription('Sparxie could not create or access the #antinuke-logs channel. Please give Sparxie **Manage Channels** permission and try again.')
+              .setFooter({ text: 'Sparxie • Anti-Nuke Security' })],
+            components: [],
+          });
+          collector.stop('log-channel-failed');
+          return;
+        }
+
+        logChannelId = logChannel.id;
+
         updateGuild(guild.id, data => {
           data.antiNuke.enabled = true;
           data.antiNuke.punishment = 'ban';
+          data.antiNuke.logChannelId = logChannelId!;
         });
 
         // These are the destructive actions currently handled by the Anti-Nuke
@@ -262,6 +297,7 @@ export const antinuke: Command = {
           '**Everything Protected**',
           protectedLines,
           '',
+          '**Logging:** <#' + logChannelId + '>',
           '**Enforcement:** Instant protection with whitelist support',
           '**Recovery:** Unauthorized destructive changes are automatically handled where recovery is available.',
         ].join('\n');
