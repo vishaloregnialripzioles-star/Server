@@ -122,9 +122,41 @@ function fromSaved(s:SavedEmbed):EmbedBuilder {
   return new EmbedBuilder(out);
 }
 
-export function getEditableEmbedDefinitions():Array<{name:string;sourceKey:string;description:string}> {
-  const data = new Map(BUILT_INS.map(x=>[x.name.toLowerCase(),x]));
-  return [...data.values()].map(x=>({name:x.name,sourceKey:x.sourceKey,description:x.description}));
+function displayCommandName(commandName:string):string {
+  if(commandName==='help')return 'Help';
+  if(commandName==='antinuke')return 'Anti-Nuke';
+  if(commandName==='ticket')return 'Ticket Create';
+  if(commandName==='closeticket')return 'Ticket Close';
+  if(commandName==='reopen')return 'Ticket Reopen';
+  if(commandName==='ticketpanel')return 'Ticket Panel';
+  return commandName.split(/[-_]/g).filter(Boolean).map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(' ') || commandName;
+}
+
+function buildPlaceholder(name:string,sourceKey:string):SavedEmbed {
+  return {
+    name,
+    sourceKey,
+    placeholder:true,
+    title:`/${sourceKey}`,
+    description:'This command embed has not been captured yet. Run the command once, then reopen /embed-edit to load its real member-visible embed.',
+    timestamp:false,
+    fields:[],
+  };
+}
+
+export function getEditableEmbedDefinitions(client?:ChatInputCommandInteraction['client']):Array<{name:string;sourceKey:string;description:string}> {
+  const data = new Map(BUILT_INS.map(x=>[x.sourceKey,{name:x.name,sourceKey:x.sourceKey,description:x.description}]));
+  if(client){
+    for(const command of client.commands.values()){
+      const sourceKey=command.data.name;
+      if(sourceKey==='welcome' || sourceKey==='embed-edit')continue;
+      const name=displayCommandName(sourceKey);
+      if(!data.has(sourceKey)){
+        data.set(sourceKey,{name,sourceKey,description:`Auto-detected embed for /${sourceKey}. If it has not been emitted yet, run the command once to capture it.`});
+      }
+    }
+  }
+  return [...data.values()].sort((a,b)=>a.name.localeCompare(b.name));
 }
 
 export function getEditableEmbedDefinition(name:string):EditableEmbedDefinition|undefined {
@@ -135,11 +167,16 @@ export async function buildCurrentEditableEmbed(i:ChatInputCommandInteraction,na
   const def=byName.get(name.toLowerCase());
   if(!def){
     const saved=loadGuild(i.guildId!).savedEmbeds?.[name];
-    if(!saved)return undefined;
-    const sourceKey=saved.sourceKey??name.toLowerCase();
-    const original=cloneSaved(saved);
-    const draft=cloneSaved(saved);
-    return {draft,original,sourceKey};
+    if(saved){
+      const sourceKey=saved.sourceKey??name.toLowerCase();
+      const original=cloneSaved(saved);
+      const draft=cloneSaved(saved);
+      return {draft,original,sourceKey};
+    }
+    const dynamic=getEditableEmbedDefinitions(i.client).find(x=>x.name===name);
+    if(!dynamic)return undefined;
+    const placeholder=buildPlaceholder(dynamic.name,dynamic.sourceKey);
+    return {draft:cloneSaved(placeholder),original:cloneSaved(placeholder),sourceKey:dynamic.sourceKey};
   }
   let base=def.build(i);
   if(name.toLowerCase()==='help'){
@@ -191,13 +228,16 @@ export function applyEditableEmbed(guildId:string,sourceKey:string,base:EmbedBui
 }
 
 export function captureCommandEmbed(guildId:string,commandName:string,embed:EmbedBuilder):void {
-  const name=commandName==='help'?'Help':commandName==='antinuke'?'Anti-Nuke':commandName==='ticket'?'Ticket Create':commandName==='closeticket'?'Ticket Close':commandName;
-  const sourceKey=commandName==='ticket'?'ticket:create':commandName==='closeticket'?'ticket:close':commandName;
+  const name=displayCommandName(commandName);
+  const sourceKey=commandName==='ticket'?'ticket:create':commandName==='closeticket'?'ticket:close':commandName==='reopen'?'ticket:reopen':commandName==='ticketpanel'?'ticket:panel':commandName;
   const current=loadGuild(guildId).savedEmbeds?.[name];
-  if(current)return;
+  if(current && !current.placeholder)return;
   const base=toSaved(name,sourceKey,embed);
   base.overrideFields=[];
-  // Auto-register the first real embed a command emits so the editor grows with the bot.
-  // It is intentionally stored only as an editable baseline, not as a user override.
-  updateGuild(guildId,d=>{d.savedEmbeds??={};if(!d.savedEmbeds[name])d.savedEmbeds[name]=base;});
+  base.placeholder=false;
+  updateGuild(guildId,d=>{
+    d.savedEmbeds??={};
+    const existing=d.savedEmbeds[name];
+    if(!existing || existing.placeholder)d.savedEmbeds[name]=base;
+  });
 }
