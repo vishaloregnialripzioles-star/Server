@@ -122,8 +122,8 @@ function input(id:string,label:string,value:string,style:TextInputStyle,required
   return new TextInputBuilder().setCustomId(id).setLabel(label.slice(0,45)).setStyle(style).setRequired(required).setMaxLength(maxLength).setValue(value.slice(0,maxLength));
 }
 
-function makeModal(s:Session,section:string):ModalBuilder{
-  const m=new ModalBuilder().setCustomId('embededit:modal:'+section+':'+s.name).setTitle((section.charAt(0).toUpperCase()+section.slice(1)+' • '+s.name).slice(0,45));
+function makeModal(s:Session,section:string,sid:string):ModalBuilder{
+  const m=new ModalBuilder().setCustomId('embededit:modal:'+section+':'+sid).setTitle((section.charAt(0).toUpperCase()+section.slice(1)+' • '+s.name).slice(0,45));
   if(section==='basic'){
     m.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(input('title','Title',s.draft.title??'',TextInputStyle.Short,false,256)),
@@ -215,10 +215,14 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
 }
   if(!customId.startsWith('embededit:'))return false;
   if(customId.startsWith('embededit:modal:')&&i.isModalSubmit()){
-    const section=customId.split(':')[2];
-    const entry=[...sessions.entries()].reverse().find(([,s])=>s.userId===i.user.id&&s.guildId===i.guildId);
-    if(!entry){await i.reply({content:'❌ This editor session expired. Run /embed-edit again.',ephemeral:true});return true;}
-    const [sid,s]=entry;
+    const parts=customId.split(':');
+    const section=parts[2];
+    const sid=parts[3];
+    const s=sessions.get(sid);
+    if(!s || s.userId!==i.user.id || s.guildId!==i.guildId){
+      await i.reply({content:'❌ This editor session expired. Run /embed-edit again.',ephemeral:true}).catch(()=>undefined);
+      return true;
+    }
     try{
       if(section==='basic'){
         s.draft.title=i.fields.getTextInputValue('title').trim()||undefined;s.draft.description=i.fields.getTextInputValue('description').trim()||undefined;
@@ -249,6 +253,6 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
     return true;
   }
   if(action==='cancel'&&i.isButton()){sessions.delete(sid);await i.update({content:'🗑️ Editor cancelled. No staged changes were saved.',embeds:[],components:[]});return true;}
-  if(i.isButton()&&['basic','author','media','footer','fields','emojis'].includes(action)){await i.showModal(makeModal(s,action));return true;}
+  if(i.isButton()&&['basic','author','media','footer','fields','emojis'].includes(action)){await i.showModal(makeModal(s,action,sid));return true;}
   return true;
 }
