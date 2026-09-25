@@ -183,21 +183,41 @@ export async function buildCurrentEditableEmbed(i:ChatInputCommandInteraction,na
       base=buildHelpEmbed(null,getGuildPrefix(i.guildId??''),commands as any);
     }catch{}
   }
-  const original=toSaved(def.name,def.sourceKey,base);
+  const generated=toSaved(def.name,def.sourceKey,base);
   const saved=loadGuild(i.guildId!).savedEmbeds?.[def.name];
-  if(!saved)return {draft:original,original,sourceKey:def.sourceKey};
+  if(!saved)return {draft:generated,original:generated,sourceKey:def.sourceKey};
+
+  // A captured embed is the real member-visible baseline. Keep it even when
+  // later edits override only selected properties.
+  const baseline=saved.base ? cloneSaved(saved.base) : cloneSaved(saved);
+  baseline.name=def.name;
+  baseline.sourceKey=def.sourceKey;
+  baseline.placeholder=false;
+
+  const draft=cloneSaved(baseline);
   if(Array.isArray(saved.overrideFields)){
-    const normalized:SavedEmbed={...original,name:def.name,sourceKey:def.sourceKey,overrideFields:saved.overrideFields};
-    for(const key of saved.overrideFields)if(key in saved)(normalized as any)[key]=(saved as any)[key];
-    return {draft:normalized,original,sourceKey:def.sourceKey};
+    for(const key of saved.overrideFields)if(key in saved)(draft as any)[key]=(saved as any)[key];
+  }else{
+    Object.assign(draft,saved);
   }
-  return {draft:{...original,...saved,name:def.name,sourceKey:def.sourceKey},original,sourceKey:def.sourceKey};
+  draft.name=def.name;
+  draft.sourceKey=def.sourceKey;
+  draft.overrideFields=saved.overrideFields;
+  draft.base=undefined;
+  return {draft,original:baseline,sourceKey:def.sourceKey};
 }
 
 export function savedFromDraft(name:string,sourceKey:string,draft:SavedEmbed,original:SavedEmbed):SavedEmbed {
   const fields:Array<keyof SavedEmbed>=['title','description','color','thumbnailUrl','imageUrl','footerText','footerIconUrl','authorName','authorIconUrl','timestamp','fields'];
   const changed=fields.filter(k=>JSON.stringify((draft as any)[k])!==JSON.stringify((original as any)[k]));
-  return {...draft,name,sourceKey,overrideFields:changed};
+  return {
+    ...draft,
+    name,
+    sourceKey,
+    overrideFields:changed,
+    base:cloneSaved(original),
+    placeholder:false,
+  };
 }
 
 export function applyEditableEmbed(guildId:string,sourceKey:string,base:EmbedBuilder):EmbedBuilder {
@@ -231,6 +251,7 @@ export function captureCommandEmbed(guildId:string,commandName:string,embed:Embe
   const base=toSaved(name,sourceKey,embed);
   base.overrideFields=[];
   base.placeholder=false;
+  base.base=cloneSaved(base);
   updateGuild(guildId,d=>{
     d.savedEmbeds??={};
     const existing=d.savedEmbeds[name];
