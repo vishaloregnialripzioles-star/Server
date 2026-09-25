@@ -37,7 +37,7 @@ const definitions: Array<[string, string]> = [
   ['./games.js', 'game'], ['./gamesInfo.js', 'games'], ['./sparks.js', 'coinLeaderboard'], ['./shop.js', 'shop'],
   ['./removeshop.js', 'removeshop'], ['./antinuke.js', 'antinuke'], ['./extraowner.js', 'extraowner'], ['./recovery.js', 'recovery'],
   ['./joinrole.js', 'joinrole'], ['./reactionrole.js', 'reactionrole'], ['./socialnotification.js', 'socialnotification'],
-  ['./roleconnection.js', 'roleconnection'], ['./ai.js', 'ai'], ['./autosetup.js', 'autosetup'], ['./clearchannels.js', 'clearchannels'],
+  ['./roleconnection.js', 'roleconnection'], ['./ytnotify.js', 'ytnotify'], ['./ai.js', 'ai'], ['./autosetup.js', 'autosetup'], ['./clearchannels.js', 'clearchannels'],
   ['./trade.js', 'trade'], ['./uploademoji.js', 'uploademoji'], ['./bloxemoji.js', 'bloxemoji'], ['./setbloxemojis.js', 'setbloxemojis'],
   ['../bloxScanner.js', 'bloxscanner'], ['./av.js', 'av'], ['./banner.js', 'banner'], ['./ping.js', 'ping'], ['./uptime.js', 'uptime'],
   ['./funCommands.js', 'cool'], ['./funCommands.js', 'aura'], ['./funCommands.js', 'funny'], ['./funCommands.js', 'sad'],
