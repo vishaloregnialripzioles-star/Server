@@ -1,7 +1,6 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import type { Command } from '../types.js';
 import { loadGuild } from '../storage.js';
-import { levelFromXp } from '../utils.js';
 const KEY_PERMISSIONS=[
   ['Administrator',PermissionFlagsBits.Administrator],
   ['Manage Server',PermissionFlagsBits.ManageGuild],
@@ -43,15 +42,6 @@ export const userinfo: Command = {
     const xp = levelEntry?.xp ?? 0;
     const level = levelEntry?.level ?? 0;
     const warnCount = (data.warnings[target.id] ?? []).length;
-
-    const roles = member
-      ? [...member.roles.cache.values()]
-          .filter(r => r.id !== interaction.guild!.id)
-          .sort((a, b) => b.position - a.position)
-          .slice(0, 10)
-          .map(r => `<@&${r.id}>`)
-          .join(' ') || 'None'
-      : 'N/A';
 
     const roles = member
       ? [...member.roles.cache.values()]
