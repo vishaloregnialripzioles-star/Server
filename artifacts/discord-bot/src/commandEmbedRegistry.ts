@@ -108,20 +108,6 @@ function toSaved(name:string, sourceKey:string, embed:EmbedBuilder):SavedEmbed {
 
 function cloneSaved(s:SavedEmbed):SavedEmbed{return JSON.parse(JSON.stringify(s));}
 
-function fromSaved(s:SavedEmbed):EmbedBuilder {
-  const out:any={};
-  if(s.title!==undefined)out.title=s.title;
-  if(s.description!==undefined)out.description=s.description;
-  if(s.color!==undefined)out.color=s.color;
-  if(s.thumbnailUrl)out.thumbnail={url:s.thumbnailUrl};
-  if(s.imageUrl)out.image={url:s.imageUrl};
-  if(s.footerText!==undefined)out.footer={text:s.footerText,...(s.footerIconUrl?{icon_url:s.footerIconUrl}:{})};
-  if(s.authorName!==undefined)out.author={name:s.authorName,...(s.authorIconUrl?{icon_url:s.authorIconUrl}:{})};
-  if(s.timestamp)out.timestamp=new Date().toISOString();
-  if(s.fields?.length)out.fields=s.fields.map(f=>({name:f.name,value:f.value,inline:Boolean(f.inline)}));
-  return new EmbedBuilder(out);
-}
-
 function displayCommandName(commandName:string):string {
   if(commandName==='help')return 'Help';
   if(commandName==='antinuke')return 'Anti-Nuke';
