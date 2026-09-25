@@ -12,7 +12,7 @@ export const embedEdit:Command={
     }
     try{
       await i.deferReply({ephemeral:true});
-      await i.editReply(buildEmbedEditorSelection(i.guild.id));
+      await i.editReply(buildEmbedEditorSelection(i.guild.id,i.client));
     }catch(error){
       console.error('[embed-edit] command failed:',error);
       const message='❌ Embed editor could not be opened. Check the bot logs for the exact error.';
