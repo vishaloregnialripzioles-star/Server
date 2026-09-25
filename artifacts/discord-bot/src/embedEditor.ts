@@ -86,7 +86,7 @@ async function normalize(s:SavedEmbed,i:Interaction){
   for(const k of keys)if(typeof s[k]==='string')(s as any)[k]=await resolveEmojiIds(s[k] as string,i);
   for(const f of s.fields??[]){f.name=await resolveEmojiIds(f.name,i);f.value=await resolveEmojiIds(f.value,i);}
 }
-export async function handleEmbedEditorInteraction{
+export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolean>{
   const customId=String((i as any).customId??'');
   if(customId.startsWith('embededit:page:')&&i.isButton()){
     if(!i.guildId){await i.reply({content:'❌ Server only.',ephemeral:true});return true;}
@@ -94,9 +94,8 @@ export async function handleEmbedEditorInteraction{
     await i.update(buildEmbedEditorSelection(i.guildId,Number.isFinite(page)?page:0));
     return true;
   }
-  if(false){}(i:Interaction):Promise<boolean>{
   const id=String((i as any).customId??'');
-  if(id==='embededit:select'&&i.isStringSelectMenu()){
+  if(id.startsWith('embededit:select:')&&i.isStringSelectMenu()){
     if(!i.guildId){await i.reply({content:'❌ Server only.',ephemeral:true});return true;}
     const name=i.values[0]?.toLowerCase().trim();
     if(!name||!loadGuild(i.guildId).savedEmbeds?.[name]){await i.reply({content:'❌ That embed no longer exists.',ephemeral:true});return true;}
