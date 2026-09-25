@@ -202,36 +202,61 @@ export const antinuke: Command = {
         const tick = emojis.tick;
         const protectedEmoji = emojis.protected;
 
+        const setupEmbed = (description: string) => new EmbedBuilder()
+          .setColor(RED)
+          .setTitle(header + ' Antinuke Setup')
+          .setDescription(description)
+          .setFooter({ text: 'Sparxie • Security Setup' });
+
         let progress = [
-          header + ' **Antinuke Setup**',
-          '',
-          '**Performing Quick Checks To Ensure**',
-          '**Everything Goes Smoothly During Setup**',
+          '__**Performing Quick Checks To Ensure**__',
+          '__**Everything Goes Smoothly During Setup**__',
           '',
           setupLine(bullet, tick, PROTECTION_LINES[0]),
-        ].join('\\n');
+        ].join('\n');
 
         await interaction.editReply({
-          embeds: [new EmbedBuilder().setColor(RED).setTitle('Antinuke Setup').setDescription(progress).setFooter({ text: 'Sparxie • Security setup' })],
+          embeds: [setupEmbed(progress)],
           components: [],
         });
 
         for (let index = 1; index < PROTECTION_LINES.length; index++) {
           await new Promise(resolve => setTimeout(resolve, 500));
-          progress += '\\n' + setupLine(bullet, tick, PROTECTION_LINES[index]);
+          progress += '\n' + setupLine(bullet, tick, PROTECTION_LINES[index]);
           await interaction.editReply({
-            embeds: [new EmbedBuilder().setColor(RED).setTitle('Antinuke Setup').setDescription(progress).setFooter({ text: 'Sparxie • Security setup' })],
+            embeds: [setupEmbed(progress)],
             components: [],
           });
         }
 
         await new Promise(resolve => setTimeout(resolve, 500));
-        updateGuild(guild.id, data => { data.antiNuke.enabled = true; data.antiNuke.punishment = 'ban'; });
+        updateGuild(guild.id, data => {
+          data.antiNuke.enabled = true;
+          data.antiNuke.punishment = 'ban';
+        });
 
-        const protectedLines = PROTECTED_ITEMS.map(item => protectedEmoji + ' ' + item).join('\\n');
+        // These are the destructive actions currently handled by the Anti-Nuke
+        // audit-log protection/recovery layer.
+        const protectedItems = [
+          'Channel Deletion',
+          'Channel Creation',
+          'Role Deletion',
+          'Role Creation',
+          'Member Bans',
+          'Member Kicks',
+          'Webhook Creation',
+          'Webhook Deletion',
+          'Channel Permission Changes',
+          'Role Permission Changes',
+          'Member Role Changes',
+          'Bot Additions',
+        ];
+
+        const protectedLines = protectedItems
+          .map(item => item + ' ' + protectedEmoji)
+          .join('\n');
+
         const enabledDescription = [
-          '**Antinuke Enabled**',
-          '',
           'Sparxie Anti-Nuke is now enabled for this server.',
           '',
           '**Everything Protected**',
@@ -239,12 +264,12 @@ export const antinuke: Command = {
           '',
           '**Enforcement:** Instant protection with whitelist support',
           '**Recovery:** Unauthorized destructive changes are automatically handled where recovery is available.',
-        ].join('\\n');
+        ].join('\n');
 
         await interaction.editReply({
           embeds: [new EmbedBuilder()
             .setColor(0x57f287)
-            .setTitle('Antinuke Enabled')
+            .setTitle(header + ' Antinuke Enabled')
             .setDescription(enabledDescription)
             .setFooter({ text: 'Sparxie • Anti-Nuke Security' })
             .setTimestamp()],
