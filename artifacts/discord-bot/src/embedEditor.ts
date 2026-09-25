@@ -26,7 +26,7 @@ export async function createEmbedEditorSession(i:ChatInputCommandInteraction,nam
 export function buildEmbedEditorSelection(guildId:string,client:ChatInputCommandInteraction['client'],page=0){
   const saved=loadGuild(guildId).savedEmbeds??{};
   const definitions=getEditableEmbedDefinitions(client);
-  const names=[...new Set([...definitions.map(x=>x.name),...Object.keys(saved)])].sort((a,b)=>a.localeCompare(b));
+  const savedNames=Object.keys(saved).filter(name=>name.toLowerCase()!=='welcome'&&saved[name]?.sourceKey!=='welcome');\n  const names=[...new Set([...definitions.map(x=>x.name),...savedNames])].sort((a,b)=>a.localeCompare(b));
   const totalPages=Math.max(1,Math.ceil(names.length/25));
   const current=Math.min(Math.max(page,0),totalPages-1);
   const pageNames=names.slice(current*25,current*25+25);
