@@ -2,7 +2,6 @@ import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.
 import type { Command } from '../types.js';
 import { loadGuild, updateGuild } from '../storage.js';
 import { buildEmbedPreview, parseColor } from '../welcomeUtils.js';
-import { buildEmbedEditorSelection } from '../embedEditor.js';
 
 
 export const embedCmd: Command = {
@@ -14,10 +13,8 @@ export const embedCmd: Command = {
     .addSubcommand(s=>s.setName('preview').setDescription('Preview a saved embed').addStringOption(o=>o.setName('name').setDescription('Embed name').setRequired(true).setAutocomplete(true)))
     .addSubcommand(s=>s.setName('delete').setDescription('Delete a saved embed').addStringOption(o=>o.setName('name').setDescription('Embed name').setRequired(true).setAutocomplete(true)))
     .addSubcommand(s=>s.setName('list').setDescription('List saved embeds')),
-    .addSubcommand(s=>s.setName('editor').setDescription('Open the interactive editor for saved embeds')),
   async execute(interaction){
     if(!interaction.guild)return;await interaction.deferReply({ephemeral:true});const sub=interaction.options.getSubcommand();
-    if(sub==='editor'){await interaction.editReply(buildEmbedEditorSelection(interaction.guild.id));return;}
     if(sub==='list'){const data=loadGuild(interaction.guild.id),names=Object.keys(data.savedEmbeds??{});if(!names.length){await interaction.editReply('📭 No saved embeds.');return;}await interaction.editReply({embeds:[new EmbedBuilder().setColor(0x5865F2).setTitle(`🖼️ Saved Embeds (${names.length})`).setDescription(names.map((n,i)=>`**${i+1}.** \`${n}\``).join('\n'))]});return;}
     const name=interaction.options.getString('name',sub==='create'||sub==='edit'||sub==='addfield'||sub==='removefield'||sub==='preview'||sub==='delete')?.toLowerCase().trim();
     if(sub==='create'){if(!name)return;const data=loadGuild(interaction.guild.id);if(data.savedEmbeds?.[name]){await interaction.editReply(`❌ \`${name}\` already exists.`);return;}const rawColor=interaction.options.getString('color'),color=rawColor?parseColor(rawColor):undefined;if(rawColor&&color===undefined){await interaction.editReply('❌ Invalid color.');return;}updateGuild(interaction.guild.id,d=>{if(!d.savedEmbeds)d.savedEmbeds={};d.savedEmbeds[name]={name,title:interaction.options.getString('title')??undefined,description:interaction.options.getString('description')??undefined,color,authorName:interaction.options.getString('author')??undefined,authorIconUrl:interaction.options.getString('author_icon')??undefined,thumbnailUrl:interaction.options.getString('thumbnail')??undefined,imageUrl:interaction.options.getString('image')??undefined,footerText:interaction.options.getString('footer')??undefined,footerIconUrl:interaction.options.getString('footer_icon')??undefined,timestamp:interaction.options.getBoolean('timestamp')??true,fields:[]};});await interaction.editReply({content:`✅ Embed \`${name}\` created.`,embeds:[buildEmbedPreview(loadGuild(interaction.guild.id).savedEmbeds![name])]});return;}
