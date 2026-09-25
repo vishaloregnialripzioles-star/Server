@@ -253,7 +253,7 @@ export const antinuke: Command = {
         ];
 
         const protectedLines = protectedItems
-          .map(item => item + ' ' + protectedEmoji)
+          .map(item => protectedEmoji + ' ' + item)
           .join('\n');
 
         const enabledDescription = [
