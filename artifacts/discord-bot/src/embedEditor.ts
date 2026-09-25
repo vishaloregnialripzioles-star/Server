@@ -103,6 +103,14 @@ function makeEmojiModal(s:Session){
 async function emojiMarkup(i:Interaction,id:string):Promise<string|null>{
   const clean=id.trim().match(/^<a?:[^:>]+:(\d+)>$/)?.[1]??id.trim();
   if(!/^\d{17,20}$/.test(clean))return null;
+
+  // First try the application emoji collection.
+  try{
+    const appEmoji=await (i.client as any).application?.emojis?.fetch(clean);
+    if(appEmoji)return appEmoji.toString();
+  }catch{}
+
+  // Then the guild where the editor is being used.
   try{
     const currentGuild=(i as any).guild;
     const cached=currentGuild?.emojis?.cache?.get(clean);
@@ -110,16 +118,18 @@ async function emojiMarkup(i:Interaction,id:string):Promise<string|null>{
     const fetched=await currentGuild?.emojis?.fetch?.(clean).catch(()=>null);
     if(fetched)return fetched.toString();
   }catch{}
-  try{
-    const appEmoji=await (i.client as any).application?.emojis?.fetch(clean);
-    if(appEmoji)return appEmoji.toString();
-  }catch{}
+
+  // Finally check other guilds the bot is in. This makes a raw emoji ID work
+  // even when the emoji belongs to another server that Sparxie can access.
   try{
     for(const guild of i.client.guilds.cache.values()){
       const cached=guild.emojis.cache.get(clean);
       if(cached)return cached.toString();
+      const fetched=await guild.emojis.fetch(clean).catch(()=>null);
+      if(fetched)return fetched.toString();
     }
   }catch{}
+
   return null;
 }
 
@@ -128,7 +138,7 @@ async function replaceEmojiIdsInText(i:Interaction,text:string):Promise<string>{
   const ids=[...new Set([...text.matchAll(/(?<!\\d)(\\d{17,20})(?!\\d)/g)].map(m=>m[1]))];
   for(const id of ids){
     const token=await emojiMarkup(i,id);
-    if(!token)throw new Error('Emoji ID '+id+' could not be resolved in this server or the bot application. Make sure the bot can use that emoji.');
+    if(!token)throw new Error('Emoji ID '+id+' could not be resolved. The ID must belong to an emoji Sparxie can access. You can also paste the full Discord emoji token, such as <:name:'+id+'>, directly into the title or description.');
     out=out.split(id).join(token);
   }
   return out;
@@ -137,6 +147,11 @@ async function replaceEmojiIdsInText(i:Interaction,text:string):Promise<string>{
 async function normalize(s:SavedEmbed,i:Interaction){
   if(s.title)s.title=await replaceEmojiIdsInText(i,s.title);
   if(s.description)s.description=await replaceEmojiIdsInText(i,s.description);
+  // Also resolve IDs inside field text when a command uses editable fields.
+  for(const field of s.fields??[]){
+    if(field.name)field.name=await replaceEmojiIdsInText(i,field.name);
+    if(field.value)field.value=await replaceEmojiIdsInText(i,field.value);
+  }
 }
 
 function input(id:string,label:string,value:string,style:TextInputStyle,required=false,maxLength=4000){
@@ -223,9 +238,13 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
     await i.reply({content:'❌ That embed no longer exists.',ephemeral:true});return true;
   }
   try{
+    // Acknowledge the select-menu interaction immediately, then do the heavier
+    // embed/session work. This prevents Discord's 3-second timeout.
     await i.deferUpdate();
     const sid=await createEmbedEditorSession(i as any,name);
-    await i.editReply(renderPayload(sessions.get(sid)!));
+    const session=sessions.get(sid);
+    if(!session)throw new Error('Could not create the editor session.');
+    await i.editReply(renderPayload(session));
   }catch(error){
     console.error('[EmbedEditor] Selection failed:',error);
     if(i.isRepliable()&&(i.deferred||i.replied)){
