@@ -6,6 +6,7 @@ import { registerBloxValueEvents } from '../bloxValueEvents.js';
 import { registerBloxValueIconEvents } from '../bloxValueIconEvents.js';
 import { registerBloxValueSync } from '../bloxValueSync.js';
 import { handleBloxEmojiInteraction, handleBloxEmojiModal } from '../commands/bloxemoji.js';
+import { handleEmbedEditorInteraction } from '../embedEditor.js';
 import { registerEnhancedAutoMod } from './enhancedAutoMod.js';
 import { handleSecurityPrefix } from '../securityPrefix.js';
 import { closeTicketById, setTicketClaim, createTicketForUser, reopenTicketById, buildTicketTranscript } from '../ticketUtils.js';
@@ -13,6 +14,7 @@ function safe(name:string,fn:(...args:any[])=>any){return(...args:any[])=>{try{P
 const EVENTS_REGISTERED=Symbol.for('sparxie.events.registered');const MESSAGE_PROCESSED=Symbol.for('sparxie.message.processed');const SECURITY_PREFIX_PROCESSED=Symbol.for('sparxie.security.prefix.processed');
 export function registerEvents(client:Client):void{
 if((client as any)[EVENTS_REGISTERED]){console.warn('[Events] registerEvents() called more than once; ignoring duplicate registration.');return;} (client as any)[EVENTS_REGISTERED]=true;registerBloxValueEvents(client);registerBloxValueIconEvents(client);registerBloxValueSync(client);registerEnhancedAutoMod(client);
+client.on(Events.InteractionCreate,safe('embedEditor',async(interaction:any)=>{await handleEmbedEditorInteraction(interaction);}));
 client.once(Events.ClientReady,safe('ready',async(...args:any[])=>{const{handleReady}=await import('./ready.js');return handleReady(...args);}));
 client.on(Events.InteractionCreate,safe('bloxEmoji',async(interaction:any)=>{if(interaction?.isModalSubmit?.()&&String(interaction.customId).startsWith('bloxemoji:modal:'))return handleBloxEmojiModal(interaction);if((interaction?.isButton?.()||interaction?.isStringSelectMenu?.())&&String(interaction.customId).startsWith('bloxemoji:'))return handleBloxEmojiInteraction(interaction);}));
 client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=>{const id=String(interaction?.customId??'');if(!interaction?.guild||!id.startsWith('ticket:'))return;const parts=id.split(':');const action=parts[1],targetId=parts[2];if(!action||!targetId)return;const data=loadGuild(interaction.guild.id);
