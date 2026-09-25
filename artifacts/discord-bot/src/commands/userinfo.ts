@@ -18,13 +18,9 @@ const KEY_PERMISSIONS=[
 ] as const;
 
 function permissionSummary(member:any,guildOwnerId:string):string{
-  if(member.id===guildOwnerId)return '**Server Owner**';
-  const granted=KEY_PERMISSIONS
-    .filter(([,bit])=>member.permissions.has(bit))
-    .map(([name])=>name);
-  return granted.length
-    ? granted.map(name=>`**${name}**`).join(' • ')
-    : '• No key permissions';
+  if(member.id===guildOwnerId)return '**Server Owner**\\nAdministrator-level access through server ownership.';
+  const granted=KEY_PERMISSIONS.filter(([,bit])=>member.permissions.has(bit)).map(([name])=>name);
+  return granted.length ? granted.map(name=>'**'+name+'**').join(' • ') : 'No key permissions';
 }
 
 
@@ -60,6 +56,7 @@ export const userinfo: Command = {
       .setColor(member?.displayHexColor ?? 0x111827)
       .setAuthor({ name: member?.displayName ?? target.username, iconURL: target.displayAvatarURL({ size: 128 }) })
       .setTitle('User Information')
+      .setDescription(member ? 'Server membership, key permissions and profile details.' : 'Discord account details.')
       .setThumbnail(target.displayAvatarURL({ size: 256 }))
       .addFields(
         { name: 'Username', value: `@${target.username}`, inline: true },
@@ -69,7 +66,7 @@ export const userinfo: Command = {
         ...(member ? [
           { name: 'Joined Server', value: member.joinedTimestamp ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:F>` : 'Unknown', inline: true },
           { name: 'Highest Role', value: member.roles.highest.id === interaction.guild.id ? '@everyone' : `<@&${member.roles.highest.id}>`, inline: true },
-          { name: 'Server Permissions', value: permissionSummary(member, interaction.guild.ownerId), inline: false },
+          { name: 'Key Permissions', value: permissionSummary(member, interaction.guild.ownerId), inline: false },
           { name: `Roles (${roles.length})`, value: roleText, inline: false },
           { name: 'Level', value: `${level} • ${xp.toLocaleString()} XP`, inline: true },
           { name: 'Warnings', value: String(warnCount), inline: true },
