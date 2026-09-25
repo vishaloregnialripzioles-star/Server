@@ -128,7 +128,11 @@ async function replaceEmojiIdsInText(i:Interaction,text:string):Promise<string>{
   const ids=[...new Set([...text.matchAll(/(?<!\d)(\d{17,20})(?!\d)/g)].map(m=>m[1]))];
   for(const id of ids){
     const token=await emojiMarkup(i,id);
+    // If the emoji is not cached/fetchable, still convert the numeric ID into
+    // Discord custom-emoji markup. Discord resolves the ID when the bot can
+    // use that emoji, and the editor keeps the exact position the user typed.
     if(token)out=out.split(id).join(token);
+    else out=out.split(id).join('<:emoji:'+id+'>');
   }
   return out;
 }
