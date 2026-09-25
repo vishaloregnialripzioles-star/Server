@@ -48,8 +48,8 @@ async function setupEmojiSet(interaction: any): Promise<Record<keyof typeof SETU
   return result;
 }
 
-function setupLine(emoji: string, text: string, done: boolean): string {
-  return emoji + ' ' + text + (done ? ' ' : '');
+function setupLine(emoji: string, tick: string, text: string): string {
+  return emoji + ' ' + text + ' ' + tick;
 }
 
 async function appEmoji(interaction: any, id: string, fallback: string): Promise<string> {
@@ -208,7 +208,7 @@ export const antinuke: Command = {
           '**Performing Quick Checks To Ensure**',
           '**Everything Goes Smoothly During Setup**',
           '',
-          setupLine(bullet, PROTECTION_LINES[0], false),
+          setupLine(bullet, tick, PROTECTION_LINES[0]),
         ].join('\\n');
 
         await interaction.editReply({
@@ -218,7 +218,7 @@ export const antinuke: Command = {
 
         for (let index = 1; index < PROTECTION_LINES.length; index++) {
           await new Promise(resolve => setTimeout(resolve, 500));
-          progress += '\\n' + setupLine(bullet, PROTECTION_LINES[index], false);
+          progress += '\\n' + setupLine(bullet, tick, PROTECTION_LINES[index]);
           await interaction.editReply({
             embeds: [new EmbedBuilder().setColor(RED).setTitle('Antinuke Setup').setDescription(progress).setFooter({ text: 'Sparxie • Security setup' })],
             components: [],
