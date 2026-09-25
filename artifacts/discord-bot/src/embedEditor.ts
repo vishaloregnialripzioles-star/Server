@@ -182,7 +182,7 @@ async function applyEmojiTextAction(s:SavedEmbed,i:Interaction,action:string,id:
     if(!/^\d{17,20}$/.test(clean))throw new Error('Enter a valid application emoji ID.');
     const token=await emojiMarkup(i,clean);
     if(!token)throw new Error('That emoji ID was not found in the bot application emojis.');
-    if(!edited.includes(clean)&&!edited.includes(token))edited=edited+'\n'+token;
+    if(!edited.includes(clean)&&!edited.includes(token))edited=edited.replace(/\[END\]\s*$/,'\n'+token+'\n[END]');
   }else if(normalizedAction==='remove'){
     if(!/^\d{17,20}$/.test(clean))throw new Error('Enter a valid application emoji ID.');
     edited=removeEmojiId(edited,clean);
