@@ -2,6 +2,7 @@ import { ChannelType, SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, Ac
 import type { Command } from '../types.js';
 import { loadGuild, updateGuild } from '../storage.js';
 import { generateId } from '../utils.js';
+import { applyEditableEmbed } from '../commandEmbedRegistry.js';
 
 export const ticketpanel: Command = {
   data:new SlashCommandBuilder().setName('ticketpanel').setDescription('Create and send a customizable ticket panel').setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
@@ -63,6 +64,6 @@ export const ticketpanel: Command = {
     const name=interaction.options.getString('name',true).toLowerCase(),channel=interaction.options.getChannel('channel',true);const panel=loadGuild(interaction.guild.id).config.ticketPanels?.[name];if(!panel){await interaction.editReply('❌ Panel not found. Create it first.');return;}
     const embed=new EmbedBuilder().setColor(panel.color??0x5865F2).setTitle(`🎫 ${panel.title}`).setDescription(panel.description).setFooter({text:`Panel: ${panel.name}`}).setTimestamp();
     const components:any[] = panel.options?.length ? [new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(new StringSelectMenuBuilder().setCustomId(`ticket:select:${panel.id}`).setPlaceholder('🎫 Select a ticket category').addOptions(panel.options.slice(0,25).map(option=>new StringSelectMenuOptionBuilder().setLabel(option.name.slice(0,100)).setDescription(option.description.slice(0,100)).setValue(option.id))))] : [new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`ticket:open:${panel.id}`).setLabel('Open Ticket').setEmoji('🎫').setStyle(ButtonStyle.Primary))];
-    try{await (channel as unknown as TextChannel).send({embeds:[embed],components});await interaction.editReply(`✅ Panel **${name}** sent to <#${channel.id}>.`);}catch{await interaction.editReply('❌ I could not send the panel. Check channel permissions.');}
+    try{await (channel as unknown as TextChannel).send({embeds:[applyEditableEmbed(interaction.guild.id,'ticket:panel',embed)],components});await interaction.editReply(`✅ Panel **${name}** sent to <#${channel.id}>.`);}catch{await interaction.editReply('❌ I could not send the panel. Check channel permissions.');}
   },
 };
