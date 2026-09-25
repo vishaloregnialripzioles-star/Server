@@ -144,18 +144,17 @@ export async function buildCurrentEditableEmbed(i:ChatInputCommandInteraction,na
   const original=toSaved(def.name,def.sourceKey,base);
   const saved=loadGuild(i.guildId!).savedEmbeds?.[def.name];
   if(!saved)return {draft:original,original,sourceKey:def.sourceKey};
-  const merged:SavedEmbed={...original,...saved,name:def.name,sourceKey:def.sourceKey};
-  if(saved.overrideFields?.length){
+  if(Array.isArray(saved.overrideFields)){
     const current:any=original,d:any=merged;
     for(const key of Object.keys(current) as Array<keyof SavedEmbed>){
       if(key==='name'||key==='sourceKey'||key==='overrideFields')continue;
       if(!saved.overrideFields.includes(key))delete (d as any)[key];
     }
-    const normalized:SavedEmbed={...original,...saved,name:def.name,sourceKey:def.sourceKey};
+    const normalized:SavedEmbed={...original,name:def.name,sourceKey:def.sourceKey,overrideFields:saved.overrideFields};
     for(const key of saved.overrideFields)if(key in saved)(normalized as any)[key]=(saved as any)[key];
     return {draft:normalized,original,sourceKey:def.sourceKey};
   }
-  return {draft:merged,original,sourceKey:def.sourceKey};
+  return {draft:{...original,...saved,name:def.name,sourceKey:def.sourceKey},original,sourceKey:def.sourceKey};
 }
 
 export function savedFromDraft(name:string,sourceKey:string,draft:SavedEmbed,original:SavedEmbed):SavedEmbed {
@@ -167,7 +166,7 @@ export function savedFromDraft(name:string,sourceKey:string,draft:SavedEmbed,ori
 export function applyEditableEmbed(guildId:string,sourceKey:string,base:EmbedBuilder):EmbedBuilder {
   const data=loadGuild(guildId);
   const saved=Object.values(data.savedEmbeds??{}).find(x=>x.sourceKey===sourceKey);
-  if(!saved)return base;
+  if(!saved || !Array.isArray(saved.overrideFields) || saved.overrideFields.length===0)return base;
   const j:any=base.toJSON();
   const overrideKeys=saved.overrideFields?.length?saved.overrideFields:['title','description','color','thumbnailUrl','imageUrl','footerText','footerIconUrl','authorName','authorIconUrl','timestamp','fields'];
   const next:any={...j};
@@ -192,7 +191,7 @@ export function captureCommandEmbed(guildId:string,commandName:string,embed:Embe
   const sourceKey=commandName==='ticket'?'ticket:create':commandName==='closeticket'?'ticket:close':commandName;
   const current=loadGuild(guildId).savedEmbeds?.[name];
   if(current)return;
-  const base=toSaved(name,sourceKey,embed);
+  const base=toSaved(name,sourceKey,embed);\n  base.overrideFields=[];
   // Auto-register the first real embed a command emits so the editor grows with the bot.
   // It is intentionally stored only as an editable baseline, not as a user override.
   updateGuild(guildId,d=>{d.savedEmbeds??={};if(!d.savedEmbeds[name])d.savedEmbeds[name]=base;});
