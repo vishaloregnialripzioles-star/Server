@@ -33,13 +33,13 @@ export const botinfo:Command={
       .addFields(
         {
           name:'Creators',
-          value:'[Vishalezz](https://discord.com/users/1504354088538869892)\\n[Karanezz](https://discord.com/users/1323664778488582284)',
+          value:'[Vishalezz](https://discord.com/users/1504354088538869892)\n[Karanezz](https://discord.com/users/1323664778488582284)',
           inline:false,
         },
         {name:'Servers',value:guilds.size.toLocaleString(),inline:true},
         {name:'Members',value:totalMembers.toLocaleString(),inline:true},
         {name:'Commands',value:commandCount.toLocaleString(),inline:true},
-        {name:'Uptime',value:`${formatUptime(uptime)}\\n<t:${Math.floor(startedAt/1000)}:R>`,inline:true},
+        {name:'Uptime',value:`${formatUptime(uptime)}\n<t:${Math.floor(startedAt/1000)}:R>`,inline:true},
         {name:'Latency',value:latency>=0?`${latency} ms`:'Calculating',inline:true},
         {name:'Status',value:'Online',inline:true},
         {name:'Runtime',value:`Node.js ${process.version}`,inline:true},
