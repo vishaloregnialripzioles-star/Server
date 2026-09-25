@@ -29,7 +29,7 @@ const definitions: Array<[string, string]> = [
   ['./afk.js', 'afk'], ['./remindme.js', 'remindme'], ['./poll.js', 'poll'], ['./snipe.js', 'snipe'],
   ['./editsnipe.js', 'editsnipe'], ['./userinfo.js', 'userinfo'], ['./serverinfo.js', 'serverinfo'], ['./temprole.js', 'temprole'],
   ['./rank.js', 'rank'], ['./leaderboard.js', 'leaderboard'], ['./ticket.js', 'ticket'], ['./closeticket.js', 'closeticket'], ['./reopen.js', 'reopen'], ['./transcripts.js', 'transcripts'],
-  ['./ticketpanel.js', 'ticketpanel'], ['./roast.js', 'roast'], ['./setprefix.js', 'setprefix'], ['./gay.js', 'gay'],
+  ['./ticketpanel.js', 'ticketpanel'], ['./botinfo.js', 'botinfo'], ['./roast.js', 'roast'], ['./setprefix.js', 'setprefix'], ['./gay.js', 'gay'],
   ['./pro.js', 'pro'], ['./noob.js', 'noob'], ['./ship.js', 'ship'], ['./autoresponder.js', 'autoresponder'],
   ['./help.js', 'help'], ['./levelconfig.js', 'levelconfig'], ['./createrole.js', 'createrole'], ['./roleassign.js', 'roleassign'],
   ['./giveaway.js', 'giveaway'], ['./giveawaydaily.js', 'giveawayDaily'], ['./automod.js', 'automod'], ['./music.js', 'music'],
