@@ -25,7 +25,7 @@ export const embedCreate:Command={
 
 export const embedEdit:Command={
  data:base('embed-edit','Open the visual editor and choose an embed by name') as any,
- async execute(i){if(!i.guild)return;await i.deferReply({ephemeral:true});await i.editReply(buildEmbedEditorSelection(i.guild.id));}
+ async execute(i){if(!i.guild)return;try{await i.deferReply({ephemeral:true});const payload=buildEmbedEditorSelection(i.guild.id);await i.editReply(payload);}catch(error){console.error('[embed-edit] command failed:',error);const message='❌ Embed editor could not be opened. Check the bot logs for the exact error.';if(i.deferred||i.replied)await i.editReply({content:message,embeds:[],components:[]}).catch(()=>undefined);else await i.reply({content:message,ephemeral:true}).catch(()=>undefined);}}
 };
 
 export const embedList:Command={
