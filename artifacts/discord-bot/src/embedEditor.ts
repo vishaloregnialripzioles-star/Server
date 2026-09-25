@@ -118,12 +118,98 @@ async function normalize(s:SavedEmbed,i:Interaction){
   }
 }
 
+function input(id:string,label:string,value:string,style:TextInputStyle,required=false,maxLength=4000){
+  return new TextInputBuilder().setCustomId(id).setLabel(label.slice(0,45)).setStyle(style).setRequired(required).setMaxLength(maxLength).setValue(value.slice(0,maxLength));
+}
+
+function makeModal(s:Session,section:string):ModalBuilder{
+  const m=new ModalBuilder().setCustomId('embededit:modal:'+section+':'+s.name).setTitle((section.charAt(0).toUpperCase()+section.slice(1)+' • '+s.name).slice(0,45));
+  if(section==='basic'){
+    m.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('title','Title',s.draft.title??'',TextInputStyle.Short,false,256)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('description','Description',s.draft.description??'',TextInputStyle.Paragraph,false,4000)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('color','Color (#hex)',''+(s.draft.color!==undefined?'#'+s.draft.color.toString(16).padStart(6,'0'):''),TextInputStyle.Short,false,7)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('timestamp','Timestamp (on/off)',s.draft.timestamp===false?'off':'on',TextInputStyle.Short,false,3)),
+    );
+  }else if(section==='author'){
+    m.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('author','Author name',s.draft.authorName??'',TextInputStyle.Short,false,256)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('author_icon','Author icon URL',s.draft.authorIconUrl??'',TextInputStyle.Short,false,1000)),
+    );
+  }else if(section==='media'){
+    m.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('thumbnail','Thumbnail URL',s.draft.thumbnailUrl??'',TextInputStyle.Short,false,1000)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('image','Image URL',s.draft.imageUrl??'',TextInputStyle.Short,false,1000)),
+    );
+  }else if(section==='footer'){
+    m.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('footer','Footer text',s.draft.footerText??'',TextInputStyle.Short,false,2048)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('footer_icon','Footer icon URL',s.draft.footerIconUrl??'',TextInputStyle.Short,false,1000)),
+    );
+  }else if(section==='fields'){
+    m.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('index','Field number (blank = add)','',TextInputStyle.Short,false,3)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('field_name','Field name','',TextInputStyle.Short,true,256)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('field_value','Field value','',TextInputStyle.Paragraph,true,1024)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('inline','Inline? on/off','off',TextInputStyle.Short,false,3)),
+    );
+  }else if(section==='emojis'){
+    m.addComponents(
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('title','Title — put emoji ID/token exactly where wanted',makeEmojiTextValue(s.draft.title),TextInputStyle.Paragraph,false,256)),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(input('description','Description — put emoji ID/token exactly where wanted',makeEmojiTextValue(s.draft.description),TextInputStyle.Paragraph,false,4000)),
+    );
+  }
+  return m;
+}
+
+function allTextFields(s:SavedEmbed){
+  const fields:{get:()=>string|undefined;set:(v:string|undefined)=>void}[]=[
+    {get:()=>s.title,set:v=>{s.title=v}},
+    {get:()=>s.description,set:v=>{s.description=v}},
+    {get:()=>s.authorName,set:v=>{s.authorName=v}},
+    {get:()=>s.footerText,set:v=>{s.footerText=v}},
+  ];
+  for(const f of s.fields??[])fields.push({get:()=>f.name,set:v=>{f.name=v??''}},{get:()=>f.value,set:v=>{f.value=v??''}});
+  return fields;
+}
+
+function renderPayload(s:Session){
+  const embed=buildEmbedPreview(s.draft);
+  return {
+    content:'🛠️ **Sparxie Embed Editor — '+s.name+'**\\n\\n'+details(s.draft)+'\\n\\nUse the buttons below to edit the embed. Emoji IDs/tokens can be placed directly inside **Title** or **Description**. Save to make changes permanent.',
+    embeds:[embed],
+    components:components([...sessions.entries()].find(([,x])=>x===s)?.[0]??'',s.draft),
+  };
+}
+
+async function render(i:Interaction,sid:string){
+  const s=sessions.get(sid);
+  if(!s)throw new Error('Editor session expired.');
+  if(i.isRepliable()){
+    if(i.deferred||i.replied)await i.editReply(renderPayload(s));
+    else await i.reply({...renderPayload(s),ephemeral:true});
+  }
+}
+
 export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolean>{
   if(!i.guildId)return false;
   const customId=String((i as any).customId??'');
   if((i.isButton()||i.isStringSelectMenu()||i.isModalSubmit())&&!isEmbedEditorOwner(i.user.id)){if(customId.startsWith('embededit:')&&i.isRepliable())await i.reply({content:'🔒 This embed editor is private to the two authorized users.',ephemeral:true}).catch(()=>undefined);return customId.startsWith('embededit:');}
   if(customId.startsWith('embededit:page:')&&i.isButton()){const page=Number(customId.split(':')[2]);await i.update(buildEmbedEditorSelection(i.guildId,i.client,Number.isFinite(page)?page:0));return true;}
-  if(customId.startsWith('embededit:select:')&&i.isStringSelectMenu()){const name=i.values[0]?.trim();if(!name||(!loadGuild(i.guildId).savedEmbeds?.[name]&&!getEditableEmbedDefinitions(i.client).some(x=>x.name===name))){await i.reply({content:'❌ That embed no longer exists.',ephemeral:true});return true;}const sid=await createEmbedEditorSession(i as any,name);await render(i,sid);return true;}
+  if(customId.startsWith('embededit:select:')&&i.isStringSelectMenu()){
+  const name=i.values[0]?.trim();
+  if(!name||(!loadGuild(i.guildId).savedEmbeds?.[name]&&!getEditableEmbedDefinitions(i.client).some(x=>x.name===name))){
+    await i.reply({content:'❌ That embed no longer exists.',ephemeral:true});return true;
+  }
+  try{
+    const sid=await createEmbedEditorSession(i as any,name);
+    await i.update(renderPayload(sessions.get(sid)!));
+  }catch(error){
+    console.error('[EmbedEditor] Selection failed:',error);
+    if(i.isRepliable()&&!i.replied&&!i.deferred)await i.reply({content:'❌ Could not open that embed editor. Please try again.',ephemeral:true}).catch(()=>undefined);
+  }
+  return true;
+}
   if(!customId.startsWith('embededit:'))return false;
   if(customId.startsWith('embededit:modal:')&&i.isModalSubmit()){
     const section=customId.split(':')[2];
