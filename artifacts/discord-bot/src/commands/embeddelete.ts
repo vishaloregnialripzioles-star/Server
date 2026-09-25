@@ -1,0 +1,4 @@
+import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
+import type { Command } from '../types.js';
+import { loadGuild, updateGuild } from '../storage.js';
+export const embeddelete: Command = { data:new SlashCommandBuilder().setName('embeddelete').setDescription('Delete a saved embed').setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).addStringOption(o=>o.setName('name').setDescription('Embed name').setRequired(true)), async execute(i){if(!i.guild)return;await i.deferReply({ephemeral:true});const name=i.options.getString('name',true).toLowerCase().trim();if(!loadGuild(i.guild.id).savedEmbeds?.[name]){await i.editReply('Embed not found.');return;}updateGuild(i.guild.id,d=>{delete d.savedEmbeds![name];});await i.editReply('Deleted '+name+' permanently.');} };
