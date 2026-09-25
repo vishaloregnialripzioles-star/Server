@@ -135,7 +135,7 @@ async function emojiMarkup(i:Interaction,id:string):Promise<string|null>{
 
 async function replaceEmojiIdsInText(i:Interaction,text:string):Promise<string>{
   let out=text;
-  const ids=[...new Set([...text.matchAll(/(?<!\\d)(\\d{17,20})(?!\\d)/g)].map(m=>m[1]))];
+  const ids=[...new Set([...text.matchAll(/(?<!\d)(\d{17,20})(?!\d)/g)].map(m=>m[1]))];
   for(const id of ids){
     const token=await emojiMarkup(i,id);
     if(!token)throw new Error('Emoji ID '+id+' could not be resolved. The ID must belong to an emoji Sparxie can access. You can also paste the full Discord emoji token, such as <:name:'+id+'>, directly into the title or description.');
