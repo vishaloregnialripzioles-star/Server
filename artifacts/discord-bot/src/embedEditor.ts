@@ -85,120 +85,36 @@ function details(d:SavedEmbed):string{
   return lines.join('\n');
 }
 
-function serializeEditableText(d:SavedEmbed):string{
-  const parts:string[]=[];
-  const add=(label:string,value:string|undefined)=>{parts.push('['+label+']',value??'');};
-  add('TITLE',d.title);
-  add('DESCRIPTION',d.description);
-  add('AUTHOR',d.authorName);
-  for(const [index,f] of (d.fields??[]).entries()){
-    add('FIELD '+(index+1)+' NAME',f.name);
-    add('FIELD '+(index+1)+' VALUE',f.value);
-  }
-  add('FOOTER',d.footerText);
-  parts.push('[END]');
-  return parts.join('\n');
+function makeEmojiTextValue(value:string|undefined):string{
+  return value??'';
 }
 
-function parseEditableText(d:SavedEmbed,text:string){
-  const matches=[...text.matchAll(/^\[([^\]]+)\]\s*$/gm)];
-  const sections=new Map<string,string>();
-  for(let n=0;n<matches.length;n++){
-    const key=matches[n][1].trim().toUpperCase();
-    const start=(matches[n].index??0)+matches[n][0].length;
-    const end=n+1<matches.length?(matches[n+1].index??text.length):text.length;
-    sections.set(key,text.slice(start,end).trim());
-  }
-  const value=(key:string)=>sections.get(key);
-  d.title=value('TITLE')||undefined;
-  d.description=value('DESCRIPTION')||undefined;
-  d.authorName=value('AUTHOR')||undefined;
-  d.footerText=value('FOOTER')||undefined;
-  const fields:typeof d.fields=[];
-  for(let n=1;n<=25;n++){
-    const name=value('FIELD '+n+' NAME');
-    const fieldValue=value('FIELD '+n+' VALUE');
-    if(name!==undefined||fieldValue!==undefined)fields.push({name:name||('Field '+n),value:fieldValue||'',inline:d.fields?.[n-1]?.inline??false});
-  }
-  d.fields=fields;
-}
-
-async function render(i:Interaction,id:string){
-  const s=sessions.get(id);
-  if(!s){if(i.isRepliable())await i.reply({content:'❌ This editor session expired. Run /embed-edit again.',ephemeral:true}).catch(()=>undefined);return;}
-  if(i.guildId!==s.guildId||i.user.id!==s.userId||!isEmbedEditorOwner(i.user.id)){if(i.isRepliable())await i.reply({content:'🔒 Only the two authorized embed editors can use this editor.',ephemeral:true}).catch(()=>undefined);return;}
-  try{
-    const payload={content:'🛠️ **Editing: '+s.name+'**\n\n'+details(s.draft)+'\n\nUse the buttons below to edit the complete embed. Custom emoji IDs can be placed directly into text fields; **Submit / Save** makes everything permanent.',embeds:[buildEmbedPreview(s.draft)],components:components(id,s.draft)};
-    if(i.isButton()||i.isStringSelectMenu())await i.update(payload);
-    else if(i.isRepliable())await i.editReply(payload);
-  }catch(error){
-    console.error('[EmbedEditor] Render failed:',error);
-    const message='❌ I could not render this embed. A saved embed value is invalid, so no changes were saved.';
-    if(i.isButton()||i.isStringSelectMenu())await i.reply({content:message,ephemeral:true}).catch(()=>undefined);
-    else if(i.isRepliable())await i.editReply({content:message,embeds:[],components:[]}).catch(()=>undefined);
-  }
-}
-
-function input(id:string,label:string,value:string|undefined,style=TextInputStyle.Short,required=false,max=4000){
-  return new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label.slice(0,45)).setStyle(style).setRequired(required).setMaxLength(max).setValue((value??'').slice(0,max)));
-}
-
-function makeModal(s:Session,section:string){
-  const m=new ModalBuilder().setCustomId('embededit:modal:'+section+':'+s.name).setTitle((section[0].toUpperCase()+section.slice(1)+' • '+s.name).slice(0,45));
-  const d=s.draft;
-  if(section==='basic')m.addComponents(input('title','Title',d.title),input('description','Description',d.description,TextInputStyle.Paragraph,false,4000),input('color','Hex color',d.color===undefined?'':'#'+d.color.toString(16).padStart(6,'0')),input('timestamp','Timestamp on/off',d.timestamp===false?'off':'on'));
-  if(section==='author')m.addComponents(input('author','Author name',d.authorName),input('author_icon','Author icon URL',d.authorIconUrl));
-  if(section==='media')m.addComponents(input('thumbnail','Thumbnail URL',d.thumbnailUrl),input('image','Image URL',d.imageUrl));
-  if(section==='footer')m.addComponents(input('footer','Footer text',d.footerText,TextInputStyle.Paragraph,false,2048),input('footer_icon','Footer icon URL',d.footerIconUrl));
-  if(section==='fields')m.addComponents(input('index','Field number (blank = add)','',TextInputStyle.Short,false,3),input('field_name','Field name','',TextInputStyle.Short,false,256),input('field_value','Field value','',TextInputStyle.Paragraph,false,1024),input('inline','Inline on/off','off'));
-  if(section==='emojis')m.addComponents(
-    input('action','Action: add or remove','add',TextInputStyle.Short,true,6),
-    input('emoji_id','Emoji ID','',TextInputStyle.Short,false,25),
-    input('full_text','Full member-visible text • place IDs anywhere',serializeEditableText(d),TextInputStyle.Paragraph,true,4000)
+function makeEmojiModal(s:Session){
+  const m=new ModalBuilder()
+    .setCustomId('embededit:modal:emojis:'+s.name)
+    .setTitle(('Text & Emojis • '+s.name).slice(0,45));
+  m.addComponents(
+    input('title','Title',makeEmojiTextValue(s.draft.title),TextInputStyle.Paragraph,false,256),
+    input('description','Description',makeEmojiTextValue(s.draft.description),TextInputStyle.Paragraph,false,4000)
   );
   return m;
 }
 
-function allTextFields(s:SavedEmbed):Array<{get:()=>string|undefined;set:(v:string)=>void}>{
-  const out:Array<{get:()=>string|undefined;set:(v:string)=>void}>=[];
-  for(const key of ['title','description','authorName','authorIconUrl','footerText','footerIconUrl','thumbnailUrl','imageUrl'] as const)out.push({get:()=>s[key],set:(v:string)=>(s[key]=v||undefined)});
-  for(const f of s.fields??[]){out.push({get:()=>f.name,set:(v:string)=>(f.name=v)});out.push({get:()=>f.value,set:(v:string)=>(f.value=v)});}
+async function replaceEmojiIdsInText(i:Interaction,text:string):Promise<string>{
+  let out=text;
+  const ids=[...new Set([...text.matchAll(/(?<!\\d)(\\d{17,20})(?!\\d)/g)].map(m=>m[1]))];
+  for(const id of ids){
+    const token=await emojiMarkup(i,id);
+    if(token)out=out.split(id).join(token);
+  }
   return out;
-}
-
-async function emojiMarkup(i:Interaction,id:string):Promise<string|null>{try{const emoji=await i.client.application.emojis.fetch(id);return emoji.toString();}catch{return null;}}
-
-function removeEmojiId(text:string,id:string):string{
-  const clean=id.trim().replace(/^<a?:[^:>]+:(\d+)>$/,'$1');
-  if(!/^\d{17,20}$/.test(clean))throw new Error('Enter a valid application emoji ID or full emoji token.');
-  const escaped=clean.replace(/[-/\^$*+?.()|[\]{}]/g,'\\$&');
-  return text.replace(new RegExp('(<a?:[^:>]+:'+escaped+'>)|'+escaped,'g'),'').replace(/[ \t]{2,}/g,' ').trim();
-}
-
-async function applyEmojiTextAction(s:SavedEmbed,i:Interaction,action:string,id:string,text:string){
-  let edited=text;
-  const normalizedAction=action.trim().toLowerCase();
-  const clean=id.trim().match(/^<a?:[^:>]+:(\d+)>$/)?.[1]??id.trim();
-  if(normalizedAction==='add'){
-    if(!/^\d{17,20}$/.test(clean))throw new Error('Enter a valid application emoji ID.');
-    const token=await emojiMarkup(i,clean);
-    if(!token)throw new Error('That emoji ID was not found in the bot application emojis.');
-    if(edited.includes(clean)) edited=edited.split(clean).join(token);
-    else if(!edited.includes(token)) edited=edited.replace(/\[END\]\s*$/,'\n'+token+'\n[END]');
-  }else if(normalizedAction==='remove'){
-    if(!/^\d{17,20}$/.test(clean))throw new Error('Enter a valid application emoji ID.');
-    edited=removeEmojiId(edited,clean);
-  }else throw new Error('Action must be add or remove.');
-  parseEditableText(s,edited);
 }
 
 
 async function normalize(s:SavedEmbed,i:Interaction){
   for(const field of allTextFields(s)){
     const value=field.get();if(!value)continue;
-    let out=value;
-    for(const match of value.matchAll(/(?<!\\d)(\\d{17,20})(?!\\d)/g)){const token=await emojiMarkup(i,match[1]);if(token)out=out.replaceAll(match[1],token);}
-    field.set(out);
+    field.set(await replaceEmojiIdsInText(i,value));
   }
 }
 
@@ -206,7 +122,7 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
   if(!i.guildId)return false;
   const customId=String((i as any).customId??'');
   if((i.isButton()||i.isStringSelectMenu()||i.isModalSubmit())&&!isEmbedEditorOwner(i.user.id)){if(customId.startsWith('embededit:')&&i.isRepliable())await i.reply({content:'🔒 This embed editor is private to the two authorized users.',ephemeral:true}).catch(()=>undefined);return customId.startsWith('embededit:');}
-  if(customId.startsWith('embededit:page:')&&i.isButton()){const page=Number(customId.split(':')[2]);await i.update(buildEmbedEditorSelection(i.guildId,Number.isFinite(page)?page:0));return true;}
+  if(customId.startsWith('embededit:page:')&&i.isButton()){const page=Number(customId.split(':')[2]);await i.update(buildEmbedEditorSelection(i.guildId,i.client,Number.isFinite(page)?page:0));return true;}
   if(customId.startsWith('embededit:select:')&&i.isStringSelectMenu()){const name=i.values[0]?.trim();if(!name||(!loadGuild(i.guildId).savedEmbeds?.[name]&&!getEditableEmbedDefinitions(i.client).some(x=>x.name===name))){await i.reply({content:'❌ That embed no longer exists.',ephemeral:true});return true;}const sid=await createEmbedEditorSession(i as any,name);await render(i,sid);return true;}
   if(!customId.startsWith('embededit:'))return false;
   if(customId.startsWith('embededit:modal:')&&i.isModalSubmit()){
@@ -228,10 +144,8 @@ export async function handleEmbedEditorInteraction(i:Interaction):Promise<boolea
         if(raw){const n=Number(raw)-1;if(!Number.isInteger(n)||n<0||n>=s.draft.fields.length)throw new Error('That field number does not exist.');s.draft.fields[n]={name,value,inline};}
         else{if(s.draft.fields.length>=25)throw new Error('Maximum 25 fields.');s.draft.fields.push({name,value,inline});}
       }else if(section==='emojis'){
-        const action=i.fields.getTextInputValue('action').trim();
-        const emojiId=i.fields.getTextInputValue('emoji_id').trim();
-        const fullText=i.fields.getTextInputValue('full_text');
-        await applyEmojiTextAction(s.draft,i,action,emojiId,fullText);
+        s.draft.title=i.fields.getTextInputValue('title').trim()||undefined;
+        s.draft.description=i.fields.getTextInputValue('description').trim()||undefined;
       }
       await i.deferUpdate();await render(i,sid);
     }catch(error){await i.reply({content:'❌ '+(error instanceof Error?error.message:'Could not apply that change.'),ephemeral:true}).catch(()=>undefined);}
