@@ -140,6 +140,30 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
     return;
   }
 
+  // ── Help category selector ───────────────────────────────────────────────────
+  // This selector must be handled before the generic component routers. It was
+  // previously rendered by /help but had no matching handler, so Discord timed
+  // out with "This interaction failed" when a category was selected.
+  if (interaction.isStringSelectMenu() && interaction.customId === HELP_SELECT_CUSTOM_ID) {
+    if (!interaction.guildId) {
+      await interaction.reply({ content: '❌ Help categories are only available inside a server.', flags: 64 });
+      return;
+    }
+    const value = interaction.values[0] ?? 'all';
+    const commands = Array.from(interaction.client.commands?.values?.() ?? []);
+    const prefix = (await import('../prefixHandler.js')).getGuildPrefix(interaction.guildId);
+    const category = value === 'all' ? undefined : findHelpCategory(value, commands, prefix);
+    if (value !== 'all' && !category) {
+      await interaction.reply({ content: '❌ That help category is no longer available.', flags: 64 });
+      return;
+    }
+    await interaction.update({
+      embeds: [applyEditableEmbed(interaction.guildId, 'help', buildHelpEmbed(category?.name, prefix, commands))],
+      components: [buildHelpMenu(category?.name, commands, prefix)],
+    });
+    return;
+  }
+
   // ── Buttons ─────────────────────────────────────────────────────────────────
   if (interaction.isButton()) {
     const { customId } = interaction;
