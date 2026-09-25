@@ -42,10 +42,11 @@ export const botinfo:Command={
         value:'Need help or want to report something? [Join the Sparxie Support Server](https://discord.gg/UFvjK5Uy5e)',
         inline:false,
       })
-      .setThumbnail(client.user?.displayAvatarURL({size:256})??null)
       .setFooter({text:'Sparxie • Built with ❤️ by Vishalezz & Karanezz'})
       .setTimestamp();
 
+    const avatar=client.user?.displayAvatarURL({size:256});
+    if(avatar)embed.setThumbnail(avatar);
     await interaction.reply({embeds:[embed]});
   },
 };
