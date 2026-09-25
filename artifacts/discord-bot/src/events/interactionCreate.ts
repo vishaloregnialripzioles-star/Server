@@ -676,16 +676,20 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
     // ── Sparxie help category menu ────────────────────────────────────────────
     if (interaction.customId === HELP_SELECT_CUSTOM_ID) {
       const category = interaction.values[0];
+      await interaction.deferUpdate();
+      const { primeHelpApplicationEmojis } = await import('../commands/help.js');
+      await primeHelpApplicationEmojis(interaction.client);
       const helpCommands=Array.from(interaction.client.commands?.values?.()??[]);
-      if (!category || (category !== 'all' && !findHelpCategory(category, helpCommands))) {
-        await interaction.reply({ content: '❌ That help category is no longer available.', flags: 64 });
+      const prefix=(await import('../prefixHandler.js')).getGuildPrefix(interaction.guildId??'');
+      if (!category || (category !== 'all' && !findHelpCategory(category, helpCommands, prefix))) {
+        await interaction.editReply({ content: '❌ That help category is no longer available.', embeds: [], components: [] });
         return;
       }
 
-      const helpEmbed=buildHelpEmbed(category, undefined, helpCommands);
-      await interaction.update({
+      const helpEmbed=buildHelpEmbed(category, prefix, helpCommands);
+      await interaction.editReply({
         embeds: [applyEditableEmbed(interaction.guildId??'', 'help', helpEmbed)],
-        components: [buildHelpMenu(category, helpCommands)] ,
+        components: [buildHelpMenu(category, helpCommands, prefix)],
       });
       return;
     }
