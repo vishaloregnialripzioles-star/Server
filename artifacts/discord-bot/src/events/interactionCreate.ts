@@ -27,6 +27,7 @@ import {
 import { pendingGiveaways, buildConfigEmbed, buildConfigRows } from '../giveawaySetup.js';
 import type { PendingGiveaway } from '../giveawaySetup.js';
 import { parseDuration, generateId } from '../utils.js';
+import { captureCommandEmbed, applyEditableEmbed } from '../commandEmbedRegistry.js';
 import {
   HELP_SELECT_CUSTOM_ID,
   buildHelpEmbed,
@@ -90,16 +91,38 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
       return;
     }
 
+    const rawInteraction:any=interaction;
+    const originalReply=rawInteraction.reply?.bind(rawInteraction);
+    const originalEditReply=rawInteraction.editReply?.bind(rawInteraction);
+    const originalFollowUp=rawInteraction.followUp?.bind(rawInteraction);
+    const patchPayload=async(payload:any)=>{
+      if(!payload||!interaction.guildId||!Array.isArray(payload.embeds))return payload;
+      const next={...payload,embeds:payload.embeds.map((raw:any)=>{
+        try{
+          const embed=raw instanceof EmbedBuilder?raw:new EmbedBuilder(raw);
+          captureCommandEmbed(interaction.guildId!,interaction.commandName,embed);
+          return applyEditableEmbed(interaction.guildId!,interaction.commandName==='ticket'?'ticket:create':interaction.commandName==='closeticket'?'ticket:close':interaction.commandName,embed);
+        }catch{return raw;}
+      })};
+      return next;
+    };
+    if(originalReply)rawInteraction.reply=async(payload:any)=>originalReply(await patchPayload(payload));
+    if(originalEditReply)rawInteraction.editReply=async(payload:any)=>originalEditReply(await patchPayload(payload));
+    if(originalFollowUp)rawInteraction.followUp=async(payload:any)=>originalFollowUp(await patchPayload(payload));
     try {
       await command.execute(interaction);
     } catch (err) {
       console.error(`Error in command ${interaction.commandName}:`, err);
       const payload = { content: '❌ An error occurred while running this command.', flags: 64 };
       if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(payload).catch(() => undefined);
+        await originalFollowUp(payload).catch(() => undefined);
       } else {
-        await interaction.reply(payload).catch(() => undefined);
+        await originalReply(payload).catch(() => undefined);
       }
+    } finally {
+      if(originalReply)rawInteraction.reply=originalReply;
+      if(originalEditReply)rawInteraction.editReply=originalEditReply;
+      if(originalFollowUp)rawInteraction.followUp=originalFollowUp;
     }
     return;
   }
