@@ -666,15 +666,16 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
     // ── Sparxie help category menu ────────────────────────────────────────────
     if (interaction.customId === HELP_SELECT_CUSTOM_ID) {
       const category = interaction.values[0];
-      if (!category || (category !== 'all' && !findHelpCategory(category))) {
+      const helpCommands=Array.from(interaction.client.commands?.values?.()??[]);
+      if (!category || (category !== 'all' && !findHelpCategory(category, helpCommands))) {
         await interaction.reply({ content: '❌ That help category is no longer available.', flags: 64 });
         return;
       }
 
-      const helpEmbed=buildHelpEmbed(category);
+      const helpEmbed=buildHelpEmbed(category, undefined, helpCommands);
       await interaction.update({
         embeds: [applyEditableEmbed(interaction.guildId??'', 'help', helpEmbed)],
-        components: [buildHelpMenu(category)],
+        components: [buildHelpMenu(category, helpCommands)] ,
       });
       return;
     }
