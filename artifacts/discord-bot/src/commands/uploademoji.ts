@@ -34,19 +34,7 @@ export const uploademoji:Command={
    if(entry){updateGuild(interaction.guildId,g=>{g.config.bloxValueEmojis??={};g.config.bloxValueEmojis[entry.name]=emoji.toString();});}
    await refreshBloxApplicationEmojis(interaction.client);
    const emojiToken=emoji.toString();
-   await interaction.editReply(`✅ **Application emoji ready!**
-
-${emojiToken}
-Name: **${emoji.name}**
-ID: **${emoji.id}**
-Full emoji: **${emojiToken}**
-Animated: **${emoji.animated?'Yes':'No'}**
-
-📌 Copy the **Full emoji** value and paste it into /embed editor. You can also paste only the ID; the editor will resolve it automatically.
-${entry?`
-🧩 Linked automatically to **${entry.name}**.
-You can now use it in Blox value replies.`:'`
-💡 To link it automatically, run this command again with the **blox_item** option.'}`);
+   await interaction.editReply('✅ **Application emoji ready!**\n\n'+emojiToken+'\nName: **'+emoji.name+'**\nID: **'+emoji.id+'**\nFull emoji: **'+emojiToken+'**\nAnimated: **'+(emoji.animated?'Yes':'No')+'**\n\n📌 Copy the Full emoji value and paste it into `/embed-edit`. You can also paste only the ID; the editor will resolve it automatically.'+(entry?'\n\n🧩 Linked automatically to **'+entry.name+'**.':'\n\n💡 To link it automatically, run this command again with the **blox_item** option.') );
   }catch(error){console.error('[UploadEmoji]',error);await interaction.editReply(`❌ ${error instanceof Error?error.message:'Discord rejected the application emoji.'}`);}
  }
 };
