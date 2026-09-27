@@ -65,7 +65,9 @@ export const ticket: Command = {
       .addStringOption(o => o.setName('name').setDescription('Category name').setRequired(true)))
     .addSubcommand(s => s.setName('open').setDescription('Open a ticket directly')
       .addStringOption(o => o.setName('reason').setDescription('What do you need help with?').setRequired(true))
-      .addStringOption(o => o.setName('panel').setDescription('Optional saved panel name'))),
+      .addStringOption(o => o.setName('panel').setDescription('Optional saved panel name')))
+    .addSubcommand(s => s.setName('add-member').setDescription('Add a member to the current ticket')
+      .addUserOption(o => o.setName('user').setDescription('Member to add to this ticket').setRequired(true))),
 
   async execute(interaction) {
     if (!interaction.guild) return;
@@ -181,6 +183,35 @@ export const ticket: Command = {
       const panels=loadGuild(interaction.guild.id).config.ticketPanels??{};
       const lines=Object.values(panels).map(p=>`• **${p.name}** — ${p.options?.length??0} categories — ${p.questions.length} panel question(s)`);
       await interaction.editReply({embeds:[new EmbedBuilder().setColor(0x5865F2).setTitle('🎫 Ticket Panels').setDescription(lines.join('\\n')||'No saved panels. Create one with /ticket create.')]});return;
+    }
+
+    if (sub==='add-member') {
+      if (!interaction.channelId) { await interaction.editReply('❌ This command must be used inside a ticket channel.'); return; }
+      const canManage = interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) || interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels);
+      if (!canManage) { await interaction.editReply('❌ You need Manage Server or Manage Channels permission to add members to tickets.'); return; }
+
+      const data=loadGuild(interaction.guild.id);
+      const ticket=Object.values(data.tickets).find(t=>t.channelId===interaction.channelId && !t.closed);
+      if(!ticket) { await interaction.editReply('❌ This channel is not an open Sparxie ticket.'); return; }
+
+      const user=interaction.options.getUser('user',true);
+      const member=await interaction.guild.members.fetch(user.id).catch(()=>null);
+      if(!member) { await interaction.editReply('❌ That member is not in this server.'); return; }
+
+      const channel=interaction.channel;
+      if(!channel || !('permissionOverwrites' in channel)) { await interaction.editReply('❌ I could not edit this ticket channel.'); return; }
+
+      try {
+        await (channel as any).permissionOverwrites.edit(user.id,{
+          ViewChannel:true,
+          SendMessages:true,
+          ReadMessageHistory:true,
+        });
+        await interaction.editReply(`✅ Added <@${user.id}> to ticket **${ticket.id}**. They can now view and reply in this ticket.`);
+      } catch {
+        await interaction.editReply('❌ I could not add that member. Make sure I have Manage Channels permission.');
+      }
+      return;
     }
 
     if (sub==='option-add') {
