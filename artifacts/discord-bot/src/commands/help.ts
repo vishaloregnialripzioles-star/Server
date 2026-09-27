@@ -1,5 +1,6 @@
 import { ActionRowBuilder, EmbedBuilder, SlashCommandBuilder, StringSelectMenuBuilder } from 'discord.js';
 import type { Command } from '../types.js';
+import { DEFAULT_EMBED_COLOR } from '../embedDefaults.js';
 
 export const HELP_SELECT_CUSTOM_ID='sparxie_help_category';
 
