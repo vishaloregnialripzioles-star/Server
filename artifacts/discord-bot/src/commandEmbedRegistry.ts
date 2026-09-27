@@ -3,6 +3,7 @@ import type { SavedEmbed } from './types.js';
 import { loadGuild, updateGuild } from './storage.js';
 import { buildHelpEmbed } from './commands/help.js';
 import { getGuildPrefix } from './prefixHandler.js';
+import { DEFAULT_EMBED_COLOR } from './embedDefaults.js';
 
 export type EditableEmbedDefinition = {
   name: string;
