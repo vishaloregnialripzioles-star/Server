@@ -5,6 +5,7 @@ import { handleDashboardApi } from './dashboardApi.js';
 import { initStorage } from './storage.js';
 import { initGlobalAfk } from './globalAfk.js';
 import { startRecoveryScheduler } from './recoveryScheduler.js';
+import { allCommands } from './commands/index.js';
 
 const port = Number(process.env.PORT ?? 3000);
 const token = process.env.DISCORD_BOT_TOKEN?.trim();
@@ -18,6 +19,10 @@ const client = new Client({
 createServer(async (req, res) => { if (await handleDashboardApi(req, res, client)) return; res.writeHead(200, { 'content-type': 'text/plain' }); res.end('Sparxie bot is running'); }).listen(port, '0.0.0.0', () => console.log(`🌐 Health server listening on ${port}`));
 
 client.commands = new Collection();
+// Load the complete command map before the gateway connects so every slash
+// interaction has a command ready immediately when Discord delivers it.
+for (const command of allCommands) client.commands.set(command.data.name, command);
+console.log(`📦 Preloaded ${client.commands.size} core slash commands before login`);
 client.on('debug', message => { if (/identify|gateway|ready|heartbeat|resume/i.test(message)) console.log(`[Discord] ${message}`); });
 registerEvents(client);
 
