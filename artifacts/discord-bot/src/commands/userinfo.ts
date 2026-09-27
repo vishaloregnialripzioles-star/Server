@@ -54,7 +54,7 @@ export const userinfo: Command = {
       : 'None';
 
     const embed = new EmbedBuilder()
-      .setColor(member?.displayHexColor ?? 0x111827)
+      .setColor(DEFAULT_EMBED_COLOR)
       .setAuthor({ name: member?.displayName ?? target.username, iconURL: target.displayAvatarURL({ size: 128 }) })
       .setTitle('User Information')
       .setDescription(member ? 'Server membership, key permissions and profile details.' : 'Discord account details.')
