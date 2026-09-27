@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import type { Command } from '../types.js';
 import { loadGuild } from '../storage.js';
+import { DEFAULT_EMBED_COLOR } from '../embedDefaults.js';
 const KEY_PERMISSIONS=[
   ['Administrator',PermissionFlagsBits.Administrator],
   ['Manage Server',PermissionFlagsBits.ManageGuild],
