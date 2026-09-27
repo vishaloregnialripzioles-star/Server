@@ -40,7 +40,7 @@ const BUILT_INS: Array<Omit<EditableEmbedDefinition,'build'> & { build: (interac
     sourceKey: 'antinuke',
     description: 'Anti-Nuke security response embeds.',
     build: () => new EmbedBuilder()
-      .setColor(0x5865F2)
+      .setColor(DEFAULT_EMBED_COLOR)
       .setTitle('🛡️ Anti-Nuke Security')
       .setDescription('Sparxie Anti-Nuke protection and security settings.')
       .setFooter({text:'Sparxie • Anti-Nuke Security'})
