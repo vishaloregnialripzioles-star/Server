@@ -115,7 +115,7 @@ export function buildHelpEmbed(category?:string|null,prefix='.',commands:any=com
   const selected=category?categories.find(c=>c.name.toLowerCase()===category.toLowerCase()):undefined;
   const count=categories.reduce((n,c)=>n+c.commands.length,0);
   const premiumEmoji=emojiFor('Premium');
-  const embed=new EmbedBuilder().setColor(0x12d9d3).setAuthor({name:'Sparxie Help Center'}).setFooter({text:'Sparxie • Complete command directory'}).setTimestamp();
+  const embed=new EmbedBuilder().setColor(DEFAULT_EMBED_COLOR).setAuthor({name:'Sparxie Help Center'}).setFooter({text:'Sparxie • Complete command directory'}).setTimestamp();
   if(!selected)embed.setTitle('✨ Welcome to Sparxie').setDescription(`Your complete command directory, organized by category.\n\n**Prefix:** \`${prefix}\`\n**Command entries:** \`${count}\`\n**${premiumEmoji}:** Premium feature when premium metadata is configured.\n\n${categories.map(c=>`${c.emoji} **${c.name}** — ${c.commands.length}`).join('\n')}\n\nUse \`${prefix}help <category>\` or the selector below.`);
   else{
     embed.setTitle(`${selected.emoji} ${selected.name}`).setDescription(`${selected.commands.length} command entries.\n${premiumEmoji} = Premium.`);
