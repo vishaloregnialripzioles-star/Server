@@ -29,7 +29,7 @@ export const botinfo:Command={
     const commandCount=client.commands.size;
 
     const embed=new EmbedBuilder()
-      .setColor(0x0B0D10)
+      .setColor(DEFAULT_EMBED_COLOR)
       .setAuthor({name:'SPARXIE',iconURL:client.user?.displayAvatarURL({size:128})})
       .setTitle('Bot Information')
       .setDescription('A clean overview of Sparxie, its creators and current runtime.')
