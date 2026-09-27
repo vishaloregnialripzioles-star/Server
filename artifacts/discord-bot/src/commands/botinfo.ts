@@ -1,5 +1,6 @@
 import { EmbedBuilder, SlashCommandBuilder } from 'discord.js';
 import type { Command } from '../types.js';
+import { DEFAULT_EMBED_COLOR } from '../embedDefaults.js';
 
 function formatUptime(ms:number):string{
   let seconds=Math.floor(ms/1000);
