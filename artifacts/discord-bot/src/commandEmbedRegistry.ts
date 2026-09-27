@@ -80,7 +80,7 @@ const BUILT_INS: Array<Omit<EditableEmbedDefinition,'build'> & { build: (interac
     sourceKey: 'ticket:reopen',
     description: 'Embed sent when a closed ticket is reopened.',
     build: () => new EmbedBuilder()
-      .setColor(0x57F287)
+      .setColor(DEFAULT_EMBED_COLOR)
       .setTitle('🔓 Ticket Reopened')
       .setDescription('This ticket is open again. Please continue the conversation here.')
       .setTimestamp(),
