@@ -66,7 +66,7 @@ const BUILT_INS: Array<Omit<EditableEmbedDefinition,'build'> & { build: (interac
     sourceKey: 'ticket:close',
     description: 'Embed sent when a support ticket is closed.',
     build: () => new EmbedBuilder()
-      .setColor(0xE74C3C)
+      .setColor(DEFAULT_EMBED_COLOR)
       .setTitle('🔒 Ticket Closed')
       .setDescription('This ticket has been closed. You can save the transcript, reopen the ticket, or permanently close this channel.')
       .addFields(
