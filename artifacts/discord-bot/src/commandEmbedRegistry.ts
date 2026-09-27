@@ -18,7 +18,7 @@ const BUILT_INS: Array<Omit<EditableEmbedDefinition,'build'> & { build: (interac
     sourceKey: 'help',
     description: 'The main Sparxie Help Center embed.',
     build: (i) => new EmbedBuilder()
-      .setColor(0x12d9d3)
+      .setColor(DEFAULT_EMBED_COLOR)
       .setAuthor({name:'Sparxie Help Center'})
       .setTitle('✨ Welcome to Sparxie')
       .setDescription('Your complete command directory.')
