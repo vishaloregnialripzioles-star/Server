@@ -3,6 +3,7 @@ import { loadGuild, updateGuild } from './storage.js';
 import { generateId } from './utils.js';
 import type { TicketPanelConfig, TicketPanelOption } from './types.js';
 import { applyEditableEmbed } from './commandEmbedRegistry.js';
+import { DEFAULT_EMBED_COLOR } from './embedDefaults.js';
 
 export type TicketResult = { success:true; channel:TextChannel; ticketId:string } | { success:false; message:string };
 
