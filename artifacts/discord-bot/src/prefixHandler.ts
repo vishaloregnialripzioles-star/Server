@@ -62,6 +62,38 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
   const reply = (content: string | object) =>
     message.reply(content).catch(() => undefined);
 
+  // ── .ping / .uptime ─────────────────────────────────────────────────────────
+  if (cmd === 'ping') {
+    const latency = message.client.ws.ping;
+    await reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0xD30000)
+        .setTitle('🏓 Sparxie Pong!')
+        .setDescription('**WebSocket latency:** \`' + (latency >= 0 ? latency + 'ms' : 'calculating') + '\`')
+        .setFooter({ text: 'Sparxie • Health check' })
+        .setTimestamp()],
+    });
+    return;
+  }
+
+  if (cmd === 'uptime') {
+    const ms = message.client.uptime ?? 0;
+    let seconds = Math.floor(ms / 1000);
+    const days = Math.floor(seconds / 86400); seconds %= 86400;
+    const hours = Math.floor(seconds / 3600); seconds %= 3600;
+    const minutes = Math.floor(seconds / 60); seconds %= 60;
+    const pretty = [days ? days + 'd' : '', hours ? hours + 'h' : '', minutes ? minutes + 'm' : '', seconds + 's'].filter(Boolean).join(' ') || '0s';
+    await reply({
+      embeds: [new EmbedBuilder()
+        .setColor(0xD30000)
+        .setTitle('⏱️ Sparxie Uptime')
+        .setDescription('Online for **' + pretty + '**\nStarted <t:' + Math.floor((Date.now() - ms) / 1000) + ':R>.')
+        .setFooter({ text: 'Sparxie • Health check' })
+        .setTimestamp()],
+    });
+    return;
+  }
+
   // ── .ban ─────────────────────────────────────────────────────────────────────
   if (cmd === 'ban') {
     if (!perm(member, PermissionFlagsBits.BanMembers)) {
