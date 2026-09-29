@@ -73,7 +73,7 @@ const token=(s:string,fruit='',dealer='')=>s.replaceAll('{fruit}',fruit).replace
 function text(html:string){return html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ');}
 
 function parseMoney(value:string):number|undefined{
-  const raw=value.trim().toUpperCase().replace(/[,\\s]/g,'');
+  const raw=value.trim().toUpperCase().replace(/[,$\\sR]/g,'');
   if(!raw||raw==='—'||raw==='N/A')return undefined;
   const match=raw.match(/^([0-9]+(?:\\.[0-9]+)?)([KMB])?$/);
   if(!match)return undefined;
@@ -103,40 +103,38 @@ function parseSection(section:string):Fruit[]{
 }
 
 function extractDealerSections(source:string):{normal:string;mirage:string}{
-  const labels:[keyof DealerSections,string][]=[
-    ['normal','Normal Stock'],
-    ['mirage','Mirage Stock']
-  ];
+  // FruityBlox currently renders the headings as "Normal" and "Mirage",
+  // followed by "Next reset". Match that structure instead of older labels.
   const hits:{kind:keyof DealerSections;index:number;length:number}[]=[];
-  for(const [kind,label] of labels){
-    const re=new RegExp(label,'ig');
-    let m:RegExpExecArray|null;
-    while((m=re.exec(source))!==null)hits.push({kind,index:m.index,length:label.length});
+  const re=/\\b(Normal|Mirage)\\s+Next\\s+reset\\b/ig;
+  let m:RegExpExecArray|null;
+  while((m=re.exec(source))!==null){
+    hits.push({
+      kind:m[1].toLowerCase()==='normal'?'normal':'mirage',
+      index:m.index,
+      length:m[0].length
+    });
   }
   hits.sort((a,b)=>a.index-b.index);
 
-  let best:{normal:string;mirage:string;score:number}|undefined;
-  for(let i=0;i<hits.length-1;i++){
-    const a=hits[i],b=hits[i+1];
-    if(a.kind===b.kind)continue;
-    const aSection=source.slice(a.index+a.length,b.index);
-    const aScore=parseSectionScore(aSection);
-    if(aScore===0)continue;
+  if(hits.length<2)return {normal:'',mirage:''};
 
-    const nextAfterB=hits[i+2];
-    const bSection=source.slice(b.index+b.length,nextAfterB?.index??source.length);
-    const bScore=parseSectionScore(bSection);
-    if(bScore===0)continue;
+  const normalHit=hits.find(x=>x.kind==='normal');
+  const mirageHit=hits.find(x=>x.kind==='mirage');
+  if(!normalHit||!mirageHit)return {normal:'',mirage:''};
 
-    const candidate={
-      normal:a.kind==='normal'?aSection:bSection,
-      mirage:a.kind==='mirage'?aSection:bSection,
-      score:aScore+bScore
-    };
-    if(!best||candidate.score>best.score)best=candidate;
-  }
-  if(!best)return {normal:'',mirage:''};
-  return {normal:best.normal,mirage:best.mirage};
+  const normalStart=normalHit.index+normalHit.length;
+  const mirageStart=mirageHit.index+mirageHit.length;
+  const normal=normalStart<mirageHit.index
+    ?source.slice(normalStart,mirageHit.index)
+    :source.slice(mirageStart,normalHit.index);
+  const mirage=mirageStart<normalHit.index
+    ?source.slice(mirageStart,normalHit.index)
+    :source.slice(mirageStart);
+
+  return normalHit.index<mirageHit.index
+    ?{normal,mirage}
+    :{normal:mirage,mirage:normal};
 }
 type DealerSections={normal:string;mirage:string};
 function parseSectionScore(section:string):number{
