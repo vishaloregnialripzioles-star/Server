@@ -73,9 +73,9 @@ const token=(s:string,fruit='',dealer='')=>s.replaceAll('{fruit}',fruit).replace
 function text(html:string){return html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ');}
 
 function parseMoney(value:string):number|undefined{
-  const raw=value.trim().toUpperCase().replace(/[,$\\sR]/g,'');
+  const raw=value.trim().toUpperCase().replace(/[,$\sR]/g,'');
   if(!raw||raw==='—'||raw==='N/A')return undefined;
-  const match=raw.match(/^([0-9]+(?:\\.[0-9]+)?)([KMB])?$/);
+  const match=raw.match(/^([0-9]+(?:\.[0-9]+)?)([KMB])?$/);
   if(!match)return undefined;
   const amount=Number(match[1]);
   const multiplier=match[2]==='K'?1_000:match[2]==='M'?1_000_000:match[2]==='B'?1_000_000_000:1;
@@ -106,7 +106,7 @@ function extractDealerSections(source:string):{normal:string;mirage:string}{
   // FruityBlox currently renders the headings as "Normal" and "Mirage",
   // followed by "Next reset". Match that structure instead of older labels.
   const hits:{kind:keyof DealerSections;index:number;length:number}[]=[];
-  const re=/\\b(Normal|Mirage)\\s+Next\\s+reset\\b/ig;
+  const re=/\b(Normal|Mirage)\s+Next\s+reset\b/ig;
   let m:RegExpExecArray|null;
   while((m=re.exec(source))!==null){
     hits.push({
