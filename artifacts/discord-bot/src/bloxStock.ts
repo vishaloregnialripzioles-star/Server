@@ -20,13 +20,41 @@ const token=(s:string,fruit='',dealer='')=>s.replaceAll('{fruit}',fruit).replace
 function text(html:string){return html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ');}
 function reset(html:string,label:string){const m=html.match(new RegExp(label+'[\\s\\S]{0,500}?(?:reset|refresh)[^0-9]{0,100}(\\d{10,13})','i'));if(!m)return undefined;const n=Number(m[1]);return n>2e9?n*1000:n;}
 function inSection(section:string,entry:any){const s=section.toLowerCase();return [entry.name,...(entry.aliases||[])].map(norm).some((n:string)=>s.includes(n));}
+function parseMoney(value:string):number|undefined{
+  const raw=value.trim().toUpperCase().replace(/[,\\s]/g,'');
+  if(!raw||raw==='—'||raw==='N/A')return undefined;
+  const match=raw.match(/^([0-9]+(?:\\.[0-9]+)?)([KMB])?$/);
+  if(!match)return undefined;
+  const amount=Number(match[1]);
+  const multiplier=match[2]==='K'?1_000:match[2]==='M'?1_000_000:match[2]==='B'?1_000_000_000:1;
+  const result=amount*multiplier;
+  return Number.isFinite(result)?result:undefined;
+}
 function parseSection(section:string):Fruit[]{
   const out:Fruit[]=[];
+  const seen=new Set<string>();
   for(const e of BLOX_VALUES){
-    if(e.type==='Gamepass'||e.type==='Skin'||!inSection(section,e))continue;
-    out.push({name:e.name,price:Number(e.beli.replace(/[^0-9.]/g,''))||undefined,image:'https://fruityblox.com/images/fruits/'+slug(e.name)+'.webp',rarity:e.rarity});
+    if(e.type==='Gamepass'||e.type==='Skin'||!e.beli||e.beli==='—')continue;
+    if(!inSection(section,e))continue;
+    const nameKey=norm(e.name);
+    if(seen.has(nameKey))continue;
+    const price=parseMoney(e.beli);
+    out.push({
+      name:e.name,
+      price,
+      image:'https://fruityblox.com/images/fruits/'+slug(e.name)+'.webp',
+      rarity:e.rarity
+    });
+    seen.add(nameKey);
   }
   return out;
+}
+function formatBeli(value?:number):string{
+  if(value===undefined||!Number.isFinite(value))return 'Price unavailable';
+  if(value>=1_000_000_000)return `${Number((value/1_000_000_000).toFixed(2))}B Beli`;
+  if(value>=1_000_000)return `${Number((value/1_000_000).toFixed(2))}M Beli`;
+  if(value>=1_000)return `${Number((value/1_000).toFixed(2))}K Beli`;
+  return `${value.toLocaleString('en-US')} Beli`;
 }
 async function getStock():Promise<Stock>{
   const r=await fetch(URL,{headers:{'user-agent':'Sparxie stock notifier','accept':'text/html,application/xhtml+xml'}});
