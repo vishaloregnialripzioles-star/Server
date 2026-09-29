@@ -71,12 +71,29 @@ client.once('ready', async () => {
     console.log(`📋 Registering slash commands (${commandNames.length}): ${commandNames.join(', ')}`);
 
     let registered: any[] = [];
-    if (guildId && /^\d+$/.test(guildId)) {
-      registered = await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), { body: commandData }) as any[];
-      console.log(`✅ Synced ${registered.length} slash commands to guild ${guildId}`);
-    } else {
-      registered = await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData }) as any[];
-      console.log(`✅ Synced ${registered.length} global slash commands`);
+    const target = guildId && /^\d+$/.test(guildId) ? 'guild' : 'global';
+    const route = target === 'guild'
+      ? Routes.applicationGuildCommands(client.user!.id, guildId!)
+      : Routes.applicationCommands(client.user!.id);
+
+    try {
+      registered = await rest.put(route, { body: commandData }) as any[];
+      console.log(`✅ Synced ${registered.length} ${target} slash commands${target === 'guild' ? ` to guild ${guildId}` : ''}`);
+    } catch (bulkError) {
+      // One invalid command can reject a bulk overwrite. Register commands
+      // individually so one broken command cannot hide the healthy commands.
+      console.error('❌ Bulk slash-command sync failed:', bulkError);
+      console.log('🛠️ Falling back to individual slash-command registration...');
+      registered = [];
+      for (const command of commandData) {
+        try {
+          const result = await rest.post(route, { body: command }) as any;
+          registered.push(result);
+        } catch (commandError) {
+          console.error(`❌ Failed to register /${String(command.name)}:`, commandError);
+        }
+      }
+      console.log(`🛠️ Individual sync completed: ${registered.length}/${commandData.length} commands registered`);
     }
 
     const registeredNames = registered.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
@@ -85,6 +102,7 @@ client.once('ready', async () => {
     if (missing.length) console.error(`❌ Discord registration missing: ${missing.join(', ')}`);
     if (extra.length) console.warn(`⚠️ Discord has extra commands: ${extra.join(', ')}`);
     console.log(`🔎 Slash command verification: ${registeredNames.length}/${commandNames.length} present`);
+    console.log(`🔐 Slash sync target: ${target}${target === 'guild' ? ` (${guildId})` : ' (global)'}`);
   } catch (err) { console.error('[Slash sync failed]', err); }
 
   try {
