@@ -201,11 +201,34 @@ async function update(client:Client,guildId:string,force=false){
   const newNormal=s.normal.filter(x=>!oldN.includes(norm(x.name))),newMirage=s.mirage.filter(x=>!oldM.includes(norm(x.name)));
   const hasChange=newNormal.length>0||newMirage.length>0;
   if(force||!cfg.lastSnapshot||hasChange){
-    const all=[...newNormal.map(x=>({...x,dealer:'Normal'})),...newMirage.map(x=>({...x,dealer:'Mirage'}))].filter(x=>mythical(x.name));
-    const mentions:string[]=[];const roles=new Set<string>();
-    if(cfg.mythicalPingRoleId&&all.length){mentions.push(role(cfg.mythicalPingRoleId)+' '+token(cfg.mythicalPingMessage||'Mythical in stock: {fruit}',[...new Set(all.map(x=>x.name))].join(', '),'Normal/Mirage'));roles.add(cfg.mythicalPingRoleId);}
-    for(const x of all){const p=cfg.fruitPings?.[norm(x.name)];if(p){mentions.push(role(p.roleId)+' '+token(p.message||'{fruit} is in stock!',x.name,x.dealer));roles.add(p.roleId);}}
-    await (ch as TextChannel).send({content:mentions.join('\n')||undefined,allowedMentions:{roles:[...roles]},embeds:[embed(s.normal,'Normal',s.normalReset),embed(s.mirage,'Mirage',s.mirageReset)]});
+    const sendDealer=async(dealer:'Normal'|'Mirage',items:Fruit[],newItems:Fruit[],next?:number)=>{
+      const entered=newItems.filter(x=>mythical(x.name));
+      const mentions:string[]=[];const roles=new Set<string>();
+      if(cfg.mythicalPingRoleId&&entered.length){
+        mentions.push(role(cfg.mythicalPingRoleId)+' '+token(
+          cfg.mythicalPingMessage||'Mythical in stock: {fruit}',
+          [...new Set(entered.map(x=>x.name))].join(', '),
+          dealer
+        ));
+        roles.add(cfg.mythicalPingRoleId);
+      }
+      for(const x of entered){
+        const p=cfg.fruitPings?.[norm(x.name)];
+        if(p){
+          mentions.push(role(p.roleId)+' '+token(p.message||'{fruit} is in stock!',x.name,dealer));
+          roles.add(p.roleId);
+        }
+      }
+      await (ch as TextChannel).send({
+        content:mentions.join('\n')||undefined,
+        allowedMentions:{roles:[...roles]},
+        embeds:[embed(items,dealer,next)]
+      });
+    };
+
+    // Each dealer gets its own message. Their stock, pings and embed can never mix.
+    await sendDealer('Normal',s.normal,newNormal,s.normalReset);
+    await sendDealer('Mirage',s.mirage,newMirage,s.mirageReset);
   }
   updateGuild(guildId,d=>{if(!d.config.bloxStock)return;d.config.bloxStock.lastSnapshot=k;d.config.bloxStock.lastNormalStock=s.normal.map(x=>norm(x.name)).join('|');d.config.bloxStock.lastMirageStock=s.mirage.map(x=>norm(x.name)).join('|');d.config.bloxStock.lastCheckedAt=s.checked;});
 }
