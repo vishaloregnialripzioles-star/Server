@@ -10,7 +10,13 @@ async function snapshotGuild(guild: Guild): Promise<void> {
     const map = new Map<string, number>();
     for (const invite of invites.values()) map.set(invite.code, invite.uses ?? 0);
     inviteUses.set(guild.id, map);
-  } catch (error) { console.error(`[inviteRoles] Could not snapshot invites for ${guild.id}:`, error); }
+  } catch (error: any) {
+    if (error?.code === 50013) {
+      console.warn(`[inviteRoles] Skipping invite snapshot for ${guild.id}: bot lacks Manage Guild permission.`);
+      return;
+    }
+    console.error(`[inviteRoles] Could not snapshot invites for ${guild.id}:`, error);
+  }
 }
 
 export async function primeInviteCache(client: Client<true>): Promise<void> { await Promise.all(client.guilds.cache.map(snapshotGuild)); }
