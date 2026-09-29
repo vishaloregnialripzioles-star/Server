@@ -190,7 +190,11 @@ export async function buildCurrentEditableEmbed(i:ChatInputCommandInteraction,na
 
   // A captured embed is the real member-visible baseline. Keep it even when
   // later edits override only selected properties.
-  const baseline=saved.captured && saved.base ? cloneSaved(saved.base) : cloneSaved(saved);
+  // Placeholder entries are only directory hints. If the command has a real
+  // captured embed, always prefer that member-visible payload as the editor baseline.
+  const baseline=(saved.placeholder || saved.captured !== true)
+    ? cloneSaved(generated)
+    : (saved.base ? cloneSaved(saved.base) : cloneSaved(saved));
   baseline.name=def.name;
   baseline.sourceKey=def.sourceKey;
   baseline.placeholder=false;
@@ -259,6 +263,6 @@ export function captureCommandEmbed(guildId:string,commandName:string,embed:Embe
   updateGuild(guildId,d=>{
     d.savedEmbeds??={};
     const existing=d.savedEmbeds[name];
-    if(!existing || existing.placeholder || existing.captured===false)d.savedEmbeds[name]=base;
+    if(!existing || existing.placeholder || existing.captured!==true)d.savedEmbeds[name]=base;
   });
 }
