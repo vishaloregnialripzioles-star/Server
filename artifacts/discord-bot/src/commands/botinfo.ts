@@ -29,9 +29,8 @@ export const botinfo:Command={
     const commandCount=client.commands.size;
 
     const embed=new EmbedBuilder()
-      .setColor(DEFAULT_EMBED_COLOR)
-      .setAuthor({name:'SPARXIE',iconURL:client.user?.displayAvatarURL({size:128})})
-      .setTitle('Bot Information')
+      .setColor(0x111827)
+      .setTitle('Sparxie • Bot Information')
       .setDescription('A clean overview of Sparxie, its creators and current runtime.')
       .addFields(
         {name:'Creators',value:'[Vishalezz](https://discord.com/users/1504354088538869892)\n[Karanezz](https://discord.com/users/1323664778488582284)'},
@@ -44,7 +43,6 @@ export const botinfo:Command={
         {name:'Runtime',value:'Node.js '+process.version,inline:true},
         {name:'Support',value:'[Sparxie Support Server](https://discord.gg/UFvjK5Uy5e)'}
       )
-      .setThumbnail(client.user?.displayAvatarURL({size:256})??'')
       .setFooter({text:'Sparxie • Bot Information'})
       .setTimestamp();
 
