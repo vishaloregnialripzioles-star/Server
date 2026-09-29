@@ -2,12 +2,14 @@ import type { Client, BaseGuildTextChannel } from 'discord.js';
 import { loadGuild, saveGuild } from './storage.js';
 import { endGiveaway, buildGiveawayRow } from './giveawayUtils.js';
 import { startSocialNotifications } from './socialNotifications.js';
+import { startBloxStockTracker } from './bloxStock.js';
 
 const DAILY_MS = 24 * 60 * 60 * 1000;
 
 export function startLoops(client: Client): void {
   void syncActiveGiveawayButtons(client);
   startSocialNotifications(client);
+  startBloxStockTracker(client);
   setInterval(() => {
     void checkReminders(client);
     void checkTempRoles(client);
