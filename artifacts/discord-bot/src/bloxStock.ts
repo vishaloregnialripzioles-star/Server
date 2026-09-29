@@ -194,7 +194,7 @@ function embed(items:Fruit[],dealer:string,next?:number){
 async function update(client:Client,guildId:string,force=false){
   const cfg=loadGuild(guildId).config.bloxStock;if(!cfg?.enabled||!cfg.channelId)return;
   let s:Stock;try{s=await getStock();}catch(e){console.warn('[BloxStock]',e);return;}
-  const k=JSON.stringify({n:key(s.normal),m:key(s.mirage)});
+  const k=JSON.stringify({n:key(s.normal),m:key(s.mirage),nr:s.normalReset??null,mr:s.mirageReset??null});
   if(!force&&cfg.lastSnapshot===k){updateGuild(guildId,d=>{if(d.config.bloxStock)d.config.bloxStock.lastCheckedAt=s.checked;});return;}
   const g=client.guilds.cache.get(guildId);if(!g)return;
   const ch=await g.channels.fetch(cfg.channelId).catch(()=>null);if(!ch?.isTextBased()||ch.type!==ChannelType.GuildText)return;
