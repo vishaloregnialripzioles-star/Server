@@ -63,13 +63,7 @@ const ist=(n:number)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',d
 const role=(id:string)=>'<@&'+id+'>';
 const token=(s:string,fruit='',dealer='')=>s.replaceAll('{fruit}',fruit).replaceAll('{dealer}',dealer).replaceAll('{time}',ist(Date.now()));
 function text(html:string){return html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ');}
-function reset(html:string,label:string){const m=html.match(new RegExp(label+'[\\s\\S]{0,500}?(?:reset|refresh)[^0-9]{0,100}(\\d{10,13})','i'));if(!m)return undefined;const n=Number(m[1]);return n>2e9?n*1000:n;}
-function inSection(section:string,entry:any){
-  const s=' '+norm(section)+' ';
-  return [entry.name,...(entry.aliases||[])]
-    .map(norm)
-    .some((n:string)=>n&&s.includes(' '+n+' '));
-}
+
 function parseMoney(value:string):number|undefined{
   const raw=value.trim().toUpperCase().replace(/[,\\s]/g,'');
   if(!raw||raw==='—'||raw==='N/A')return undefined;
@@ -108,7 +102,6 @@ function bestSection(textValue:string,label:string,nextLabel:string):string{
   let best='';
   let bestScore=-1;
   for(const start of hits){
-    const end=Math.max(textValue.length,textValue.length);
     const next=textValue.slice(start+label.length);
     const endMatch=new RegExp(nextLabel,'i').exec(next);
     const section=textValue.slice(start,endMatch?start+label.length+endMatch.index:textValue.length);
