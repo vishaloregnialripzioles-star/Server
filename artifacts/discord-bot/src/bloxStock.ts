@@ -57,9 +57,10 @@ async function update(client:Client,guildId:string,force=false){
   const g=client.guilds.cache.get(guildId);if(!g)return;
   const ch=await g.channels.fetch(cfg.channelId).catch(()=>null);if(!ch?.isTextBased()||ch.type!==ChannelType.GuildText)return;
   const oldN=(cfg.lastNormalStock||'').split('|').filter(Boolean),oldM=(cfg.lastMirageStock||'').split('|').filter(Boolean);
-  const newN=s.normal.some(x=>!oldN.includes(norm(x.name))),newM=s.mirage.some(x=>!oldM.includes(norm(x.name)));
-  if(force||!cfg.lastSnapshot||newN||newM){
-    const all=[...s.normal.map(x=>({...x,dealer:'Normal'})),...s.mirage.map(x=>({...x,dealer:'Mirage'}))].filter(x=>mythical(x.name));
+  const newNormal=s.normal.filter(x=>!oldN.includes(norm(x.name))),newMirage=s.mirage.filter(x=>!oldM.includes(norm(x.name)));
+  const hasChange=newNormal.length>0||newMirage.length>0;
+  if(force||!cfg.lastSnapshot||hasChange){
+    const all=[...newNormal.map(x=>({...x,dealer:'Normal'})),...newMirage.map(x=>({...x,dealer:'Mirage'}))].filter(x=>mythical(x.name));
     const mentions:string[]=[];const roles=new Set<string>();
     if(cfg.mythicalPingRoleId&&all.length){mentions.push(role(cfg.mythicalPingRoleId)+' '+token(cfg.mythicalPingMessage||'Mythical in stock: {fruit}',[...new Set(all.map(x=>x.name))].join(', '),'Normal/Mirage'));roles.add(cfg.mythicalPingRoleId);}
     for(const x of all){const p=cfg.fruitPings?.[norm(x.name)];if(p){mentions.push(role(p.roleId)+' '+token(p.message||'{fruit} is in stock!',x.name,x.dealer));roles.add(p.roleId);}}
