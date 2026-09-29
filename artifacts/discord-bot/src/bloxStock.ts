@@ -94,21 +94,45 @@ function parseSection(section:string):Fruit[]{
   return out;
 }
 
-function bestSection(textValue:string,label:string,nextLabel:string):string{
-  const re=new RegExp(label,'ig');
-  const hits:number[]=[];
-  let m:RegExpExecArray|null;
-  while((m=re.exec(textValue))!==null)hits.push(m.index);
-  let best='';
-  let bestScore=-1;
-  for(const start of hits){
-    const next=textValue.slice(start+label.length);
-    const endMatch=new RegExp(nextLabel,'i').exec(next);
-    const section=textValue.slice(start,endMatch?start+label.length+endMatch.index:textValue.length);
-    const score=BLOX_VALUES.reduce((n,e)=>n+(e.type!=='Gamepass'&&e.type!=='Skin'&&e.beli!=='—'&&inSection(section,e)?1:0),0);
-    if(score>bestScore){bestScore=score;best=section;}
+function extractDealerSections(source:string):{normal:string;mirage:string}{
+  const labels:[keyof DealerSections,string][]=[
+    ['normal','Normal Stock'],
+    ['mirage','Mirage Stock']
+  ];
+  const hits:{kind:keyof DealerSections;index:number;length:number}[]=[];
+  for(const [kind,label] of labels){
+    const re=new RegExp(label,'ig');
+    let m:RegExpExecArray|null;
+    while((m=re.exec(source))!==null)hits.push({kind,index:m.index,length:label.length});
   }
-  return best;
+  hits.sort((a,b)=>a.index-b.index);
+
+  let best:{normal:string;mirage:string;score:number}|undefined;
+  for(let i=0;i<hits.length-1;i++){
+    const a=hits[i],b=hits[i+1];
+    if(a.kind===b.kind)continue;
+    const aSection=source.slice(a.index+a.length,b.index);
+    const aScore=parseSectionScore(aSection);
+    if(aScore===0)continue;
+
+    const nextAfterB=hits[i+2];
+    const bSection=source.slice(b.index+b.length,nextAfterB?.index??source.length);
+    const bScore=parseSectionScore(bSection);
+    if(bScore===0)continue;
+
+    const candidate={
+      normal:a.kind==='normal'?aSection:bSection,
+      mirage:a.kind==='mirage'?aSection:bSection,
+      score:aScore+bScore
+    };
+    if(!best||candidate.score>best.score)best=candidate;
+  }
+  if(!best)return {normal:'',mirage:''};
+  return {normal:best.normal,mirage:best.mirage};
+}
+type DealerSections={normal:string;mirage:string};
+function parseSectionScore(section:string):number{
+  return BLOX_VALUES.reduce((n,e)=>n+(e.type!=='Gamepass'&&e.type!=='Skin'&&e.beli!=='—'&&inSection(section,e)?1:0),0);
 }
 
 function findNextRotation(raw:string,label:string):number|undefined{
@@ -132,12 +156,10 @@ async function getStock():Promise<Stock>{
   const r=await fetch(URL,{headers:{'user-agent':'Sparxie stock notifier','accept':'text/html,application/xhtml+xml'}});
   if(!r.ok)throw new Error('Stock HTTP '+r.status);
   const raw=await r.text();
-  const t=text(raw);
-  const normalSection=bestSection(t,'Normal Stock','Mirage Stock');
-  const mirageSection=bestSection(t,'Mirage Stock','Normal Stock');
-  if(!normalSection&&!mirageSection)throw new Error('Stock sections not found');
-  const normal=parseSection(normalSection);
-  const mirage=parseSection(mirageSection);
+  const sections=extractDealerSections(t);
+  if(!sections.normal&&!sections.mirage)throw new Error('Stock sections not found');
+  const normal=parseSection(sections.normal);
+  const mirage=parseSection(sections.mirage);
   if(!normal.length&&!mirage.length)throw new Error('No stock detected');
   return {
     normal,
