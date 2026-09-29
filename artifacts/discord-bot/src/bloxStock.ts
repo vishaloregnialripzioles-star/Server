@@ -59,6 +59,14 @@ const FRUIT_EMOJI:Record<string,string>={
   'rocket':'🚀',
 };
 const fruitLabel=(name:string)=>`${FRUIT_EMOJI[norm(name)]??'🍈'} ${name} fruit`;
+function inSection(section:string,e:{name:string;aliases:string[]}):boolean{
+  const haystack=' '+norm(section)+' ';
+  const candidates=[e.name,...e.aliases]
+    .map(norm)
+    .filter(Boolean)
+    .sort((a,b)=>b.length-a.length);
+  return candidates.some(candidate=>haystack.includes(' '+candidate+' '));
+}
 const ist=(n:number)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'}).format(new Date(n));
 const role=(id:string)=>'<@&'+id+'>';
 const token=(s:string,fruit='',dealer='')=>s.replaceAll('{fruit}',fruit).replaceAll('{dealer}',dealer).replaceAll('{time}',ist(Date.now()));
