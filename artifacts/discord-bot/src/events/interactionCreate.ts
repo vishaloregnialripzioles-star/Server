@@ -96,9 +96,12 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
     const command = commands.get(interaction.commandName);
 
     if (!command) {
-      await interaction.reply({ content: '❌ Unknown command.', flags: 64 });
+      console.error('[Slash] Unknown command /' + interaction.commandName + '. Loaded commands: ' + [...commands.keys()].sort().join(', '));
+      await interaction.reply({ content: '❌ This command is not loaded by Sparxie yet. Please try again after the bot finishes syncing commands.', flags: 64 });
       return;
     }
+
+    console.log('[Slash] /' + interaction.commandName + ' used by ' + interaction.user.tag + ' (' + interaction.user.id + ') in ' + (interaction.guildId ?? 'DM'));
 
     const rawInteraction:any=interaction;
     const originalReply=rawInteraction.reply?.bind(rawInteraction);
@@ -124,7 +127,7 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
     try {
       await command.execute(interaction);
     } catch (err) {
-      console.error(`Error in command ${interaction.commandName}:`, err);
+      console.error('[Slash] Error in /' + interaction.commandName + ':', err);
       const payload = { content: '❌ An error occurred while running this command.', flags: 64 };
       if (interaction.replied || interaction.deferred) {
         await originalFollowUp(payload).catch(() => undefined);
