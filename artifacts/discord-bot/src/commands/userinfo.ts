@@ -19,9 +19,9 @@ const KEY_PERMISSIONS=[
 ] as const;
 
 function permissionSummary(member:any,guildOwnerId:string):string{
-  if(member.id===guildOwnerId)return '**Server Owner**\\nAdministrator-level access through server ownership.';
+  if(member.id===guildOwnerId)return '**Server Owner**\nAdministrator-level access through server ownership.';
   const granted=KEY_PERMISSIONS.filter(([,bit])=>member.permissions.has(bit)).map(([name])=>name);
-  return granted.length ? granted.map(name=>'**'+name+'**').join(' • ') : 'No key permissions';
+  return granted.length ? granted.map(name=>'`'+name+'`').join('  •  ') : 'No key permissions';
 }
 
 
