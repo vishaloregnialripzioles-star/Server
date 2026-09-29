@@ -14,12 +14,62 @@ type Stock={normal:Fruit[];mirage:Fruit[];checked:number;normalReset?:number;mir
 
 const norm=(s:string)=>s.toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
 const slug=(s:string)=>norm(s).replace(/ /g,'-');
+const FRUIT_EMOJI:Record<string,string>={
+  'west dragon':'🐲',
+  'east dragon':'🐉',
+  'tiger':'🐯',
+  'kitsune':'🦊',
+  'control':'🎮',
+  'yeti':'❄️',
+  'gas':'💨',
+  'dough':'🍩',
+  'venom':'☠️',
+  't-rex':'🦖',
+  'gravity':'🪐',
+  'mammoth':'🦣',
+  'spirit':'👻',
+  'shadow':'🌑',
+  'lightning':'⚡',
+  'pain':'💥',
+  'portal':'🌀',
+  'buddha':'🧘',
+  'blizzard':'🌨️',
+  'phoenix':'🔥',
+  'creation':'✨',
+  'sound':'🔊',
+  'spider':'🕷️',
+  'love':'💗',
+  'quake':'🌋',
+  'magma':'🌋',
+  'light':'💡',
+  'ghost':'👻',
+  'rubber':'🛞',
+  'diamond':'💎',
+  'eagle':'🦅',
+  'ice':'🧊',
+  'sand':'🏜️',
+  'dark':'🌑',
+  'flame':'🔥',
+  'spike':'🔺',
+  'smoke':'💨',
+  'bomb':'💣',
+  'spring':'🌱',
+  'blade':'🗡️',
+  'spin':'🌀',
+  'rocket':'🚀',
+};
+const fruitLabel=(name:string)=>`${FRUIT_EMOJI[norm(name)]??'🍈'} ${name} fruit`;
 const ist=(n:number)=>new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'}).format(new Date(n));
 const role=(id:string)=>'<@&'+id+'>';
 const token=(s:string,fruit='',dealer='')=>s.replaceAll('{fruit}',fruit).replaceAll('{dealer}',dealer).replaceAll('{time}',ist(Date.now()));
 function text(html:string){return html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/\s+/g,' ');}
 function reset(html:string,label:string){const m=html.match(new RegExp(label+'[\\s\\S]{0,500}?(?:reset|refresh)[^0-9]{0,100}(\\d{10,13})','i'));if(!m)return undefined;const n=Number(m[1]);return n>2e9?n*1000:n;}
-function inSection(section:string,entry:any){const s=section.toLowerCase();return [entry.name,...(entry.aliases||[])].map(norm).some((n:string)=>s.includes(n));}
+function inSection(section:string,entry:any){
+  const s=' '+norm(section)+' ';
+  return [entry.name,...(entry.aliases||[])]
+    .map(norm)
+    .some((n:string)=>n&&s.includes(' '+n+' '));
+}
 function parseMoney(value:string):number|undefined{
   const raw=value.trim().toUpperCase().replace(/[,\\s]/g,'');
   if(!raw||raw==='—'||raw==='N/A')return undefined;
@@ -49,6 +99,35 @@ function parseSection(section:string):Fruit[]{
   }
   return out;
 }
+
+function bestSection(textValue:string,label:string,nextLabel:string):string{
+  const re=new RegExp(label,'ig');
+  const hits:number[]=[];
+  let m:RegExpExecArray|null;
+  while((m=re.exec(textValue))!==null)hits.push(m.index);
+  let best='';
+  let bestScore=-1;
+  for(const start of hits){
+    const end=Math.max(textValue.length,textValue.length);
+    const next=textValue.slice(start+label.length);
+    const endMatch=new RegExp(nextLabel,'i').exec(next);
+    const section=textValue.slice(start,endMatch?start+label.length+endMatch.index:textValue.length);
+    const score=BLOX_VALUES.reduce((n,e)=>n+(e.type!=='Gamepass'&&e.type!=='Skin'&&e.beli!=='—'&&inSection(section,e)?1:0),0);
+    if(score>bestScore){bestScore=score;best=section;}
+  }
+  return best;
+}
+
+function findNextRotation(raw:string,label:string):number|undefined{
+  const t=text(raw);
+  const i=t.search(new RegExp(label,'i'));
+  if(i<0)return undefined;
+  const window=t.slice(i,i+1800);
+  const m=window.match(/(?:reset|refresh|next)[^0-9]{0,80}(\d{10,13})/i);
+  if(!m)return undefined;
+  const n=Number(m[1]);
+  return n>2e9?n*1000:n;
+}
 function formatBeli(value?:number):string{
   if(value===undefined||!Number.isFinite(value))return 'Price unavailable';
   if(value>=1_000_000_000)return `${Number((value/1_000_000_000).toFixed(2))}B Beli`;
@@ -59,22 +138,32 @@ function formatBeli(value?:number):string{
 async function getStock():Promise<Stock>{
   const r=await fetch(URL,{headers:{'user-agent':'Sparxie stock notifier','accept':'text/html,application/xhtml+xml'}});
   if(!r.ok)throw new Error('Stock HTTP '+r.status);
-  const raw=await r.text(), t=text(raw), n=t.search(/\bNormal\b/i), m=t.search(/\bMirage\b/i);
-  if(n<0||m<0)throw new Error('Stock sections not found');
-  const normal=parseSection(t.slice(n,m)),mirage=parseSection(t.slice(m));
+  const raw=await r.text();
+  const t=text(raw);
+  const normalSection=bestSection(t,'Normal Stock','Mirage Stock');
+  const mirageSection=bestSection(t,'Mirage Stock','Normal Stock');
+  if(!normalSection&&!mirageSection)throw new Error('Stock sections not found');
+  const normal=parseSection(normalSection);
+  const mirage=parseSection(mirageSection);
   if(!normal.length&&!mirage.length)throw new Error('No stock detected');
-  return {normal,mirage,checked:Date.now(),normalReset:reset(raw,'Normal'),mirageReset:reset(raw,'Mirage')};
+  return {
+    normal,
+    mirage,
+    checked:Date.now(),
+    normalReset:findNextRotation(raw,'Normal Stock'),
+    mirageReset:findNextRotation(raw,'Mirage Stock')
+  };
 }
 const key=(a:Fruit[])=>a.map(x=>x.name).sort().join('|');
 const mythical=(name:string)=>{const e=findBloxValue(name);return !!e&&e.rarity==='Mythical'&&e.type!=='Skin';};
 
 function embed(items:Fruit[],dealer:string,next?:number){
-  const desc=items.map(x=>'**'+x.name+'** — '+(x.price?x.price.toLocaleString('en-US')+' Beli':'—')).join('\n')||'No stock detected.';
-  const rare=items.filter(x=>mythical(x.name)).map(x=>'• **'+x.name+'**').join('\n')||'None';
+  const desc=items.map(x=>`**${fruitLabel(x.name)}** — **${formatBeli(x.price)}**`).join('\n')||'No stock detected.';
+  const rare=items.filter(x=>mythical(x.name)).map(x=>`• **${fruitLabel(x.name)}**`).join('\n')||'None';
   const hero=items.find(x=>mythical(x.name))??items[0];
   const e=new EmbedBuilder()
     .setColor(dealer==='Normal'?0x5865F2:0x9B59B6)
-    .setTitle('🍈 '+dealer+' Stock • IST')
+    .setTitle((dealer==='Normal'?'🛒':'🌌')+' '+dealer+' Stock • IST')
     .setDescription(desc)
     .addFields(
       {name:'✨ Mythical',value:rare,inline:false},
