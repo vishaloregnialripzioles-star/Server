@@ -45,7 +45,7 @@ function embed(items:Fruit[],dealer:string,next?:number){
   const rare=items.filter(x=>mythical(x.name)).map(x=>'• **'+x.name+'**').join('\n')||'None';
   const e=new EmbedBuilder().setColor(dealer==='Normal'?0x5865F2:0x9B59B6).setTitle(dealer+' Stock').setDescription(desc)
     .addFields({name:'Mythical',value:rare},{name:'IST checked',value:ist(Date.now()),inline:true},{name:'Next refresh',value:next?ist(next):'Live'}).setFooter({text:'Sparxie • Blox Fruits Stock'});
-  if(items[0])e.setThumbnail(items[0].image);
+  if(items[0])e.setImage(items[0].image);
   return e;
 }
 
