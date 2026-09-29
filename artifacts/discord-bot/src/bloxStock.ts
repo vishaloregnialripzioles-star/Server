@@ -45,7 +45,6 @@ function embed(items:Fruit[],dealer:string,next?:number){
   const rare=items.filter(x=>mythical(x.name)).map(x=>'• **'+x.name+'**').join('\n')||'None';
   const e=new EmbedBuilder().setColor(dealer==='Normal'?0x5865F2:0x9B59B6).setTitle(dealer+' Stock').setDescription(desc)
     .addFields({name:'Mythical',value:rare},{name:'IST checked',value:ist(Date.now()),inline:true},{name:'Next refresh',value:next?ist(next):'Live'}).setFooter({text:'Sparxie • Blox Fruits Stock'});
-  if(items[0])e.setImage(items[0].image);
   return e;
 }
 
@@ -68,6 +67,8 @@ async function update(client:Client,guildId:string,force=false){
   }
   updateGuild(guildId,d=>{if(!d.config.bloxStock)return;d.config.bloxStock.lastSnapshot=k;d.config.bloxStock.lastNormalStock=s.normal.map(x=>norm(x.name)).join('|');d.config.bloxStock.lastMirageStock=s.mirage.map(x=>norm(x.name)).join('|');d.config.bloxStock.lastCheckedAt=s.checked;});
 }
+export async function postBloxStockNow(client:Client,guildId:string){ await update(client,guildId,true); }
+
 export function startBloxStockTracker(client:Client){
   if((client as any)[REG])return;(client as any)[REG]=true;
   for(const g of client.guilds.cache.values())void update(client,g.id);
