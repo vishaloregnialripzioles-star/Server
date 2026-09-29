@@ -43,6 +43,12 @@ client.once('ready', async () => {
   } catch (err) { console.error('[Core command startup failed]', err); }
 
   try {
+    const { startBloxStockTracker } = await import('./bloxStock.js');
+    startBloxStockTracker(client);
+    console.log('📈 Blox Fruits stock tracker started');
+  } catch (err) { console.error('[Blox stock tracker startup failed]', err); }
+
+  try {
     const { bloxValueCommand, setBloxValueChannelCommand } = await import('./commands/bloxvalue.js');
     client.commands.set(bloxValueCommand.data.name, bloxValueCommand);
     client.commands.set(setBloxValueChannelCommand.data.name, setBloxValueChannelCommand);
