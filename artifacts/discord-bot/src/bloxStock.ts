@@ -156,6 +156,7 @@ async function getStock():Promise<Stock>{
   const r=await fetch(URL,{headers:{'user-agent':'Sparxie stock notifier','accept':'text/html,application/xhtml+xml'}});
   if(!r.ok)throw new Error('Stock HTTP '+r.status);
   const raw=await r.text();
+  const t=text(raw);
   const sections=extractDealerSections(t);
   if(!sections.normal&&!sections.mirage)throw new Error('Stock sections not found');
   const normal=parseSection(sections.normal);
@@ -251,7 +252,17 @@ export const stock:Command={
   if(sub==='set-channel'){const c=i.options.getChannel('channel',true);updateGuild(i.guildId,d=>{d.config.bloxStock={...(d.config.bloxStock||{enabled:false}),channelId:c.id};});await i.reply('Stock channel set to <#'+c.id+'>. Run /stock enable.');return;}
   if(sub==='enable'){updateGuild(i.guildId,d=>{d.config.bloxStock={...(d.config.bloxStock||{enabled:false}),enabled:true};});await i.reply('Stock tracker enabled.');void update(i.client,i.guildId,true);return;}
   if(sub==='disable'){updateGuild(i.guildId,d=>{if(d.config.bloxStock)d.config.bloxStock.enabled=false;});await i.reply('Stock tracker disabled.');return;}
-  if(sub==='now'){await i.deferReply();await update(i.client,i.guildId,true);await i.editReply('Current stock posted.');return;}
+  if(sub==='now'){
+    await i.deferReply();
+    const cfgNow=loadGuild(i.guildId).config.bloxStock;
+    if(!cfgNow?.enabled||!cfgNow.channelId){
+      await i.editReply('Stock tracker is not enabled or no stock channel is configured.');
+      return;
+    }
+    await update(i.client,i.guildId,true);
+    await i.editReply('✅ Current Normal Stock and Mirage Stock were fetched and posted separately to the configured channel.');
+    return;
+  }
   const c=loadGuild(i.guildId).config.bloxStock;await i.reply({content:c?.enabled&&c.channelId?'Stock ON • <#'+c.channelId+'> • IST • 60s':'Stock OFF • set channel then enable',ephemeral:true});
  }
 };
