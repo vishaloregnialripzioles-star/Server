@@ -70,7 +70,15 @@ export const stockping:Command={
   if(!current?.channelId){await interaction.reply({content:'❌ Set a stock channel first with **/stockping set-channel**.',ephemeral:true});return;}
   if(!current.enabled){await interaction.reply({content:'❌ Enable stock ping first with **/stockping enable**.',ephemeral:true});return;}
   await interaction.deferReply({ephemeral:true});
-  await postBloxStockNow(interaction.client,interaction.guildId);
-  await interaction.editReply('✅ Current stock check completed. New stock was posted to the configured channel when available.');
+  const result=await postBloxStockNow(interaction.client,interaction.guildId);
+  if(!result.ok){
+   await interaction.editReply('❌ **Stock ping failed.** '+(result.error??'The stock could not be posted to the configured channel.'));
+   return;
+  }
+  if(result.posted>0){
+   await interaction.editReply('✅ **Current stock posted successfully!** Normal Stock and Mirage Stock were sent to <#'+current.channelId+'>.');
+   return;
+  }
+  await interaction.editReply('⚠️ **Stock was fetched, but nothing was posted.** Check the stock channel configuration and bot permissions.');
  }
 };
