@@ -43,8 +43,18 @@ const mythical=(name:string)=>{const e=findBloxValue(name);return !!e&&e.rarity=
 function embed(items:Fruit[],dealer:string,next?:number){
   const desc=items.map(x=>'**'+x.name+'** — '+(x.price?x.price.toLocaleString('en-US')+' Beli':'—')).join('\n')||'No stock detected.';
   const rare=items.filter(x=>mythical(x.name)).map(x=>'• **'+x.name+'**').join('\n')||'None';
-  const e=new EmbedBuilder().setColor(dealer==='Normal'?0x5865F2:0x9B59B6).setTitle(dealer+' Stock').setDescription(desc)
-    .addFields({name:'Mythical',value:rare},{name:'IST checked',value:ist(Date.now()),inline:true},{name:'Next refresh',value:next?ist(next):'Live'}).setFooter({text:'Sparxie • Blox Fruits Stock'});
+  const hero=items.find(x=>mythical(x.name))??items[0];
+  const e=new EmbedBuilder()
+    .setColor(dealer==='Normal'?0x5865F2:0x9B59B6)
+    .setTitle('🍈 '+dealer+' Stock • IST')
+    .setDescription(desc)
+    .addFields(
+      {name:'✨ Mythical',value:rare,inline:false},
+      {name:'🕐 Checked (IST)',value:ist(Date.now()),inline:true},
+      {name:'🔄 Next refresh (IST)',value:next?ist(next):'Not available',inline:true},
+    )
+    .setFooter({text:'Sparxie • Blox Fruits Stock • Asia/Kolkata'});
+  if(hero?.image)e.setImage(hero.image);
   return e;
 }
 
