@@ -60,13 +60,25 @@ client.once('ready', async () => {
     const guildId = process.env.DISCORD_GUILD_ID?.trim();
     const commandData = [...client.commands.values()].map(command => command.data.toJSON());
     const rest = new REST({ version: '10' }).setToken(token);
+
+    const commandNames = commandData.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
+    console.log(`📋 Registering slash commands (${commandNames.length}): ${commandNames.join(', ')}`);
+
+    let registered: any[] = [];
     if (guildId && /^\d+$/.test(guildId)) {
-      await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), { body: commandData });
-      console.log(`✅ Synced ${commandData.length} slash commands to guild ${guildId}`);
+      registered = await rest.put(Routes.applicationGuildCommands(client.user!.id, guildId), { body: commandData }) as any[];
+      console.log(`✅ Synced ${registered.length} slash commands to guild ${guildId}`);
     } else {
-      await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData });
-      console.log(`✅ Synced ${commandData.length} global slash commands`);
+      registered = await rest.put(Routes.applicationCommands(client.user!.id), { body: commandData }) as any[];
+      console.log(`✅ Synced ${registered.length} global slash commands`);
     }
+
+    const registeredNames = registered.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
+    const missing = commandNames.filter(name => !registeredNames.includes(name));
+    const extra = registeredNames.filter(name => !commandNames.includes(name));
+    if (missing.length) console.error(`❌ Discord registration missing: ${missing.join(', ')}`);
+    if (extra.length) console.warn(`⚠️ Discord has extra commands: ${extra.join(', ')}`);
+    console.log(`🔎 Slash command verification: ${registeredNames.length}/${commandNames.length} present`);
   } catch (err) { console.error('[Slash sync failed]', err); }
 
   try {
