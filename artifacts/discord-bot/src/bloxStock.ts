@@ -191,13 +191,30 @@ function embed(items:Fruit[],dealer:string,next?:number){
   return e;
 }
 
-async function update(client:Client,guildId:string,force=false){
-  const cfg=loadGuild(guildId).config.bloxStock;if(!cfg?.enabled||!cfg.channelId)return;
-  let s:Stock;try{s=await getStock();}catch(e){console.warn('[BloxStock]',e);return;}
+type StockUpdateResult={ok:boolean;posted:number;error?:string};
+
+async function update(client:Client,guildId:string,force=false):Promise<StockUpdateResult>{
+  const cfg=loadGuild(guildId).config.bloxStock;
+  if(!cfg?.enabled||!cfg.channelId)return {ok:false,posted:0,error:'Stock tracker is not enabled or no stock channel is configured.'};
+
+  let s:Stock;
+  try{s=await getStock();}
+  catch(e){
+    const error=e instanceof Error?e.message:String(e);
+    console.warn('[BloxStock]',e);
+    return {ok:false,posted:0,error:'Could not fetch current stock: '+error};
+  }
   const k=JSON.stringify({n:key(s.normal),m:key(s.mirage),nr:s.normalReset??null,mr:s.mirageReset??null});
-  if(!force&&cfg.lastSnapshot===k){updateGuild(guildId,d=>{if(d.config.bloxStock)d.config.bloxStock.lastCheckedAt=s.checked;});return;}
-  const g=client.guilds.cache.get(guildId);if(!g)return;
-  const ch=await g.channels.fetch(cfg.channelId).catch(()=>null);if(!ch?.isTextBased()||ch.type!==ChannelType.GuildText)return;
+  if(!force&&cfg.lastSnapshot===k){
+    updateGuild(guildId,d=>{if(d.config.bloxStock)d.config.bloxStock.lastCheckedAt=s.checked;});
+    return {ok:true,posted:0};
+  }
+  const g=client.guilds.cache.get(guildId);
+  if(!g)return {ok:false,posted:0,error:'I could not find this server in the bot cache.'};
+  const ch=await g.channels.fetch(cfg.channelId).catch(()=>null);
+  if(!ch?.isTextBased()||ch.type!==ChannelType.GuildText){
+    return {ok:false,posted:0,error:'The configured stock channel is missing or is not a text channel.'};
+  }
   const oldN=(cfg.lastNormalStock||'').split('|').filter(Boolean),oldM=(cfg.lastMirageStock||'').split('|').filter(Boolean);
   const newNormal=s.normal.filter(x=>!oldN.includes(norm(x.name))),newMirage=s.mirage.filter(x=>!oldM.includes(norm(x.name)));
   const hasChange=newNormal.length>0||newMirage.length>0;
@@ -228,12 +245,19 @@ async function update(client:Client,guildId:string,force=false){
     };
 
     // Each dealer gets its own message. Their stock, pings and embed can never mix.
-    await sendDealer('Normal',s.normal,newNormal,s.normalReset);
-    await sendDealer('Mirage',s.mirage,newMirage,s.mirageReset);
+    try{
+      await sendDealer('Normal',s.normal,newNormal,s.normalReset);
+      await sendDealer('Mirage',s.mirage,newMirage,s.mirageReset);
+    }catch(e){
+      const error=e instanceof Error?e.message:String(e);
+      console.warn('[BloxStock] Discord send failed',e);
+      return {ok:false,posted:0,error:'Stock was fetched, but Discord could not post it: '+error};
+    }
   }
   updateGuild(guildId,d=>{if(!d.config.bloxStock)return;d.config.bloxStock.lastSnapshot=k;d.config.bloxStock.lastNormalStock=s.normal.map(x=>norm(x.name)).join('|');d.config.bloxStock.lastMirageStock=s.mirage.map(x=>norm(x.name)).join('|');d.config.bloxStock.lastCheckedAt=s.checked;});
+  return {ok:true,posted:(force||!cfg.lastSnapshot||hasChange)?2:0};
 }
-export async function postBloxStockNow(client:Client,guildId:string){ await update(client,guildId,true); }
+export async function postBloxStockNow(client:Client,guildId:string){ return update(client,guildId,true); }
 
 export function startBloxStockTracker(client:Client){
   if((client as any)[REG])return;(client as any)[REG]=true;
@@ -259,8 +283,14 @@ export const stock:Command={
       await i.editReply('Stock tracker is not enabled or no stock channel is configured.');
       return;
     }
-    await update(i.client,i.guildId,true);
-    await i.editReply('✅ Current Normal Stock and Mirage Stock were fetched and posted separately to the configured channel.');
+    const result=await update(i.client,i.guildId,true);
+    if(!result.ok){
+      await i.editReply('❌ Stock check failed. '+result.error);
+      return;
+    }
+    await i.editReply(result.posted>0
+      ? '✅ Current Normal Stock and Mirage Stock were fetched and posted to the configured channel.'
+      : '⚠️ Stock was fetched successfully, but nothing was posted.');
     return;
   }
   const c=loadGuild(i.guildId).config.bloxStock;await i.reply({content:c?.enabled&&c.channelId?'Stock ON • <#'+c.channelId+'> • IST • 60s':'Stock OFF • set channel then enable',ephemeral:true});
