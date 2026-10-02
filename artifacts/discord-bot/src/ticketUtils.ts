@@ -44,12 +44,12 @@ async function createTicketForUserInternal(guild:Guild,user:User,client:Client,r
   if(supportRoleId)overwrites.push({id:supportRoleId,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory],deny:[PermissionFlagsBits.SendMessages],type:OverwriteType.Role});
   try{
     const ticketChannel=await guild.channels.create({name:channelName,type:ChannelType.GuildText,...(categoryId?{parent:categoryId}:{}),permissionOverwrites:overwrites}) as TextChannel;
-    updateGuild(guild.id,d=>{d.tickets[ticketId]={id:ticketId,channelId:ticketChannel.id,creatorId:user.id,createdAt:Date.now(),closed:false,panelId:panel?.id,panelOptionId:option?.id,aiEnabled:data.config.ticketAIEnabled!==false};});
+    updateGuild(guild.id,d=>{d.tickets[ticketId]={id:ticketId,channelId:ticketChannel.id,creatorId:user.id,createdAt:Date.now(),closed:false,panelId:panel?.id,panelOptionId:option?.id,aiEnabled:data.config.ticketAIEnabled===true};});
     const embed=new EmbedBuilder().setColor(panel?.color??DEFAULT_EMBED_COLOR).setTitle(option?.name?`🎫 ${panel?.title??'Ticket'} • ${option.name}`:panel?.title?`🎫 ${panel.title}`:'🎫 Support Ticket Opened').setDescription(`Hello <@${user.id}>! Your ticket is open.\n\n**Reason:**\n${reason}`).addFields({name:'Ticket ID',value:`\`${ticketId}\``,inline:true},{name:'Category',value:option?.name??panel?.name??'Support',inline:true},{name:'Handler',value:'Unclaimed',inline:true}).setTimestamp();
     if(panel&&Object.keys(answers??{}).length){const text=Object.entries(answers!).map(([q,a])=>`**${q}**\n${a}`).join('\n\n').slice(0,4000);embed.addFields({name:'📋 Ticket Questions',value:text||'No answers'});}
     const controls=new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId(`ticket:claim:${ticketId}`).setLabel('Claim').setEmoji('🙋').setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId(`ticket:unclaim:${ticketId}`).setLabel('Unclaim').setEmoji('↩️').setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId(`ticket:close:${ticketId}`).setLabel('Close').setEmoji('🔒').setStyle(ButtonStyle.Danger));
     await ticketChannel.send({content:`<@${user.id}>${supportRoleId?` <@&${supportRoleId}>`:''}`,embeds:[applyEditableEmbed(guild.id,'ticket:create',embed)],components:[controls],allowedMentions:{users:[user.id],roles:supportRoleId?[supportRoleId]:[]}});
-    if(data.config.ticketAIEnabled!==false){
+    if(data.config.ticketAIEnabled===true){
       const { sendTicketAIWelcome } = await import('./ticketAI.js');
       await sendTicketAIWelcome(ticketChannel,user.id);
     }
