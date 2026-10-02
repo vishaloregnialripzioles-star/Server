@@ -28,7 +28,7 @@ function isStaff(message:Message,ticket:any):boolean {
   const data=loadGuild(message.guild!.id);
   const panel=data.config.ticketPanels?.[ticket.panelId??''];
   const option=panel?.options?.find((x:any)=>x.id===ticket.panelOptionId);
-  const roleId=option?.supportRoleId??panel?.supportRoleId??data.config.ticketSupportRole;
+  const roleId=ticket.aiSupportRoleId??option?.supportRoleId??panel?.supportRoleId??data.config.ticketSupportRole;
   return Boolean(message.member.permissions.has(PermissionFlagsBits.Administrator)||(roleId&&message.member.roles.cache.has(roleId)));
 }
 
@@ -62,7 +62,7 @@ export async function handleTicketAIMessage(message:Message):Promise<boolean>{
         content:mention+'🆘 **New ticket request**\n**Member:** <@'+message.author.id+'>\n**Problem:** '+message.content.slice(0,1400),
         allowedMentions:{users:[message.author.id],roles:roleId?[roleId]:[]}
       }).catch(()=>undefined);
-      updateGuild(message.guild.id,d=>{const t:any=d.tickets[ticket.id];if(t){t.aiStaffAlerted=true;t.aiLastUserMessageId=message.id;}});
+      updateGuild(message.guild.id,d=>{const t:any=d.tickets[ticket.id];if(t){t.aiStaffAlerted=true;t.aiSupportRoleId=roleId;t.aiLastUserMessageId=message.id;}});
     }else{
       updateGuild(message.guild.id,d=>{const t:any=d.tickets[ticket.id];if(t)t.aiLastUserMessageId=message.id;});
     }
