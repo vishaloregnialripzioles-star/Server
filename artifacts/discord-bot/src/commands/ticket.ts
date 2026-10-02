@@ -67,7 +67,8 @@ export const ticket: Command = {
       .addStringOption(o => o.setName('reason').setDescription('What do you need help with?').setRequired(true))
       .addStringOption(o => o.setName('panel').setDescription('Optional saved panel name')))
     .addSubcommand(s => s.setName('ai').setDescription('Enable or disable AI support in new tickets')
-      .addBooleanOption(o => o.setName('enabled').setDescription('Enable ticket AI for newly created tickets').setRequired(true)))
+      .addStringOption(o => o.setName('action').setDescription('Choose enable or disable').setRequired(true)
+        .addChoices({name:'Enable',value:'enable'},{name:'Disable',value:'disable'})))
     .addSubcommand(s => s.setName('add-member').setDescription('Add a member to the current ticket')
       .addUserOption(o => o.setName('user').setDescription('Member to add to this ticket').setRequired(true))),
 
@@ -188,7 +189,7 @@ export const ticket: Command = {
     }
 
     if (sub==='ai') {
-      const enabled=interaction.options.getBoolean('enabled',true);
+      const enabled=interaction.options.getString('action',true)==='enable';
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) { await interaction.editReply('❌ You need Manage Server permission to change Ticket AI.'); return; }
       updateGuild(interaction.guild.id,d=>{d.config.ticketAIEnabled=enabled;});
       await interaction.editReply(enabled ? '🤖 **Ticket AI enabled.** Every new ticket will get the AI welcome, natural support replies, smart staff routing and a one-time staff handoff.' : '🤖 **Ticket AI disabled.** New tickets will not use the AI.');
