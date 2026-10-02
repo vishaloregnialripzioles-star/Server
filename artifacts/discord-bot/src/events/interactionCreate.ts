@@ -188,28 +188,6 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
   if (interaction.isButton()) {
     const { customId } = interaction;
 
-    // ── One-click ticket close ───────────────────────────────────────────────
-    if (customId.startsWith('ticket:close:')) {
-      if (!interaction.guild) return;
-      const ticketId = customId.slice('ticket:close:'.length);
-      const data = loadGuild(interaction.guild.id);
-      const ticket = data.tickets[ticketId];
-      if (!ticket || ticket.closed) {
-        await interaction.reply({ content: '❌ Ticket is already closed or was not found.', flags: 64 });
-        return;
-      }
-      const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
-      const isStaff = !!member?.permissions.has(PermissionFlagsBits.ManageGuild);
-      if (!isStaff && ticket.creatorId !== interaction.user.id) {
-        await interaction.reply({ content: '❌ Only staff or the ticket creator can close this ticket.', flags: 64 });
-        return;
-      }
-      // Remove the Close button immediately so the same click cannot be processed again.
-      await interaction.update({ components: [] });
-      await closeTicketById(interaction.guild, ticketId, 'Closed from ticket controls', interaction.user.tag);
-      return;
-    }
-
     // ── Snipe navigation ─────────────────────────────────────────────────────
     if (customId.startsWith('snipe_nav:') || customId.startsWith('editsnipe_nav:')) {
       if (!interaction.guild) return;
