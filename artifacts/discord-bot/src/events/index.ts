@@ -15,26 +15,37 @@ export function registerEvents(client:Client):void{
 if((client as any)[EVENTS_REGISTERED]){console.warn('[Events] registerEvents() called more than once; ignoring duplicate registration.');return;} (client as any)[EVENTS_REGISTERED]=true;registerBloxValueEvents(client);registerBloxValueIconEvents(client);registerBloxValueSync(client);registerEnhancedAutoMod(client);
 client.once(Events.ClientReady,safe('ready',async(...args:any[])=>{const{handleReady}=await import('./ready.js');return handleReady(...args);}));
 client.on(Events.InteractionCreate,safe('bloxEmoji',async(interaction:any)=>{if(interaction?.isModalSubmit?.()&&String(interaction.customId).startsWith('bloxemoji:modal:'))return handleBloxEmojiModal(interaction);if((interaction?.isButton?.()||interaction?.isStringSelectMenu?.())&&String(interaction.customId).startsWith('bloxemoji:'))return handleBloxEmojiInteraction(interaction);}));
-client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=>{const id=String(interaction?.customId??'');if(!interaction?.guild||!id.startsWith('ticket:'))return;const parts=id.split(':');const action=parts[1],targetId=parts[2];if(!action||!targetId)return;const data=loadGuild(interaction.guild.id);
-  const panel=Object.values(data.config.ticketPanels??{}).find(p=>p.id===targetId)||(data.config.ticketPanels??{})[targetId];
+client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=>{
+  const id=String(interaction?.customId??'');
+  if(!interaction?.guild||!id.startsWith('ticket:'))return;
+  const parts=id.split(':');const action=parts[1],targetId=parts[2];
+  if(!action||!targetId)return;
+  const data=loadGuild(interaction.guild.id);
+
+  const panel=Object.values(data.config.ticketPanels??{}).find((p:any)=>p.id===targetId)||(data.config.ticketPanels??{})[targetId];
   if((action==='select'||action==='open')&&(interaction.isStringSelectMenu()||interaction.isButton())){
     if(!panel){await interaction.reply({content:'❌ This ticket panel no longer exists.',ephemeral:true});return;}
     const optionId=action==='select'&&interaction.isStringSelectMenu()?interaction.values[0]:undefined;
-    const option=optionId?panel.options?.find(item=>item.id===optionId):undefined;
+    const option=optionId?panel.options?.find((item:any)=>item.id===optionId):undefined;
     if(optionId&&!option){await interaction.reply({content:'❌ That ticket category is no longer available.',ephemeral:true});return;}
     const questions=option?.questions??panel.questions;
     if(!questions.length){
-      const result=await createTicketForUser(interaction.guild,interaction.user,interaction.client,'Opened from ticket panel',panel.name,undefined,option?.id);
-      await interaction.reply({content:result.success?'✅ Ticket created: <#'+result.channel.id+'>':'❌ '+result.message,ephemeral:true});return;
+      // Acknowledge immediately; ticket creation may take a few seconds.
+      await interaction.deferReply({ephemeral:true});
+      const result=await createTicketForUser(interaction.guild,interaction.user,interaction.client,'Opened from ticket panel',panel.id,undefined,option?.id);
+      await interaction.editReply(result.success?'✅ Ticket created successfully: <#'+result.channel.id+'>':'❌ '+result.message);
+      return;
     }
     const modalId=option?.id?'ticket:modal:'+panel.id+':'+option.id:'ticket:modal:'+panel.id;
     const modal=new ModalBuilder().setCustomId(modalId).setTitle((option?.name??panel.title).slice(0,45));
-    questions.slice(0,5).forEach((q,index)=>modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('q'+index).setLabel(q.slice(0,45)).setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000))));
+    questions.slice(0,5).forEach((q:any,index:number)=>modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId('q'+index).setLabel(q.slice(0,45)).setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000))));
     await interaction.showModal(modal);return;
   }
+
   const ticket=data.tickets[targetId];
   if(!ticket){await interaction.reply({content:'❌ This ticket no longer exists.',ephemeral:true});return;}
   const isStaff=Boolean(interaction.member?.permissions?.has?.(8n)||interaction.member?.permissions?.has?.(16n));
+
   if(action==='save'){
     if(!isStaff&&ticket.creatorId!==interaction.user.id){await interaction.reply({content:'❌ Only staff or the ticket owner can save a transcript.',ephemeral:true});return;}
     const logId=data.config.transcriptLogChannel;
@@ -43,21 +54,48 @@ client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=
     await interaction.deferReply({ephemeral:true});
     const attachment=await buildTicketTranscript(interaction.channel as TextChannel,ticket.id);
     await logChannel.send({embeds:[new EmbedBuilder().setColor(0x5865F2).setTitle('📄 Ticket Transcript').setDescription('Transcript for ticket '+ticket.id+' from <#'+ticket.channelId+'>.').addFields({name:'Ticket Owner',value:'<@'+ticket.creatorId+'>',inline:true},{name:'Saved By',value:'<@'+interaction.user.id+'>',inline:true}).setTimestamp()],files:[attachment]});
-    await interaction.editReply('✅ Transcript saved to <#'+logId+'>.');return;
+    await interaction.editReply('✅ Transcript saved successfully.');
+    return;
   }
+
   if(action==='reopen'){
     if(!ticket.closed){await interaction.reply({content:'❌ This ticket is already open.',ephemeral:true});return;}
     if(!isStaff&&ticket.creatorId!==interaction.user.id){await interaction.reply({content:'❌ Only staff or the ticket owner can reopen this ticket.',ephemeral:true});return;}
-    const ok=await reopenTicketById(interaction.guild,targetId);await interaction.reply({content:ok?'🔓 Ticket reopened successfully.':'❌ I could not reopen this ticket.',ephemeral:true});return;
+    await interaction.deferReply({ephemeral:true});
+    const ok=await reopenTicketById(interaction.guild,targetId);
+    await interaction.editReply(ok?'🔓 Ticket reopened successfully.':'❌ I could not reopen this ticket.');
+    return;
   }
+
   if(action==='delete'){
     if(!ticket.closed){await interaction.reply({content:'❌ Close the ticket first.',ephemeral:true});return;}
     if(!isStaff){await interaction.reply({content:'❌ Staff only.',ephemeral:true});return;}
-    await interaction.reply({content:'🗑️ Closing this ticket permanently…',ephemeral:true});
-    await interaction.channel?.delete('Ticket permanently closed by '+interaction.user.tag).catch(()=>undefined);return;
+    await interaction.deferReply({ephemeral:true});
+    await interaction.editReply('🗑️ Closing this ticket permanently…');
+    await interaction.channel?.delete('Ticket permanently closed by '+interaction.user.tag).catch(()=>undefined);
+    return;
   }
-  if(ticket.closed){await interaction.reply({content:'❌ This ticket is closed. Use Reopen to continue.',ephemeral:true});return;}  if(action==='claim'||action==='unclaim'){if(!isStaff){await interaction.reply({content:'❌ Staff only.',ephemeral:true});return;}const result=await setTicketClaim(interaction.guild,targetId,action==='claim'?interaction.user.id:null);await interaction.reply({content:result.message,ephemeral:true});return;}
-  if(action==='close'){if(!isStaff&&ticket.creatorId!==interaction.user.id){await interaction.reply({content:'❌ Only the ticket owner or staff can close this ticket.',ephemeral:true});return;}await interaction.deferReply({ephemeral:true});await closeTicketById(interaction.guild,targetId,'Closed from ticket controls',interaction.user.tag);await interaction.editReply('🔒 Ticket closed. Use the buttons in the closed-ticket message to save the transcript, reopen it, or permanently close the channel.');return;}
+
+  if(ticket.closed){
+    await interaction.reply({content:'❌ This ticket is closed. Use Reopen to continue.',ephemeral:true});
+    return;
+  }
+
+  if(action==='claim'||action==='unclaim'){
+    if(!isStaff){await interaction.reply({content:'❌ Staff only.',ephemeral:true});return;}
+    await interaction.deferReply({ephemeral:true});
+    const result=await setTicketClaim(interaction.guild,targetId,action==='claim'?interaction.user.id:null);
+    await interaction.editReply(result.ok?'✅ '+result.message:'❌ '+result.message);
+    return;
+  }
+
+  if(action==='close'){
+    if(!isStaff&&ticket.creatorId!==interaction.user.id){await interaction.reply({content:'❌ Only the ticket owner or staff can close this ticket.',ephemeral:true});return;}
+    await interaction.deferReply({ephemeral:true});
+    const ok=await closeTicketById(interaction.guild,targetId,'Closed from ticket controls',interaction.user.tag);
+    await interaction.editReply(ok?'🔒 Ticket closed successfully. Use the buttons in the closed-ticket message for the next action.':'❌ This ticket was already closed or could not be found.');
+    return;
+  }
 }));
 client.on(Events.InteractionCreate,safe('ticketModal',async(interaction:any)=>{if(!interaction?.isModalSubmit?.()||!String(interaction.customId).startsWith('ticket:modal:')||!interaction.guild)return;const modalParts=String(interaction.customId).split(':');const panelId=modalParts[2];const optionId=modalParts[3];const data=loadGuild(interaction.guild.id);const panel=Object.values(data.config.ticketPanels??{}).find(p=>p.id===panelId)||(data.config.ticketPanels??{})[panelId];if(!panel){await interaction.reply({content:'❌ This ticket panel no longer exists.',ephemeral:true});return;}const option=optionId?panel.options?.find(item=>item.id===optionId):undefined;if(optionId&&!option){await interaction.reply({content:'❌ That ticket category is no longer available.',ephemeral:true});return;}const questions=option?.questions??panel.questions;const answers:Record<string,string>={};questions.slice(0,5).forEach((q,i)=>{answers[q]=interaction.fields.getTextInputValue('q'+i);});const reason=answers[questions[0]]??'Opened from ticket panel';const result=await createTicketForUser(interaction.guild,interaction.user,interaction.client,reason,panel.name,answers,option?.id);await interaction.reply({content:result.success?'✅ Ticket created: <#'+result.channel.id+'>':'❌ '+result.message,ephemeral:true});}));
 client.on(Events.InteractionCreate,safe('tradeModal',async(interaction:any)=>{if(interaction?.isModalSubmit?.()&&String(interaction.customId).startsWith('tradecalc:')){const{handleTradeModal}=await import('../commands/trade.js');return handleTradeModal(interaction);}}));
