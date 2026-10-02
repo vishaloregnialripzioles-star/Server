@@ -21,8 +21,6 @@ export function getTicketPanelOption(panel:TicketPanelConfig|undefined,optionId?
 export async function createTicketForUser(guild:Guild,user:User,client:Client,reason:string,panelId?:string,answers?:Record<string,string>,optionId?:string):Promise<TicketResult>{
   const data=loadGuild(guild.id);const panel=getTicketPanel(guild,panelId);const option=getTicketPanelOption(panel,optionId);
   if(optionId&&!option)return{success:false,message:'That ticket category is no longer available.'};
-  const existing=Object.values(data.tickets).find(t=>t.creatorId===user.id&&!t.closed);
-  if(existing)return{success:false,message:`You already have an open ticket: <#${existing.channelId}>.`};
   const ticketId=generateId();const safeName=user.username.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,20)||'user';const channelName=`ticket-${safeName}-${ticketId.slice(-4)}`;
   const supportRoleId=option?.supportRoleId??panel?.supportRoleId??data.config.ticketSupportRole;const categoryId=option?.categoryId??panel?.categoryId??data.config.ticketCategory;
   const overwrites:OverwriteResolvable[]=[
