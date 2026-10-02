@@ -1,7 +1,7 @@
 import type { Client } from 'discord.js';
 import { Events, AuditLogEvent, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, type TextChannel } from 'discord.js';
 import { auditLog } from '../auditLogger.js';
-import { deleteGuild, loadGuild, claimInteractionEvent } from '../storage.js';
+import { deleteGuild, loadGuild, loadGuildFresh, claimInteractionEvent } from '../storage.js';
 import { registerBloxValueEvents } from '../bloxValueEvents.js';
 import { registerBloxValueIconEvents } from '../bloxValueIconEvents.js';
 import { registerBloxValueSync } from '../bloxValueSync.js';
@@ -21,7 +21,7 @@ client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=
   const parts=id.split(':');const action=parts[1],targetId=parts[2];
   if(!action||!targetId)return;
   if(!(await claimInteractionEvent(String(interaction.id))))return;
-  const data=loadGuild(interaction.guild.id);
+  const data=await loadGuildFresh(interaction.guild.id);
 
   const panel=Object.values(data.config.ticketPanels??{}).find((p:any)=>p.id===targetId)||(data.config.ticketPanels??{})[targetId];
   if((action==='select'||action==='open')&&(interaction.isStringSelectMenu()||interaction.isButton())){
@@ -98,7 +98,7 @@ client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=
     return;
   }
 }));
-client.on(Events.InteractionCreate,safe('ticketModal',async(interaction:any)=>{if(!interaction?.isModalSubmit?.()||!String(interaction.customId).startsWith('ticket:modal:')||!interaction.guild)return;if(!(await claimInteractionEvent(String(interaction.id))))return;const modalParts=String(interaction.customId).split(':');const panelId=modalParts[2];const optionId=modalParts[3];const data=loadGuild(interaction.guild.id);const panel=Object.values(data.config.ticketPanels??{}).find(p=>p.id===panelId)||(data.config.ticketPanels??{})[panelId];if(!panel){await interaction.reply({content:'❌ This ticket panel no longer exists.',ephemeral:true});return;}const option=optionId?panel.options?.find(item=>item.id===optionId):undefined;if(optionId&&!option){await interaction.reply({content:'❌ That ticket category is no longer available.',ephemeral:true});return;}const questions=option?.questions??panel.questions;const answers:Record<string,string>={};questions.slice(0,5).forEach((q,i)=>{answers[q]=interaction.fields.getTextInputValue('q'+i);});const reason=answers[questions[0]]??'Opened from ticket panel';const result=await createTicketForUser(interaction.guild,interaction.user,interaction.client,reason,panel.id,answers,option?.id);await interaction.reply({content:result.success?'✅ Ticket created: <#'+result.channel.id+'>':'❌ '+result.message,ephemeral:true});}));
+client.on(Events.InteractionCreate,safe('ticketModal',async(interaction:any)=>{if(!interaction?.isModalSubmit?.()||!String(interaction.customId).startsWith('ticket:modal:')||!interaction.guild)return;if(!(await claimInteractionEvent(String(interaction.id))))return;await interaction.deferReply({ephemeral:true});const modalParts=String(interaction.customId).split(':');const panelId=modalParts[2];const optionId=modalParts[3];const data=await loadGuildFresh(interaction.guild.id);const panel=Object.values(data.config.ticketPanels??{}).find(p=>p.id===panelId)||(data.config.ticketPanels??{})[panelId];if(!panel){await interaction.reply({content:'❌ This ticket panel no longer exists.',ephemeral:true});return;}const option=optionId?panel.options?.find(item=>item.id===optionId):undefined;if(optionId&&!option){await interaction.reply({content:'❌ That ticket category is no longer available.',ephemeral:true});return;}const questions=option?.questions??panel.questions;const answers:Record<string,string>={};questions.slice(0,5).forEach((q,i)=>{answers[q]=interaction.fields.getTextInputValue('q'+i);});const reason=answers[questions[0]]??'Opened from ticket panel';const result=await createTicketForUser(interaction.guild,interaction.user,interaction.client,reason,panel.id,answers,option?.id);await interaction.editReply(result.success?'✅ Ticket created successfully: <#'+result.channel.id+'>':'❌ '+result.message); }));
 client.on(Events.InteractionCreate,safe('tradeModal',async(interaction:any)=>{if(interaction?.isModalSubmit?.()&&String(interaction.customId).startsWith('tradecalc:')){const{handleTradeModal}=await import('../commands/trade.js');return handleTradeModal(interaction);}}));
 client.on(Events.InteractionCreate,safe('clearChannelsButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('clearchannels:')){const{handleClearChannelsButton}=await import('../commands/clearchannels.js');return handleClearChannelsButton(interaction);}}));
 client.on(Events.InteractionCreate,safe('giveawayPreselectButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('gwcfg_selectwinner:')){const{handleGiveawayPreselectButton}=await import('./giveawayPreselect.js');return handleGiveawayPreselectButton(interaction);}if(interaction?.isUserSelectMenu?.()&&String(interaction.customId).startsWith('gwcfg_selectwinner_user:')){const{handleGiveawayPreselectUser}=await import('./giveawayPreselect.js');return handleGiveawayPreselectUser(interaction);}}));
