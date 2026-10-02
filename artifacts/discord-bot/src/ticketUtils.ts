@@ -18,7 +18,20 @@ export function getTicketPanelOption(panel:TicketPanelConfig|undefined,optionId?
   return panel.options.find(option=>option.id===optionId);
 }
 
-export async function createTicketForUser(guild:Guild,user:User,client:Client,reason:string,panelId?:string,answers?:Record<string,string>,optionId?:string):Promise<TicketResult>{
+const activeTicketCreations=new Map<string,Promise<TicketResult>>();
+
+export function createTicketForUser(guild:Guild,user:User,client:Client,reason:string,panelId?:string,answers?:Record<string,string>,optionId?:string):Promise<TicketResult>{
+  // Coalesce rapid duplicate clicks/submissions from the same user while a ticket is being created.
+  // This still allows multiple tickets sequentially; it only prevents concurrent duplicate channels.
+  const key=`${guild.id}:${user.id}`;
+  const existing=activeTicketCreations.get(key);
+  if(existing)return existing;
+  const promise=createTicketForUserInternal(guild,user,client,reason,panelId,answers,optionId).finally(()=>activeTicketCreations.delete(key));
+  activeTicketCreations.set(key,promise);
+  return promise;
+}
+
+async function createTicketForUserInternal(guild:Guild,user:User,client:Client,reason:string,panelId?:string,answers?:Record<string,string>,optionId?:string):Promise<TicketResult>{
   const data=loadGuild(guild.id);const panel=getTicketPanel(guild,panelId);const option=getTicketPanelOption(panel,optionId);
   if(optionId&&!option)return{success:false,message:'That ticket category is no longer available.'};
   const ticketId=generateId();const safeName=user.username.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,20)||'user';const channelName=`ticket-${safeName}-${ticketId.slice(-4)}`;
