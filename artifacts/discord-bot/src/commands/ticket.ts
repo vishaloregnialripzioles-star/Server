@@ -66,6 +66,8 @@ export const ticket: Command = {
     .addSubcommand(s => s.setName('open').setDescription('Open a ticket directly')
       .addStringOption(o => o.setName('reason').setDescription('What do you need help with?').setRequired(true))
       .addStringOption(o => o.setName('panel').setDescription('Optional saved panel name')))
+    .addSubcommand(s => s.setName('ai').setDescription('Enable or disable AI support in new tickets')
+      .addBooleanOption(o => o.setName('enabled').setDescription('Enable ticket AI for newly created tickets').setRequired(true)))
     .addSubcommand(s => s.setName('add-member').setDescription('Add a member to the current ticket')
       .addUserOption(o => o.setName('user').setDescription('Member to add to this ticket').setRequired(true))),
 
@@ -183,6 +185,14 @@ export const ticket: Command = {
       const panels=loadGuild(interaction.guild.id).config.ticketPanels??{};
       const lines=Object.values(panels).map(p=>`• **${p.name}** — ${p.options?.length??0} categories — ${p.questions.length} panel question(s)`);
       await interaction.editReply({embeds:[new EmbedBuilder().setColor(0x5865F2).setTitle('🎫 Ticket Panels').setDescription(lines.join('\\n')||'No saved panels. Create one with /ticket create.')]});return;
+    }
+
+    if (sub==='ai') {
+      const enabled=interaction.options.getBoolean('enabled',true);
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) { await interaction.editReply('❌ You need Manage Server permission to change Ticket AI.'); return; }
+      updateGuild(interaction.guild.id,d=>{d.config.ticketAIEnabled=enabled;});
+      await interaction.editReply(enabled ? '🤖 **Ticket AI enabled.** Every new ticket will get the AI welcome, natural support replies, smart staff routing and a one-time staff handoff.' : '🤖 **Ticket AI disabled.** New tickets will not use the AI.');
+      return;
     }
 
     if (sub==='add-member') {
