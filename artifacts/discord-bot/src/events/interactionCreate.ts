@@ -155,6 +155,9 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
     try {
       // Acknowledge first so Discord cannot time out while the menu is being rebuilt.
       await interaction.deferUpdate();
+      // Resolve the canonical application emoji objects before rebuilding the menu/embed.
+      const { primeHelpApplicationEmojis } = await import('../commands/help.js');
+      await primeHelpApplicationEmojis(interaction.client);
       const value = interaction.values[0] ?? 'all';
       const commands = Array.from(interaction.client.commands?.values?.() ?? []);
       const prefix = (await import('../prefixHandler.js')).getGuildPrefix(interaction.guildId);
