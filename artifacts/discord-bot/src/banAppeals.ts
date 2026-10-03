@@ -1,5 +1,5 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, PermissionFlagsBits, TextInputBuilder, TextInputStyle, type ButtonInteraction, type Guild, type ModalSubmitInteraction } from 'discord.js';
-import { loadGuild, updateGuild } from './storage.js';
+import { loadGuild, loadGuildFresh, updateGuild } from './storage.js';
 import type { BanCase } from './types.js';
 
 export const BAN_EMBED_COLOR = 0xD30000;
@@ -57,7 +57,7 @@ export async function handleBanAppealButton(interaction: ButtonInteraction): Pro
   const action = parts[1]; const guildId = parts[2];
   const guild = await interaction.client.guilds.fetch(guildId).catch(() => null);
   if (!guild) { await interaction.reply({ content: '❌ This server is no longer available.', ephemeral: true }); return true; }
-  const data = loadGuild(guild.id); const banCase = data.banCases[interaction.user.id];
+  const data = await loadGuildFresh(guild.id); const banCase = data.banCases[interaction.user.id];
   if (!banCase) { await interaction.reply({ content: '❌ No active ban case was found for you.', ephemeral: true }); return true; }
   if (action === 'open') {
     if (banCase.appealStatus === 'pending') { await interaction.reply({ content: '⏳ Your appeal is already pending review.', ephemeral: true }); return true; }
@@ -88,7 +88,7 @@ export async function handleBanAppealModal(interaction: ModalSubmitInteraction):
   const parts = interaction.customId.split(':'); if (parts[0] !== 'banappeal' || parts[1] !== 'submit') return false;
   const guild = await interaction.client.guilds.fetch(parts[2]).catch(() => null);
   if (!guild) { await interaction.reply({ content: '❌ This server is no longer available.', ephemeral: true }); return true; }
-  const data = loadGuild(guild.id); const banCase = data.banCases[interaction.user.id];
+  const data = await loadGuildFresh(guild.id); const banCase = data.banCases[interaction.user.id];
   if (!banCase) { await interaction.reply({ content: '❌ No active ban case was found.', ephemeral: true }); return true; }
   const appealText = interaction.fields.getTextInputValue('appeal').trim();
   updateGuild(guild.id, d => { const item = d.banCases[interaction.user.id]; if (item) { item.appealStatus = 'pending'; item.appealText = appealText; item.appealAt = Date.now(); } });
