@@ -2,8 +2,10 @@ import { EmbedBuilder, type GuildMember, type TextChannel } from 'discord.js';
 import { loadGuild } from '../storage.js';
 import { resolveWelcomeSend } from '../welcomeUtils.js';
 import { handleInviteRole } from '../inviteRoles.js';
+import { handleBanEvasion } from '../banAppeals.js';
 
 export async function handleGuildMemberAdd(member: GuildMember): Promise<void> {
+  if (await handleBanEvasion(member)) return;
   const inviteResult = await handleInviteRole(member);
   const data = loadGuild(member.guild.id);
 
