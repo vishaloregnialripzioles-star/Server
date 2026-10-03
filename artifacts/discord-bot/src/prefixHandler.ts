@@ -27,6 +27,7 @@ import { ROASTS } from './roasts.js';
 import { createTicketForUser } from './ticketUtils.js';
 import { buildSnipeEmbed, buildSnipeButtons } from './snipeUtils.js';
 import { buildLevelUpEmbed } from './commands/levelconfig.js';
+import { BAN_EMBED_COLOR, createBanCase, sendBanDm } from './banAppeals.js';
 import { buildHelpEmbed, buildHelpMenu } from './commands/help.js';
 import { buildGiveawayEmbed, buildGiveawayRow, buildGiveawayEndedEmbed, rerollWinner } from './giveawayUtils.js';
 import type { Giveaway, ExtraEntryRole } from './types.js';
@@ -111,8 +112,11 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
         return;
       }
     }
+    const caseId = 'BAN-' + Date.now().toString(36).toUpperCase();
+    await sendBanDm(target, guild, reason, caseId);
     await guild.members.ban(target, { reason: `${reason} | Mod: ${message.author.tag}` });
-    const embed = new EmbedBuilder().setColor(0xFF3333).setTitle('🔨 Member Banned')
+    createBanCase(guild, target, reason, message.author.id);
+    const embed = new EmbedBuilder().setColor(BAN_EMBED_COLOR).setTitle('🔨 Member Banned')
       .setThumbnail(target.displayAvatarURL())
       .addFields(
         { name: 'User', value: `${target.tag} (${target.id})`, inline: true },
