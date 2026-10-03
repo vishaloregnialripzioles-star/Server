@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import type { Command } from '../types.js';
 import { sendLog } from '../utils.js';
+import { BAN_EMBED_COLOR, createBanCase, sendBanDm } from '../banAppeals.js';
 
 export const ban: Command = {
   data: new SlashCommandBuilder()
@@ -22,6 +23,8 @@ export const ban: Command = {
     const target = interaction.options.getUser('user', true);
     const reason = interaction.options.getString('reason') ?? 'No reason provided';
     const deleteDays = interaction.options.getInteger('delete_days') ?? 0;
+    const caseId = 'BAN-' + Date.now().toString(36).toUpperCase();
+    await sendBanDm(target, interaction.guild, reason, caseId);
 
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
     if (member) {
@@ -36,13 +39,14 @@ export const ban: Command = {
     }
 
     try {
+      createBanCase(interaction.guild, target, reason, interaction.user.id);
       await interaction.guild.members.ban(target, {
         reason: `${reason} | Mod: ${interaction.user.tag}`,
         deleteMessageSeconds: deleteDays * 86400,
       });
 
       const embed = new EmbedBuilder()
-        .setColor(0xFF3333)
+        .setColor(BAN_EMBED_COLOR)
         .setTitle('🔨 Member Banned')
         .setThumbnail(target.displayAvatarURL())
         .addFields(
