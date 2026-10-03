@@ -90,7 +90,7 @@ export async function handleTicketStaffTakeover(message:Message):Promise<boolean
   const role=supportRole(message.guild,ticket,lines.join(' '));
   const summaryPrompt='Create a very short internal handoff report for a Discord support staff member. Do not invent facts. Output exactly 4 short lines: What member wants; What member is offering/willing to do; Important points; Next step. Based only on these member messages:\n'+lines.join('\n');
   await (message.channel as TextChannel).sendTyping().catch(()=>undefined);
-  const summary=await askAI(message.guild.id,message.author.id,summaryPrompt);
+  const summary=await askAI(message.guild.id,'ticket:'+ticket.id,summaryPrompt);
   const header='Hey <@'+message.author.id+'>, here is the quick report for this ticket. ❤️';
   await message.channel.send({embeds:[new EmbedBuilder().setColor(0x57F287).setTitle('📋 Ticket AI → Staff Handoff').setDescription(header+'\n\n'+summary).addFields({name:'Member',value:'<@'+ticket.creatorId+'>',inline:true},{name:'Category',value:role?role.name:'General support',inline:true}).setFooter({text:'You can continue from here — Ticket AI is now silent.'})],allowedMentions:{users:[message.author.id],roles:[]}}).catch(()=>undefined);
   updateGuild(message.guild.id,d=>{const t:any=d.tickets[ticket.id];if(t)t.aiHandledByStaffId=message.author.id;});
