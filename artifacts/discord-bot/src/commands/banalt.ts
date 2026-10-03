@@ -17,7 +17,7 @@ export const banalt: Command = {
     const main = await interaction.client.users.fetch(mainId).catch(() => null);
     const alt = await interaction.client.users.fetch(altId).catch(() => null);
     const embed = new EmbedBuilder().setColor(BAN_EMBED_COLOR).setTitle('🔗 Alternate Account Linked')
-      .addFields({ name: 'Main Account', value: (main ? main.tag : 'Unknown') + '\n' + mainId, inline: true }, { name: 'Alternate Account', value: (alt ? alt.tag : 'Unknown') + '\n' + altId, inline: true })
+      .addFields({ name: 'Main Account', value: (main ? main.tag : 'Unknown') + ' (' + mainId + ')', inline: true }, { name: 'Alternate Account', value: (alt ? alt.tag : 'Unknown') + ' (' + altId + ')', inline: true })
       .setFooter({ text: 'Linked alts are banned automatically when they join.' }).setTimestamp();
     await interaction.editReply({ embeds: [embed] });
   },
