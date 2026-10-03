@@ -24,7 +24,6 @@ export const ban: Command = {
     const reason = interaction.options.getString('reason') ?? 'No reason provided';
     const deleteDays = interaction.options.getInteger('delete_days') ?? 0;
     const caseId = 'BAN-' + Date.now().toString(36).toUpperCase();
-    await sendBanDm(target, interaction.guild, reason, caseId);
 
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
     if (member) {
@@ -39,11 +38,12 @@ export const ban: Command = {
     }
 
     try {
-      createBanCase(interaction.guild, target, reason, interaction.user.id);
+      await sendBanDm(target, interaction.guild, reason, caseId);
       await interaction.guild.members.ban(target, {
         reason: `${reason} | Mod: ${interaction.user.tag}`,
         deleteMessageSeconds: deleteDays * 86400,
       });
+      createBanCase(interaction.guild, target, reason, interaction.user.id);
 
       const embed = new EmbedBuilder()
         .setColor(BAN_EMBED_COLOR)
