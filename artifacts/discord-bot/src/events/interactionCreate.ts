@@ -66,6 +66,8 @@ function text(id: string, label: string, placeholder?: string, required = false,
 
 export async function handleInteractionCreate(interaction: Interaction): Promise<void> {
   try {
+    if (interaction.isButton() && String(interaction.customId).startsWith('banappeal:')) { if (await handleBanAppealButton(interaction)) return; }
+    if (interaction.isModalSubmit() && String(interaction.customId).startsWith('banappeal:')) { if (await handleBanAppealModal(interaction)) return; }
 
   // ── Private embed editor interactions ───────────────────────────────────────
   // Handle these before the general button/select/modal routers so the editor
