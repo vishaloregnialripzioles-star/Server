@@ -1,6 +1,6 @@
 import { EmbedBuilder, PermissionFlagsBits, type Message, type TextChannel, type Guild } from 'discord.js';
-import { loadGuild, updateGuild } from '../storage.js';
-import { askAI } from '../commands/ai.js';
+import { loadGuild, updateGuild } from './storage.js';
+import { askAI } from './commands/ai.js';
 
 const busy = new Set<string>();
 const lastReply = new Map<string, number>();
