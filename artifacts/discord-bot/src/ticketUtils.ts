@@ -1,5 +1,5 @@
 import { ChannelType, OverwriteType, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder, type Guild, type User, type Client, type TextChannel, type OverwriteResolvable } from 'discord.js';
-import { loadGuild, updateGuild } from './storage.js';
+import { loadGuild, loadGuildFresh, updateGuild } from './storage.js';
 import { generateId } from './utils.js';
 import type { TicketPanelConfig, TicketPanelOption } from './types.js';
 import { applyEditableEmbed } from './commandEmbedRegistry.js';
@@ -32,7 +32,7 @@ export function createTicketForUser(guild:Guild,user:User,client:Client,reason:s
 }
 
 async function createTicketForUserInternal(guild:Guild,user:User,client:Client,reason:string,panelId?:string,answers?:Record<string,string>,optionId?:string):Promise<TicketResult>{
-  const data=loadGuild(guild.id);const panel=getTicketPanel(guild,panelId);const option=getTicketPanelOption(panel,optionId);
+  const data=await loadGuildFresh(guild.id);const panel=getTicketPanel(guild,panelId);const option=getTicketPanelOption(panel,optionId);
   if(optionId&&!option)return{success:false,message:'That ticket category is no longer available.'};
   const ticketId=generateId();const safeName=user.username.toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,20)||'user';const channelName=`ticket-${safeName}-${ticketId.slice(-4)}`;
   const supportRoleId=option?.supportRoleId??panel?.supportRoleId??data.config.ticketSupportRole;const categoryId=option?.categoryId??panel?.categoryId??data.config.ticketCategory;
