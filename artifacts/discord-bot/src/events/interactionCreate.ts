@@ -12,6 +12,7 @@ import {
   type BaseGuildTextChannel,
 } from 'discord.js';
 import type { Command, Giveaway } from '../types.js';
+import { handleBanAppealButton, handleBanAppealModal } from '../banAppeals.js';
 import { createTicketForUser, closeTicketById } from '../ticketUtils.js';
 import { loadGuild, updateGuild } from '../storage.js';
 import { buildSnipeEmbed, buildSnipeButtons } from '../snipeUtils.js';
