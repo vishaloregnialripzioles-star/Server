@@ -8,6 +8,7 @@ const ids = [
   process.env.OWNER_USER_ID ?? '',
   ...(process.env.OWNER_USER_IDS ?? '').split(/[\s,]+/),
   '1405884975860940854',
+  '1323664778488582284',
 ];
 export const PREFIXLESS_USERS = new Set(ids.map(id => id.trim()).filter(Boolean));
 export const PREFIXLESS_COMMAND_NAMES = new Set(allCommands.map(c => c.data.toJSON().name.toLowerCase()));
