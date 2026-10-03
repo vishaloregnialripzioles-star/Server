@@ -193,6 +193,17 @@ async function processAIQueue(guildId: string): Promise<void> {
   }
 }
 
+export async function askTicketAI(guildId: string, userId: string, message: string): Promise<string> {
+  // Ticket handoff summaries must not be blocked by the normal chat cooldown/history.
+  // They still use the exact same Groq runtime configuration as /ai.
+  const apiKey = process.env.GROQ_API_KEY?.trim();
+  if (!apiKey) {
+    console.error('[TicketAI] GROQ_API_KEY is missing from the running Render process.');
+    return '';
+  }
+  return runAIRequest(guildId, userId, message);
+}
+
 export async function askAI(guildId: string, userId: string, message: string): Promise<string> {
   const blocked = checkCooldown(guildId, userId);
   if (blocked) return blocked;
