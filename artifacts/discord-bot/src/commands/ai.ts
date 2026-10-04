@@ -227,7 +227,7 @@ export async function askAI(guildId: string, userId: string, message: string): P
     queue.push({ guildId, userId, message, resolve });
     queues.set(guildId, queue);
     void processAIQueue(guildId);
-  });
+  }).then(answer => answer || '⚠️ AI temporarily unavailable. Please try again.');
 }
 
 export const ai: Command = {
