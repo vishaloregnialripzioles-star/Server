@@ -135,17 +135,24 @@ Mode: ${modePrompts[mode] ?? modePrompts.funny}`;
           await new Promise(resolve => setTimeout(resolve, 1_500 * (attempt + 1)));
           continue;
         }
-        return safeApiError(response.status, body);
+        return '';
       }
 
-      if (!response.ok) return safeApiError(response.status, await response.text());
+      if (!response.ok) console.error('[AI] Groq request failed:', response.status); return '';
 
       const body = await response.json() as {
         choices?: { message?: { content?: string | null } }[];
       };
     const answer = trimResponse(body.choices?.[0]?.message?.content ?? '');
 
-    if (!answer) return '😅 AI ko abhi response nahi mila. Phir se ping karo.';
+    if (!answer) {
+      console.warn('[AI] Groq returned an empty response; retrying.');
+      if (attempt < AI_MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, 1_500 * (attempt + 1)));
+        continue;
+      }
+      return '';
+    }
 
     const next = [
       ...history,
@@ -161,7 +168,7 @@ Mode: ${modePrompts[mode] ?? modePrompts.funny}`;
         continue;
       }
       console.error('[AI] Groq request failed:', error);
-      return '⚠️ AI response nahi de paaya abhi. Thodi der baad ping karna.';
+      return '';
     }
   }
 
@@ -201,7 +208,12 @@ export async function askTicketAI(guildId: string, userId: string, message: stri
     console.error('[TicketAI] GROQ_API_KEY is missing from the running Render process.');
     return '';
   }
-  return runAIRequest(guildId, userId, message);
+  return new Promise(resolve => {
+    const queue = queues.get(guildId) ?? [];
+    queue.push({ guildId, userId, message, resolve });
+    queues.set(guildId, queue);
+    void processAIQueue(guildId);
+  });
 }
 
 export async function askAI(guildId: string, userId: string, message: string): Promise<string> {
