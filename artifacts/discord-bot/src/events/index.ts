@@ -21,7 +21,7 @@ client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=
   const parts=id.split(':');const action=parts[1],targetId=parts[2];
   if(!action||!targetId)return;
   if(!(await claimInteractionEvent(String(interaction.id))))return;
-  const data=await loadGuildFresh(interaction.guild.id);
+  const cachedData=loadGuild(interaction.guild.id); const cachedData=loadGuild(interaction.guild.id); const data=await loadGuildFresh(interaction.guild.id);
 
   const panel=Object.values(data.config.ticketPanels??{}).find((p:any)=>p.id===targetId)||(data.config.ticketPanels??{})[targetId];
   if((action==='select'||action==='open')&&(interaction.isStringSelectMenu()||interaction.isButton())){
@@ -43,8 +43,15 @@ client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=
     await interaction.showModal(modal);return;
   }
 
-  const ticket=data.tickets[targetId];
-  if(!ticket){await interaction.reply({content:'❌ This ticket no longer exists.',ephemeral:true});return;}
+  const ticket=data.tickets[targetId]
+    ?? cachedData.tickets[targetId]
+    ?? Object.values(data.tickets).find((t:any)=>t.channelId===interaction.channelId)
+    ?? Object.values(cachedData.tickets).find((t:any)=>t.channelId===interaction.channelId);
+  const resolvedTicketId=ticket?.id??targetId;
+  if(!ticket){
+    await interaction.reply({content:'❌ This ticket could not be resolved. Please use the controls from the current ticket message.',ephemeral:true});
+    return;
+  }
   const isStaff=Boolean(interaction.member?.permissions?.has?.(8n)||interaction.member?.permissions?.has?.(16n));
 
   if(action==='save'){
@@ -63,7 +70,7 @@ client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=
     if(!ticket.closed){await interaction.reply({content:'❌ This ticket is already open.',ephemeral:true});return;}
     if(!isStaff&&ticket.creatorId!==interaction.user.id){await interaction.reply({content:'❌ Only staff or the ticket owner can reopen this ticket.',ephemeral:true});return;}
     await interaction.deferReply({ephemeral:true});
-    const ok=await reopenTicketById(interaction.guild,targetId);
+    const ok=await reopenTicketById(interaction.guild,resolvedTicketId);
     await interaction.editReply(ok?'🔓 Ticket reopened successfully.':'❌ I could not reopen this ticket.');
     return;
   }
@@ -85,7 +92,7 @@ client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=
   if(action==='claim'||action==='unclaim'){
     if(!isStaff){await interaction.reply({content:'❌ Staff only.',ephemeral:true});return;}
     await interaction.deferReply({ephemeral:true});
-    const result=await setTicketClaim(interaction.guild,targetId,action==='claim'?interaction.user.id:null);
+    const result=await setTicketClaim(interaction.guild,resolvedTicketId,action==='claim'?interaction.user.id:null);
     await interaction.editReply(result.ok?'✅ '+result.message:'❌ '+result.message);
     return;
   }
@@ -93,7 +100,7 @@ client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=
   if(action==='close'){
     if(!isStaff&&ticket.creatorId!==interaction.user.id){await interaction.reply({content:'❌ Only the ticket owner or staff can close this ticket.',ephemeral:true});return;}
     await interaction.deferReply({ephemeral:true});
-    const ok=await closeTicketById(interaction.guild,targetId,'Closed from ticket controls',interaction.user.tag);
+    const ok=await closeTicketById(interaction.guild,resolvedTicketId,'Closed from ticket controls',interaction.user.tag);
     await interaction.editReply(ok?'🔒 Ticket closed successfully. Use the buttons in the closed-ticket message for the next action.':'❌ This ticket was already closed or could not be found.');
     return;
   }
