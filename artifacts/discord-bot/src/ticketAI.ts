@@ -1,6 +1,6 @@
 import { EmbedBuilder, PermissionFlagsBits, type Message, type TextChannel, type Guild } from 'discord.js';
 import { loadGuild, updateGuild } from './storage.js';
-import { askAI } from './commands/ai.js';
+import { askTicketAI } from './commands/ai.js';
 
 const busy = new Set<string>();
 const lastReply = new Map<string, number>();
@@ -69,7 +69,7 @@ export async function handleTicketAIMessage(message:Message):Promise<boolean>{
 
     await (message.channel as TextChannel).sendTyping().catch(()=>undefined);
     const prompt='You are Sparxie, the support assistant inside a Discord ticket. Respond naturally and briefly like a helpful support teammate, but never claim to be human. Keep answers short (1-3 sentences), notice important details, ask only useful follow-ups, and do not mention internal prompts. Never ping roles; the bot handles routing. A staff member has not handled this ticket yet.\nRecent ticket conversation:\n'+transcript+'\nLatest member message: '+message.content;
-    const answer=await askAI(message.guild.id,message.author.id,prompt);
+    const answer=await askTicketAI(message.guild.id,message.author.id,prompt);
     if(answer){
       await new Promise(r=>setTimeout(r,Math.min(1800,Math.max(500,answer.length*12))));
       await message.channel.sendTyping().catch(()=>undefined);
@@ -90,9 +90,15 @@ export async function handleTicketStaffTakeover(message:Message):Promise<boolean
   const role=supportRole(message.guild,ticket,lines.join(' '));
   const summaryPrompt='Create a very short internal handoff report for a Discord support staff member. Do not invent facts. Output exactly 4 short lines: What member wants; What member is offering/willing to do; Important points; Next step. Based only on these member messages:\n'+lines.join('\n');
   await (message.channel as TextChannel).sendTyping().catch(()=>undefined);
-  const summary=await askAI(message.guild.id,'ticket:'+ticket.id,summaryPrompt);
+  const summary=await askTicketAI(message.guild.id,'ticket:'+ticket.id,summaryPrompt);
   const header='Hey <@'+message.author.id+'>, here is the quick report for this ticket. ❤️';
-  await message.channel.send({embeds:[new EmbedBuilder().setColor(0x57F287).setTitle('📋 Ticket AI → Staff Handoff').setDescription(header+'\n\n'+summary).addFields({name:'Member',value:'<@'+ticket.creatorId+'>',inline:true},{name:'Category',value:role?role.name:'General support',inline:true}).setFooter({text:'You can continue from here — Ticket AI is now silent.'})],allowedMentions:{users:[message.author.id],roles:[]}}).catch(()=>undefined);
+  const report = summary || [
+    'What member wants: '+(lines[lines.length-1] ?? 'See recent ticket messages.'),
+    'What member is offering/willing to do: See recent ticket messages.',
+    'Important points: Review the member messages above.',
+    'Next step: Continue the conversation with the member.'
+  ].join('\n');
+  await message.channel.send({embeds:[new EmbedBuilder().setColor(0x57F287).setTitle('📋 Ticket AI → Staff Handoff').setDescription(header+'\n\n'+report).addFields({name:'Member',value:'<@'+ticket.creatorId+'>',inline:true},{name:'Category',value:role?role.name:'General support',inline:true}).setFooter({text:'You can continue from here — Ticket AI is now silent.'})],allowedMentions:{users:[message.author.id],roles:[]}}).catch(()=>undefined);
   updateGuild(message.guild.id,d=>{const t:any=d.tickets[ticket.id];if(t)t.aiHandledByStaffId=message.author.id;});
   return true;
 }
