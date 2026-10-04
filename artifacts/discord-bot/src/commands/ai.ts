@@ -83,7 +83,10 @@ export function getAICooldown(guildId: string, userId: string): string | undefin
 
 async function runAIRequest(guildId: string, userId: string, message: string): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY?.trim();
-  if (!apiKey) return '🤖 AI abhi setup nahi hua bro 💀 **GROQ_API_KEY** Render mein set karo.';
+  if (!apiKey) {
+    console.error('[AI] GROQ_API_KEY is missing from the running process.');
+    return '';
+  }
 
   const data = loadGuild(guildId);
   const mode = (data.config.aiPersonality ?? 'funny') as Mode;
@@ -209,11 +212,10 @@ async function processAIQueue(guildId: string): Promise<void> {
 }
 
 export async function askTicketAI(guildId: string, userId: string, message: string): Promise<string> {
-  // Ticket AI is deliberately independent from the normal /ai cooldown.
-  // A ticket request stays queued until Groq returns an actual AI message.
-  const apiKey = process.env.GROQ_API_KEY?.trim();
-  if (!apiKey) {
-    console.error('[TicketAI] GROQ_API_KEY is missing from the running Render process.');
+  // Ticket AI never returns a canned/non-AI answer. It keeps retrying until
+  // Groq supplies an actual generated response.
+  if (!process.env.GROQ_API_KEY?.trim()) {
+    console.error('[TicketAI] GROQ_API_KEY is missing from the running process.');
     return '';
   }
 
