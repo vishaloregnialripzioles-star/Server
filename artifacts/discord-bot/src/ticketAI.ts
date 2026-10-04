@@ -44,11 +44,9 @@ export async function handleTicketAIMessage(message:Message):Promise<boolean>{
   const ticket=getTicket(message.guild.id,message.channelId);
   if(!ticket||ticket.creatorId!==message.author.id||ticket.closed)return false;
   if(ticket.aiEnabled===false||ticket.aiHandledByStaffId)return false;
-  if(isStaff(message,ticket)||busy.has(ticket.id))return false;
+  if(isStaff(message,ticket))return false;
 
-  const now=Date.now();
-  if(now-(lastReply.get(ticket.id)??0)<2500)return false;
-  busy.add(ticket.id);
+
   try{
     const role=supportRole(message.guild,ticket,message.content);
     const roleId=role?.id;
@@ -77,7 +75,7 @@ export async function handleTicketAIMessage(message:Message):Promise<boolean>{
       lastReply.set(ticket.id,Date.now());
     }
     return true;
-  }finally{busy.delete(ticket.id);}
+  }
 }
 
 export async function handleTicketStaffTakeover(message:Message):Promise<boolean>{
