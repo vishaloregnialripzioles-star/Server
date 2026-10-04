@@ -138,7 +138,15 @@ Mode: ${modePrompts[mode] ?? modePrompts.funny}`;
         return '';
       }
 
-      if (!response.ok) console.error('[AI] Groq request failed:', response.status); return '';
+      if (!response.ok) {
+        const body = await response.text();
+        console.error('[AI] Groq request failed:', response.status, body.slice(0, 500));
+        if (attempt < AI_MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 1_500 * (attempt + 1)));
+          continue;
+        }
+        return '';
+      }
 
       const body = await response.json() as {
         choices?: { message?: { content?: string | null } }[];
@@ -172,7 +180,7 @@ Mode: ${modePrompts[mode] ?? modePrompts.funny}`;
     }
   }
 
-  return '⚠️ AI response nahi de paaya abhi. Thodi der baad ping karna.';
+  return '';
 }
 
 async function processAIQueue(guildId: string): Promise<void> {
