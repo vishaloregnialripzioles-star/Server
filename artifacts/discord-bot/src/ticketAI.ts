@@ -71,7 +71,7 @@ export async function handleTicketAIMessage(message:Message):Promise<boolean>{
     if(answer){
       await new Promise(r=>setTimeout(r,Math.min(1800,Math.max(500,answer.length*12))));
       await message.channel.sendTyping().catch(()=>undefined);
-      await message.reply({content:answer.slice(0,1900),allowedMentions:{parse:[]}}).catch(()=>undefined);
+      await message.channel.send({content:answer.slice(0,1900),allowedMentions:{parse:[]}}).catch(()=>undefined);
       lastReply.set(ticket.id,Date.now());
     }
     return true;
