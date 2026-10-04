@@ -23,7 +23,7 @@ async function runAutoMod(message:Message):Promise<boolean>{if(!message.guild||!
 export async function handleMessageCreate(message:Message):Promise<void>{if(message.author.bot||!message.guild||!message.member)return;const guildConfig=loadGuild(message.guild.id).config;if(guildConfig.bloxValueChannelId===message.channelId&&message.mentions.users.has(message.client.user?.id??''))return;if(!(await claimMessageEvent(message.id)))return;trackActivity(message);if(await handlePrefixlessMessage(message))return;if(await runAutoMod(message))return;const restricted=loadGuild(message.guild.id),{chatBanRole,jailRole}=restricted.config,memberRoles=message.member.roles.cache;if((chatBanRole&&memberRoles.has(chatBanRole))||(jailRole&&memberRoles.has(jailRole))){await message.delete().catch(()=>undefined);return;}const commandPrefix=getGuildPrefix(message.guild.id);
 const aiConfig=loadGuild(message.guild.id).config;
 const botId=message.client.user?.id;
-const mentionedBot=!!botId&&message.mentions.users.has(botId);
+const mentionedBot=!!botId&&new RegExp(`<@!?${botId}>`).test(String(message.content??''));
 if(aiConfig.aiChannelId===message.channelId&&mentionedBot&&!message.content.startsWith('/')&&!message.content.startsWith(commandPrefix)){
 const prompt=botId?message.content.replace(new RegExp('<@!?' + botId + '>','g'),'').trim():message.content.trim();
 if(prompt){
