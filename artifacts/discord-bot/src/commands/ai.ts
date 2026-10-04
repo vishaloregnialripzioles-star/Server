@@ -209,13 +209,14 @@ async function processAIQueue(guildId: string): Promise<void> {
 }
 
 export async function askTicketAI(guildId: string, userId: string, message: string): Promise<string> {
-  // Ticket handoff summaries must not be blocked by the normal chat cooldown/history.
-  // They still use the exact same Groq runtime configuration as /ai.
+  // Ticket AI is deliberately independent from the normal /ai cooldown.
+  // A ticket request stays queued until Groq returns an actual AI message.
   const apiKey = process.env.GROQ_API_KEY?.trim();
   if (!apiKey) {
     console.error('[TicketAI] GROQ_API_KEY is missing from the running Render process.');
     return '';
   }
+
   return new Promise(resolve => {
     const queue = queues.get(guildId) ?? [];
     queue.push({ guildId, userId, message, resolve });
