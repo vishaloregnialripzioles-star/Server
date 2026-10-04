@@ -29,7 +29,7 @@ const prompt=botId?message.content.replace(new RegExp('<@!?' + botId + '>','g'),
 if(prompt){
 await message.channel.sendTyping().catch(()=>undefined);
 const answer=await askAI(message.guild.id,message.author.id,prompt);
-await message.reply({content:answer.slice(0,1900),allowedMentions:{parse:[]}}).catch(error=>console.error('[AI] Discord reply failed:',error));
+await message.channel.send({content:answer.slice(0,1900),allowedMentions:{parse:[]}}).catch(error=>console.error('[AI] Discord send failed:',error));
 return;
 }
 }if(message.content.startsWith(commandPrefix)){const claimed=await claimCommandMessage(message.id);if(!claimed)return;}if(await handleMissingPrefixCommand(message))return;const rawPrefix=message.content.slice(commandPrefix.length).trim();const nativeCommandName=rawPrefix.split(/\s+/)[0]?.toLowerCase()??'';const rawMessage:any=message;const originalReply=rawMessage.reply?.bind(rawMessage);const patchPrefixPayload=async(payload:any)=>{if(!payload||!message.guildId||!Array.isArray(payload.embeds))return payload;const sourceKey=nativeCommandName==='ticket'?'ticket:create':nativeCommandName==='closeticket'?'ticket:close':nativeCommandName==='reopen'?'ticket:reopen':nativeCommandName==='ticketpanel'?'ticket:panel':nativeCommandName;return {...payload,embeds:payload.embeds.map((raw:any)=>{try{const embed=raw instanceof EmbedBuilder?raw:new EmbedBuilder(raw);captureCommandEmbed(message.guildId!,nativeCommandName,embed);return applyEditableEmbed(message.guildId!,sourceKey,embed);}catch{return raw;}})};};if(originalReply)rawMessage.reply=async(payload:any)=>originalReply(await patchPrefixPayload(payload));try{await handlePrefixCommand(message);}finally{if(originalReply)rawMessage.reply=originalReply;}
