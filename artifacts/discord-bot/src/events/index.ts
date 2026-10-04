@@ -21,7 +21,7 @@ client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=
   const parts=id.split(':');const action=parts[1],targetId=parts[2];
   if(!action||!targetId)return;
   if(!(await claimInteractionEvent(String(interaction.id))))return;
-  const cachedData=loadGuild(interaction.guild.id); const cachedData=loadGuild(interaction.guild.id); const data=await loadGuildFresh(interaction.guild.id);
+  const cachedData=loadGuild(interaction.guild.id); const data=await loadGuildFresh(interaction.guild.id);
 
   const panel=Object.values(data.config.ticketPanels??{}).find((p:any)=>p.id===targetId)||(data.config.ticketPanels??{})[targetId];
   if((action==='select'||action==='open')&&(interaction.isStringSelectMenu()||interaction.isButton())){
