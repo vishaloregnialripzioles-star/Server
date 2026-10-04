@@ -1,7 +1,7 @@
 import type { Client } from 'discord.js';
 import { Events, AuditLogEvent, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, EmbedBuilder, type TextChannel } from 'discord.js';
 import { auditLog } from '../auditLogger.js';
-import { deleteGuild, loadGuild, loadGuildFresh, claimInteractionEvent } from '../storage.js';
+import { deleteGuild, loadGuild, loadGuildFresh, claimInteractionEvent, claimBotMention } from '../storage.js';
 import { registerBloxValueEvents } from '../bloxValueEvents.js';
 import { registerBloxValueIconEvents } from '../bloxValueIconEvents.js';
 import { registerBloxValueSync } from '../bloxValueSync.js';
@@ -114,7 +114,7 @@ client.on(Events.InteractionCreate,safe('giveawayWinnerButton',async(interaction
 client.on(Events.InteractionCreate,safe('giveawayAdminWinnerButton',async(interaction:any)=>{if(interaction?.isButton?.()&&String(interaction.customId).startsWith('gwadmin_selectwinner:')){const{handleGiveawayAdminWinnerButton}=await import('./giveawayAdminWinnerButton.js');return handleGiveawayAdminWinnerButton(interaction);}}));
 client.on(Events.InteractionCreate,safe('interactionCreate',async(...args:any[])=>{const{handleInteractionCreate}=await import('./interactionCreate.js');return handleInteractionCreate(...args);}));
 client.on(Events.MessageCreate,safe('securityPrefix',async(message:any)=>{if(message?.[SECURITY_PREFIX_PROCESSED])return;if(await handleSecurityPrefix(message))message[SECURITY_PREFIX_PROCESSED]=true;}));
-client.on(Events.MessageCreate,safe('botMention',async(message:any)=>{if(message?.author?.bot||!message?.guild||!client.user)return;const content=String(message.content??'').replace(new RegExp(`<@!?${client.user.id}>`,'g'),'').trim();if(!message.mentions?.users?.has(client.user.id)||content.length>0)return;await message.channel.send({content:`Hi, I am **SPARXIE**! 👋\nUse **${(await import('../prefixHandler.js')).getGuildPrefix(message.guild.id)}help** to see my main features.`,allowedMentions:{parse:[]}}).catch(()=>undefined);}));
+client.on(Events.MessageCreate,safe('botMention',async(message:any)=>{if(message?.author?.bot||!message?.guild||!client.user)return;const content=String(message.content??'').replace(new RegExp(`<@!?${client.user.id}>`,'g'),'').trim();if(!message.mentions?.users?.has(client.user.id)||content.length>0)return;if(!(await claimBotMention(String(message.id))))return;await message.channel.send({content:`Hi, I am **SPARXIE**! 👋\nUse **${(await import('../prefixHandler.js')).getGuildPrefix(message.guild.id)}help** to see my main features.`,allowedMentions:{parse:[]}}).catch(()=>undefined);}));
 client.on(Events.MessageCreate,safe('ticketAI',async(message:any)=>{try{const{handleTicketStaffTakeover,handleTicketAIMessage}=await import('../ticketAI.js');if(await handleTicketStaffTakeover(message))return;await handleTicketAIMessage(message);}catch(err){console.error('[ticketAI]',err);}}));
 client.on(Events.MessageCreate,safe('messageCreate',async(message:any)=>{if(message?.[MESSAGE_PROCESSED]||message?.[SECURITY_PREFIX_PROCESSED])return;message[MESSAGE_PROCESSED]=true;const{handleMessageCreate}=await import('./messageCreate.js');return handleMessageCreate(message);}));
 client.on(Events.MessageCreate,safe('hinglishCursedWords',async(...args:any[])=>{const{handleHinglishCursedWords}=await import('./hinglishCursedWords.js');return handleHinglishCursedWords(...args);}));
