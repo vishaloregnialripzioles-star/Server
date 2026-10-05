@@ -43,10 +43,14 @@ client.on(Events.InteractionCreate,safe('ticketControls',async(interaction:any)=
     await interaction.showModal(modal);return;
   }
 
-  const ticket=data.tickets[targetId]
-    ?? cachedData.tickets[targetId]
-    ?? Object.values(data.tickets).find((t:any)=>t.channelId===interaction.channelId)
-    ?? Object.values(cachedData.tickets).find((t:any)=>t.channelId===interaction.channelId);
+  // Prefer the in-memory ticket first. It is updated immediately when a ticket is created,
+  // while a database read can briefly lag behind that local state.
+  const ticket=cachedData.tickets[targetId]
+    ?? Object.values(cachedData.tickets).find((t:any)=>t.id===targetId)
+    ?? Object.values(cachedData.tickets).find((t:any)=>t.channelId===interaction.channelId)
+    ?? data.tickets[targetId]
+    ?? Object.values(data.tickets).find((t:any)=>t.id===targetId)
+    ?? Object.values(data.tickets).find((t:any)=>t.channelId===interaction.channelId);
   const resolvedTicketId=ticket?.id??targetId;
   if(!ticket){
     await interaction.reply({content:'❌ This ticket could not be resolved. Please use the controls from the current ticket message.',ephemeral:true});
