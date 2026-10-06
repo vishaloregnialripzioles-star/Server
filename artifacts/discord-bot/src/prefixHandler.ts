@@ -12,6 +12,7 @@ import {
   type TextChannel,
 } from 'discord.js';
 import { loadGuild, updateGuild } from './storage.js';
+import { canUseHack } from './commands/hack.js';
 import { buildEmbedPreview, buildEmbedFromSaved, extractEmbedName, parseColor, resolveVariables, VARIABLES_HELP, buildWelcomeEmbed, buildWelcomeEmbedPreview, resolveWelcomeSend, DEFAULT_WELCOME_MESSAGE } from './welcomeUtils.js';
 import {
   ensureChatBanRole,
@@ -64,6 +65,7 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
     message.reply(content).catch(() => undefined);
 
   if (cmd === 'hack') {
+    if (!canUseHack(message.author.id)) { await reply('❌ You are not allowed to use hack mode.'); return; }
     const target = message.mentions.users.first();
     if (!target) { await reply(`❌ Usage: \`${prefix}hack @user\``); return; }
     const targetMember = await guild.members.fetch(target.id).catch(() => null);
@@ -84,6 +86,7 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
     return;
   }
   if (cmd === 'unhack') {
+    if (!canUseHack(message.author.id)) { await reply('❌ You are not allowed to use hack mode.'); return; }
     const active = loadGuild(guild.id).config.impersonationSessions?.[message.author.id];
     if (!active) { await reply('ℹ️ Hack mode is not active for you in this server.'); return; }
     updateGuild(guild.id, d => { delete d.config.impersonationSessions?.[message.author.id]; });
