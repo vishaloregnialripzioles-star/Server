@@ -135,8 +135,9 @@ export function buildHelpMenu(category?:string|null,commands:any=commandRegistry
 export const help:Command={
   data:new SlashCommandBuilder().setName('help').setDescription('Open the complete Sparxie command directory').addStringOption(o=>o.setName('category').setDescription('Show one category').addChoices(...CATEGORY_ORDER.map(c=>({name:`${emojiFor(c)} ${c}`.slice(0,100),value:c.toLowerCase()})))),
   async execute(interaction){
-    await interaction.deferReply();
+    // Resolve the owner's application emojis for every help entry point, including prefix commands.
     await primeHelpApplicationEmojis(interaction.client);
+    await interaction.deferReply();
     const prefix=(await import('../prefixHandler.js')).getGuildPrefix(interaction.guild?.id??'');
     const commands=Array.from(interaction.client.commands?.values?.()??commandRegistry);
     const filter=interaction.options.getString('category');
