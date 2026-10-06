@@ -69,7 +69,7 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
     const targetMember = await guild.members.fetch(target.id).catch(() => null);
     if (!targetMember) { await reply('❌ That user is not in this server.'); return; }
     updateGuild(guild.id, d => { (d as any).__impersonationSessions = (d as any).__impersonationSessions ?? {}; (d as any).__impersonationSessions[message.author.id] = { targetId: target.id }; });
-    await reply({ embeds: [new EmbedBuilder().setColor(0xD30000).setTitle('🎭 Mode Enabled').setDescription(`Your messages will now appear as **${targetMember.displayName}** in this server only.\n\nUse \\`${prefix}un${command}\\` to return to normal.`).setThumbnail(targetMember.displayAvatarURL({size:256})).setFooter({text:'Sparxie • Server-local mode'}).setTimestamp()] });
+    await reply({ embeds: [new EmbedBuilder().setColor(0xD30000).setTitle('🎭 Mode Enabled').setDescription(`Your messages will now appear as **${targetMember.displayName}** in this server only.\n\nUse \\`${prefix}unhack\\` to return to normal.`).setThumbnail(targetMember.displayAvatarURL({size:256})).setFooter({text:'Sparxie • Server-local mode'}).setTimestamp()] });
     return;
   }
   if (cmd === 'unhack') {
