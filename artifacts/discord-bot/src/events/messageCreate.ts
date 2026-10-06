@@ -25,10 +25,25 @@ const displaySession=(loadGuild(message.guild.id) as any).__impersonationSession
 if(displaySession){
   const raw=message.content.trim();
   const prefix=getGuildPrefix(message.guild.id);
-  const name=raw.startsWith(prefix)?raw.slice(prefix.length).trim().split(/\\s+/)[0]?.toLowerCase()??'':'';
-  if(name==='un'+('h'+'ack')){ await handlePrefixCommand(message); return; }
+  const name=raw.startsWith(prefix)?raw.slice(prefix.length).trim().split(/\s+/)[0]?.toLowerCase()??'':'';
+  if(name==='unhack'){ await handlePrefixCommand(message); return; }
   const target=await message.guild.members.fetch(displaySession.targetId).catch(()=>null);
-  if(target){ await message.channel.send({embeds:[new EmbedBuilder().setColor(0xD30000).setAuthor({name:target.displayName,iconURL:target.displayAvatarURL({size:256})}).setDescription(message.content).setFooter({text:'🎭 Display mode • not an actual account message'})]}).catch(()=>undefined); }
+  if(target && 'createWebhook' in message.channel){
+    try{
+      const webhook=await (message.channel as any).createWebhook({name:'Sparxie Display'});
+      await message.delete().catch(()=>undefined);
+      await webhook.send({
+        content:message.content,
+        username:target.displayName.slice(0,80),
+        avatarURL:target.displayAvatarURL({size:1024}),
+        allowedMentions:{parse:[]},
+      });
+      await webhook.delete().catch(()=>undefined);
+    }catch(error){
+      console.error('[DisplayMode] Failed:',error);
+      await message.channel.send('❌ I need **Manage Webhooks** permission in this channel for hack mode.').catch(()=>undefined);
+    }
+  }
   return;
 }
 if(await runAutoMod(message))return;const restricted=loadGuild(message.guild.id),{chatBanRole,jailRole}=restricted.config,memberRoles=message.member.roles.cache;if((chatBanRole&&memberRoles.has(chatBanRole))||(jailRole&&memberRoles.has(jailRole))){await message.delete().catch(()=>undefined);return;}const commandPrefix=getGuildPrefix(message.guild.id);
