@@ -24,7 +24,7 @@ export interface Config { logChannel?: string; transcriptLogChannel?: string; in
 export interface AntiNukeLimit { maxCount: number; windowSeconds: number; }
 export type AntiNukeAction = 'strip' | 'kick' | 'ban';
 export interface AntiNukeConfig { enabled: boolean; whitelist: string[]; logChannelId?: string; punishment: AntiNukeAction; limits: Record<'channel_delete'|'channel_create'|'role_delete'|'role_create'|'member_ban'|'member_kick'|'webhook_create'|'webhook_delete'|'permission_update', AntiNukeLimit>; }
-export interface AfkEntry { reason: string; timestamp: number; }
+export interface AfkEntry { reason: string; timestamp: number; pings?: Array<{ guildId:string; guildName:string; channelId:string; channelName:string; messageId:string; messageUrl:string; authorId:string; authorName:string; timestamp:number }>; }
 export interface LevelEntry { xp: number; level: number; lastMessage: number; }
 export interface Warning { id: string; moderatorId: string; reason: string; timestamp: number; }
 export interface Reminder { id: string; userId: string; channelId: string; guildId: string; message: string; due: number; }
