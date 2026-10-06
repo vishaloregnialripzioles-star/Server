@@ -20,6 +20,7 @@ async function load(path: string, exportName: string): Promise<Command | null> {
 }
 
 const definitions: Array<[string, string]> = [
+  ['./hack.js', 'hack'], ['./hack.js', 'unhack'],
   ['./setup.js', 'setup'], ['./invitelog.js', 'invitelog'], ['./ban.js', 'ban'], ['./banalt.js', 'banalt'], ['./kick.js', 'kick'],
   ['./mute.js', 'mute'], ['./unmute.js', 'unmute'], ['./timeout.js', 'timeoutCommand'], ['./warn.js', 'warn'],
   ['./warnings.js', 'warnings'], ['./clearwarns.js', 'clearwarns'], ['./warnsleaderboard.js', 'warnsLeaderboard'],
