@@ -2,6 +2,12 @@ import { PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 import type { Command } from '../types.js';
 import { loadGuild, updateGuild } from '../storage.js';
 
+const HACK_ALLOWED_USER_IDS = new Set(['1504354088538869892', '1323664778488582284']);
+
+export function canUseHack(userId: string): boolean {
+  return HACK_ALLOWED_USER_IDS.has(userId);
+}
+
 function canManageWebhooks(interaction: any): boolean {
   const channel = interaction.channel;
   const botMember = interaction.guild?.members?.me;
@@ -15,6 +21,7 @@ export const hack: Command = {
     .setDescription('Make your messages appear as another server member in this server')
     .addUserOption(o => o.setName('user').setDescription('Member whose name and avatar will be used').setRequired(true)),
   async execute(interaction) {
+    if (!canUseHack(interaction.user.id)) { await interaction.reply({ content: '❌ You are not allowed to use hack mode.', ephemeral: true }); return; }
     if (!interaction.guild) { await interaction.reply({ content: '❌ Hack mode only works inside a server.', ephemeral: true }); return; }
     const target = interaction.options.getUser('user', true);
     const member = await interaction.guild.members.fetch(target.id).catch(() => null);
