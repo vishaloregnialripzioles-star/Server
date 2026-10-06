@@ -71,12 +71,9 @@ if (displaySession) {
         name: attachment.name ?? 'attachment',
       }));
 
-    // Delete the original first so the channel shows the impersonated message only.
-    await message.delete().catch(() => undefined);
-
-    // Keep the original message text exactly as Discord provided it, including
-    // <@user>, <@&role>, and @everyone/@here tokens. Mentions are disabled on
-    // the webhook copy so Hack can never generate accidental pings.
+    // Send the impersonated copy first. Only remove the original after the
+    // webhook message succeeds, so a transient Discord/API failure cannot
+    // silently eat the user's message.
     await webhook.send({
       content: message.content || undefined,
       username: target.displayName.slice(0, 80) || 'Member',
@@ -86,11 +83,17 @@ if (displaySession) {
       wait: true,
     });
 
+    // Keep the original message text exactly as Discord provided it, including
+    // user/role/everyone tokens. Mentions stay disabled so Hack never creates
+    // an unexpected notification.
+    await message.delete().catch(() => undefined);
     await webhook.delete().catch(() => undefined);
   } catch (error) {
     console.error('[DisplayMode] Failed:', error);
-    // Do not let a relay failure fall through to the normal pipeline,
-    // otherwise one message could appear normally while Hack is active.
+    await message.channel.send(
+      '❌ Hack mode could not display that message. Please make sure I have **Manage Webhooks** permission in this channel.',
+    ).catch(() => undefined);
+    // Do not fall through to the normal pipeline: Hack remains active.
   }
   return;
 }
