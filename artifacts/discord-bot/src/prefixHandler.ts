@@ -69,7 +69,7 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
     const targetMember = await guild.members.fetch(target.id).catch(() => null);
     if (!targetMember) { await reply('❌ That user is not in this server.'); return; }
     const botMember = guild.members.me;
-    if (!botMember || !botMember.permissionsIn(message.channel).has(PermissionFlagsBits.ManageWebhooks)) {
+    if (!botMember || !botMember.permissionsIn(message.channel as any).has(PermissionFlagsBits.ManageWebhooks)) {
       await reply('❌ I need **Manage Webhooks** permission in this channel for hack mode.');
       return;
     }
