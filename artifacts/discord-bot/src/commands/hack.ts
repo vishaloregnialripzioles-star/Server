@@ -38,6 +38,7 @@ export const hack: Command = {
 export const unhack: Command = {
   data: new SlashCommandBuilder().setName('unhack').setDescription('Turn off your server-local hack display mode'),
   async execute(interaction) {
+    if (!canUseHack(interaction.user.id)) { await interaction.reply({ content: '❌ You are not allowed to use hack mode.', ephemeral: true }); return; }
     if (!interaction.guild) { await interaction.reply({ content: '❌ Hack mode only works inside a server.', ephemeral: true }); return; }
     const active = loadGuild(interaction.guild.id).config.impersonationSessions?.[interaction.user.id];
     if (!active) { await interaction.reply({ content: 'ℹ️ Hack mode is not active for you in this server.', ephemeral: true }); return; }
