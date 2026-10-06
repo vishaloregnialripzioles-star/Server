@@ -72,7 +72,7 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
     await reply({ embeds: [new EmbedBuilder().setColor(0xD30000).setTitle('🎭 Mode Enabled').setDescription(`Your messages will now appear as **${targetMember.displayName}** in this server only.\n\nUse \\`${prefix}un${command}\\` to return to normal.`).setThumbnail(targetMember.displayAvatarURL({size:256})).setFooter({text:'Sparxie • Server-local mode'}).setTimestamp()] });
     return;
   }
-  if (cmd === 'un'+command) {
+  if (cmd === 'unhack') {
     const active = (loadGuild(guild.id) as any).__impersonationSessions?.[message.author.id];
     if (!active) { await reply('ℹ️ This mode is not active for you in this server.'); return; }
     updateGuild(guild.id, d => { delete (d as any).__impersonationSessions?.[message.author.id]; });
