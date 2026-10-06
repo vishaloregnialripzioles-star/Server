@@ -14,7 +14,7 @@ import { removeGlobalAfk, setGlobalAfk } from '../globalAfk.js';
 
 type AfkMode = 'server' | 'global';
 const BUTTON_PREFIX = 'afk_scope:';
-const pendingReasons = new Map<string, string>();
+const pendingReasons = new Map<string, { reason: string; expiresAt: number }>();
 const listenerClients = new WeakSet<Client>();
 
 async function finishAfk(button: ButtonInteraction): Promise<void> {
@@ -24,7 +24,13 @@ async function finishAfk(button: ButtonInteraction): Promise<void> {
   if (!button.guild || !userId || button.user.id !== userId || (mode !== 'server' && mode !== 'global')) return;
 
   const key = `${button.guild.id}:${userId}`;
-  const reason = pendingReasons.get(key) ?? 'AFK';
+  const pending = pendingReasons.get(key);
+  if (!pending || pending.expiresAt < Date.now()) {
+    await button.update({ content: '⏰ This AFK setup expired. Please run `/afk` again.', embeds: [], components: [] }).catch(() => undefined);
+    pendingReasons.delete(key);
+    return;
+  }
+  const reason = pending.reason;
   pendingReasons.delete(key);
 
   if (mode === 'global') {
@@ -64,9 +70,9 @@ export const afk: Command = {
   async execute(interaction) {
     if (!interaction.guild || !interaction.member) return;
     registerButtonListener(interaction.client);
-    const reason = interaction.options.getString('reason') ?? 'AFK';
+    const reason = interaction.options.getString('reason')?.trim() || 'AFK';
     const uid = interaction.user.id;
-    pendingReasons.set(`${interaction.guild.id}:${uid}`, reason);
+    pendingReasons.set(`${interaction.guild.id}:${uid}`, { reason, expiresAt: Date.now() + 60_000 });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder().setCustomId(`${BUTTON_PREFIX}server:${uid}`).setLabel('Server AFK').setEmoji('🏠').setStyle(ButtonStyle.Primary),
