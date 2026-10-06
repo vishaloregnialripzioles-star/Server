@@ -63,6 +63,23 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
   const reply = (content: string | object) =>
     message.reply(content).catch(() => undefined);
 
+  if (cmd === "hack") {
+    const target = message.mentions.users.first();
+    if (!target) { await reply(`❌ Usage: \\`${prefix}${command} @user\\``); return; }
+    const targetMember = await guild.members.fetch(target.id).catch(() => null);
+    if (!targetMember) { await reply('❌ That user is not in this server.'); return; }
+    updateGuild(guild.id, d => { (d as any).__impersonationSessions = (d as any).__impersonationSessions ?? {}; (d as any).__impersonationSessions[message.author.id] = { targetId: target.id }; });
+    await reply({ embeds: [new EmbedBuilder().setColor(0xD30000).setTitle('🎭 Mode Enabled').setDescription(`Your messages will now appear as **${targetMember.displayName}** in this server only.\n\nUse \\`${prefix}un${command}\\` to return to normal.`).setThumbnail(targetMember.displayAvatarURL({size:256})).setFooter({text:'Sparxie • Server-local mode'}).setTimestamp()] });
+    return;
+  }
+  if (cmd === 'un'+command) {
+    const active = (loadGuild(guild.id) as any).__impersonationSessions?.[message.author.id];
+    if (!active) { await reply('ℹ️ This mode is not active for you in this server.'); return; }
+    updateGuild(guild.id, d => { delete (d as any).__impersonationSessions?.[message.author.id]; });
+    await reply('✅ Mode disabled. You are back to normal.');
+    return;
+  }
+
   // ── .ping / .uptime ─────────────────────────────────────────────────────────
   if (cmd === 'ping') {
     const latency = message.client.ws.ping;
