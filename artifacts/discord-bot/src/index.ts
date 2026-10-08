@@ -173,21 +173,36 @@ await initGlobalAfk();
 const installGatewayDiscoveryFallback = () => {
   const manager = client.ws as any;
 
-  if (typeof manager?.gateway === 'string' && manager.gateway.length > 0) {
-    console.log('[Discord AUTH] Gateway URL already available; keeping discord.js gateway configuration.');
+  // discord.js 14.27 bundles @discordjs/ws 1.x. Its login path can obtain
+  // Gateway information through REST before opening the shard. This Render
+  // instance has repeatedly received a REST 429, while a direct Gateway
+  // WebSocket upgrade succeeds. Force the known canonical Gateway endpoint
+  // into the manager's connect call so REST discovery cannot stall login.
+  const originalConnect = manager?.connect;
+  if (typeof originalConnect !== 'function') {
+    console.warn('[Discord AUTH] WebSocketManager.connect() hook unavailable; using normal discord.js login.');
     return;
   }
 
-  if (manager && 'gateway' in manager) {
-    manager.gateway = 'wss://gateway.discord.gg';
-    console.log('[Discord AUTH] Seeded canonical Gateway URL; bypassing /gateway/bot discovery for this single-shard bot.');
-    return;
-  }
+  manager.connect = async (options: any = {}) => {
+    console.log('[Discord AUTH] Intercepting Gateway manager.connect(); supplying canonical Gateway information.');
+    const gatewayInformation = {
+      ...(options?.gatewayInformation ?? {}),
+      url: 'wss://gateway.discord.gg',
+      shards: 1,
+    };
 
-  console.warn('[Discord AUTH] Compatible Gateway URL hook unavailable; using normal discord.js login.');
+    const result = await originalConnect.call(manager, {
+      ...options,
+      gatewayInformation,
+    });
+
+    console.log('[Discord AUTH] WebSocketManager.connect() completed.');
+    return result;
+  };
+
+  console.log('[Discord AUTH] Gateway connect override installed; REST /gateway/bot discovery will not block login.');
 };
-
-installGatewayDiscoveryFallback();
 
 const gatewayWebSocketProbe = async () => {
   console.log('[Discord WS] Probing Gateway WebSocket upgrade (no bot token, no IDENTIFY)...');
