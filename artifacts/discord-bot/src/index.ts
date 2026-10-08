@@ -150,6 +150,7 @@ client.on('warn', message => console.warn('[Discord warn]', message));
 // connection errors, reconnects, and the exact point where the Gateway stops progressing.
 client.on('shardReady', shardId => console.log('[Discord] shard ' + shardId + ' READY'));
 client.on('shardReconnecting', shardId => console.warn('[Discord] shard ' + shardId + ' reconnecting...'));
+client.on('shardResume', (shardId, replayedEvents) => console.log('[Discord] shard ' + shardId + ' RESUMED; replayedEvents=' + replayedEvents));
 client.on('shardError', (error, shardId) => console.error('[Discord] shard ' + shardId + ' error:', error));
 client.on('shardDisconnect', (closeEvent, shardId) => {
   console.error('[Discord] shard ' + shardId + ' disconnected (code ' + closeEvent.code + ', reason: ' + (closeEvent.reason || 'none') + ')');
@@ -159,62 +160,6 @@ client.on('invalidated', () => console.error('[Discord] Session invalidated by D
 console.log('🔌 Starting Discord authentication + gateway connection...');
 await initStorage();
 await initGlobalAfk();
-
-const discordAuthDiagnostics = async () => {
-  console.log('[Discord AUTH] Validating bot token with Discord Gateway API...');
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
-
-  try {
-    const response = await fetch('https://discord.com/api/v10/gateway/bot', {
-      method: 'GET',
-      headers: {
-        Authorization: `Bot ${token}`,
-        'User-Agent': 'SparxieBot/1.0',
-      },
-      signal: controller.signal,
-    });
-
-    console.log(`[Discord AUTH] /gateway/bot -> HTTP ${response.status}`);
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error('DISCORD_BOT_TOKEN is invalid or unauthorized (HTTP 401).');
-      }
-      if (response.status === 403) {
-        throw new Error('DISCORD_BOT_TOKEN is forbidden (HTTP 403). Check the bot/application credentials.');
-      }
-      if (response.status === 429) {
-        const retryAfter = response.headers.get('retry-after');
-        console.warn(
-          `[Discord AUTH] /gateway/bot is rate-limited (HTTP 429)${retryAfter ? `; retry-after=${retryAfter}s` : ''}. Continuing to Gateway login; this diagnostic must never block the bot.`,
-        );
-        return;
-      }
-      console.warn(`[Discord AUTH] Token diagnostic returned HTTP ${response.status}; continuing to Gateway login so Discord can provide the authoritative authentication result.`);
-      return;
-    }
-
-    const data = await response.json() as {
-      url?: string;
-      shards?: number;
-      session_start_limit?: { remaining?: number; reset_after?: number };
-    };
-    console.log(
-      '[Discord AUTH] Token accepted by Discord Gateway API' +
-      (data.url ? `; gateway=${data.url}` : '') +
-      (typeof data.shards === 'number' ? `; recommendedShards=${data.shards}` : '') +
-      (data.session_start_limit ? `; sessionsRemaining=${data.session_start_limit.remaining ?? 'unknown'}` : ''),
-    );
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error('Discord token validation timed out after 15s.');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
-};
 
 const gatewayDiagnostics = async () => {
   const host = 'gateway.discord.gg';
@@ -271,10 +216,9 @@ const gatewayWatchdog = setTimeout(() => {
 client.once('ready', () => clearTimeout(gatewayWatchdog));
 
 try {
-  // Keep login bounded. If discord.js gets stuck before it can emit a shard
-  // error, Render will now receive a precise timeout plus the DNS/TLS probe result.
-  await discordAuthDiagnostics();
-
+  // client.login() is the authoritative authentication + Gateway handshake.
+  // Do not call /gateway/bot on every restart: it is unnecessary for login and can
+  // itself consume Discord REST rate-limit budget. DNS/TLS diagnostics above remain.
   console.log('[Discord] Calling client.login() now...');
   const loginTimeoutMs = 120_000;
   let loginTimer: ReturnType<typeof setTimeout> | undefined;
