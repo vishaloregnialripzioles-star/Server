@@ -142,34 +142,7 @@ client.on('shardDisconnect', (closeEvent, shardId) => {
 });
 client.on('invalidated', () => console.error('[Discord] Session invalidated by Discord.'));
 
-async function discordRestPreflight() {
-  const headers = { Authorization: `Bot ${token}` };
-  try {
-    const me = await fetch('https://discord.com/api/v10/users/@me', { headers });
-    const meBody = await me.text();
-    console.log(`[Discord REST] /users/@me -> HTTP ${me.status}${me.ok ? ' (authenticated)' : `; ${meBody.slice(0, 300)}`}`);
-    if (!me.ok) throw new Error(`Discord REST authentication failed with HTTP ${me.status}`);
-
-    const gateway = await fetch('https://discord.com/api/v10/gateway/bot', { headers });
-    const gatewayBody = await gateway.text();
-    console.log(`[Discord REST] /gateway/bot -> HTTP ${gateway.status}`);
-    if (gateway.ok) {
-      try {
-        const info = JSON.parse(gatewayBody) as { url?: string; shards?: number; session_start_limit?: { remaining?: number; reset_after?: number } };
-        console.log(`[Discord REST] Gateway=${info.url ?? 'unknown'}, shards=${info.shards ?? 'unknown'}, sessions remaining=${info.session_start_limit?.remaining ?? 'unknown'}`);
-      } catch { console.warn('[Discord REST] Gateway response was not valid JSON.'); }
-    } else {
-      console.error(`[Discord REST] /gateway/bot response: ${gatewayBody.slice(0, 500)}`);
-    }
-  } catch (error) {
-    console.error('[Discord REST preflight failed]', error);
-    throw error;
-  }
-}
-
 console.log('🔌 Starting Discord authentication + gateway connection...');
-await discordRestPreflight();
-console.log('🔐 Discord REST authentication passed; starting Gateway login...');
 await initStorage();
 await initGlobalAfk();
 
@@ -188,7 +161,7 @@ try {
   // Await login so invalid tokens, rejected intents, and gateway failures are
   // surfaced to Render instead of leaving a misleading healthy process alive.
   console.log('[Discord] Calling client.login() now...');
-  const loginResult = await client.login(token);
+  await client.login(token);
   console.log(`[Discord] client.login() resolved; isReady=${client.isReady()}, user=${client.user?.tag ?? 'unknown'}`);
 } catch (err) {
   clearTimeout(gatewayWatchdog);
