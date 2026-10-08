@@ -12,9 +12,22 @@ const token = process.env.DISCORD_BOT_TOKEN?.trim();
 if (!token) throw new Error('DISCORD_BOT_TOKEN is not set');
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildModeration, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMessageReactions, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.DirectMessages],
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.DirectMessages,
+  ],
   partials: [Partials.Message, Partials.Reaction, Partials.Channel],
 });
+
+// The bot intentionally has several independent interaction handlers.
+// Keep their behavior unchanged while avoiding a misleading EventEmitter warning.
+client.setMaxListeners(25);
 
 createServer(async (req, res) => { if (await handleDashboardApi(req, res, client)) return; res.writeHead(200, { 'content-type': 'text/plain' }); res.end('Sparxie bot is running'); }).listen(port, '0.0.0.0', () => console.log(`🌐 Health server listening on ${port}`));
 
@@ -113,9 +126,38 @@ client.once('ready', async () => {
 
 client.on('error', err => console.error('[Discord error]', err));
 client.on('warn', message => console.warn('[Discord warn]', message));
+
+// Gateway lifecycle diagnostics. These expose Discord close codes such as 4013/4014.
+client.on('shardReady', shardId => console.log('[Discord] shard ' + shardId + ' READY'));
+client.on('shardReconnecting', shardId => console.warn('[Discord] shard ' + shardId + ' reconnecting...'));
+client.on('shardError', (error, shardId) => console.error('[Discord] shard ' + shardId + ' error:', error));
+client.on('shardDisconnect', (closeEvent, shardId) => {
+  console.error('[Discord] shard ' + shardId + ' disconnected (code ' + closeEvent.code + ', reason: ' + (closeEvent.reason || 'none') + ')');
+});
+client.on('invalidated', () => console.error('[Discord] Session invalidated by Discord.'));
+
 console.log('🔌 Connecting to Discord gateway...');
 await initStorage();
 await initGlobalAfk();
-const loginPromise = client.login(token);
-const timeout = setTimeout(() => console.error('❌ Discord gateway did not become ready within 30 seconds. Check the bot token and Discord gateway connectivity.'), 30000);
-loginPromise.then(() => clearTimeout(timeout)).catch(err => { clearTimeout(timeout); console.error('[Discord login failed]', err); });
+
+const gatewayWatchdog = setTimeout(() => {
+  if (!client.isReady()) {
+    console.error(
+      '❌ Discord gateway has not reached READY after 30 seconds. ' +
+      'Check the gateway diagnostics above; if close code 4013/4014 appears, enable the required privileged intents in the Discord Developer Portal.',
+    );
+  }
+}, 30000);
+
+client.once('ready', () => clearTimeout(gatewayWatchdog));
+
+try {
+  // Await login so invalid tokens, rejected intents, and gateway failures are
+  // surfaced to Render instead of leaving a misleading healthy process alive.
+  await client.login(token);
+} catch (err) {
+  clearTimeout(gatewayWatchdog);
+  console.error('[Discord login failed]', err);
+  process.exitCode = 1;
+  throw err;
+}
