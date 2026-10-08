@@ -173,39 +173,51 @@ await initGlobalAfk();
 const installGatewayDiscoveryFallback = () => {
   const manager = client.ws as any;
 
-  // discord.js 14.27 bundles @discordjs/ws 1.x. Its login path can obtain
-  // Gateway information through REST before opening the shard. This Render
-  // instance has repeatedly received a REST 429, while a direct Gateway
-  // WebSocket upgrade succeeds. Force the known canonical Gateway endpoint
-  // into the manager's connect call so REST discovery cannot stall login.
-  const originalConnect = manager?.connect;
+  // @discordjs/ws 1.x keeps the Gateway endpoint on the manager. Seed both
+  // the manager field and the connect argument so its REST discovery path
+  // cannot be selected on this single-shard bot.
+  if (!manager) {
+    console.warn('[Discord AUTH] WebSocketManager unavailable; using normal discord.js login.');
+    return;
+  }
+
+  const gatewayUrl = 'wss://gateway.discord.gg/?v=10&encoding=json';
+  try {
+    manager.gateway = gatewayUrl;
+    console.log('[Discord AUTH] Seeded WebSocketManager.gateway with canonical Gateway URL.');
+  } catch (error) {
+    console.error('[Discord AUTH] Failed to seed WebSocketManager.gateway:', error);
+  }
+
+  const originalConnect = manager.connect;
   if (typeof originalConnect !== 'function') {
-    console.warn('[Discord AUTH] WebSocketManager.connect() hook unavailable; using normal discord.js login.');
+    console.warn('[Discord AUTH] WebSocketManager.connect() unavailable; using normal discord.js login.');
     return;
   }
 
   manager.connect = async (options: any = {}) => {
-    console.log('[Discord AUTH] Intercepting Gateway manager.connect(); supplying canonical Gateway information.');
+    console.log('[Discord AUTH] Intercepting Gateway manager.connect(); forcing canonical Gateway information.');
     const gatewayInformation = {
       ...(options?.gatewayInformation ?? {}),
-      url: 'wss://gateway.discord.gg',
+      url: gatewayUrl,
       shards: 1,
     };
 
-    const result = await originalConnect.call(manager, {
-      ...options,
-      gatewayInformation,
-    });
-
-    console.log('[Discord AUTH] WebSocketManager.connect() completed.');
-    return result;
+    try {
+      const result = await originalConnect.call(manager, {
+        ...options,
+        gatewayInformation,
+      });
+      console.log('[Discord AUTH] WebSocketManager.connect() completed.');
+      return result;
+    } catch (error) {
+      console.error('[Discord AUTH] WebSocketManager.connect() failed:', error);
+      throw error;
+    }
   };
 
-  console.log('[Discord AUTH] Gateway connect override installed; REST /gateway/bot discovery will not block login.');
+  console.log('[Discord AUTH] Gateway connect override installed; REST discovery bypass is active.');
 };
-
-installGatewayDiscoveryFallback();
-
 const gatewayWebSocketProbe = async () => {
   console.log('[Discord WS] Probing Gateway WebSocket upgrade (no bot token, no IDENTIFY)...');
   await new Promise<void>(resolve => {
