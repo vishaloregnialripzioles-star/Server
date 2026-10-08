@@ -163,44 +163,28 @@ console.log('🔌 Starting Discord authentication + gateway connection...');
 await initStorage();
 await initGlobalAfk();
 
-// discord.js normally fetches /gateway/bot before opening the real Gateway.
-// That endpoint is currently rate-limited on this Render instance, while the
-// actual WebSocket endpoint is reachable (HTTP 101). A bot this small can
-// safely use one shard and the canonical Gateway URL without blocking startup.
-// If Discord's discovery endpoint is available, keep using its authoritative data.
+// discord.js 14.x uses the bundled @discordjs/ws 1.x manager, which does not
+// expose fetchGatewayInformation(). In that version the manager stores the
+// Gateway URL in its internal "gateway" field and otherwise discovers it through
+// /gateway/bot. That endpoint has been rate-limited on this Render instance,
+// while a direct WebSocket upgrade to the canonical Gateway succeeds with 101.
+// This bot uses one shard, so safely seed the canonical Gateway URL and avoid
+// making a rate-limited discovery request part of startup.
 const installGatewayDiscoveryFallback = () => {
   const manager = client.ws as any;
-  const originalFetch = manager?.fetchGatewayInformation;
-  if (typeof originalFetch !== 'function') {
-    console.warn('[Discord AUTH] Gateway discovery hook unavailable; using normal discord.js login.');
+
+  if (typeof manager?.gateway === 'string' && manager.gateway.length > 0) {
+    console.log('[Discord AUTH] Gateway URL already available; keeping discord.js gateway configuration.');
     return;
   }
 
-  manager.fetchGatewayInformation = async (force = false) => {
-    try {
-      const info = await originalFetch.call(manager, force);
-      console.log('[Discord AUTH] Gateway discovery succeeded; using Discord-provided gateway information.');
-      return info;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.warn(
-        '[Discord AUTH] /gateway/bot discovery failed. Falling back to the canonical Gateway URL with one shard so login is not blocked:',
-        message,
-      );
-      return {
-        url: 'wss://gateway.discord.gg',
-        shards: 1,
-        session_start_limit: {
-          total: 1000,
-          remaining: 1000,
-          reset_after: 0,
-          max_concurrency: 1,
-        },
-      };
-    }
-  };
+  if (manager && 'gateway' in manager) {
+    manager.gateway = 'wss://gateway.discord.gg';
+    console.log('[Discord AUTH] Seeded canonical Gateway URL; bypassing /gateway/bot discovery for this single-shard bot.');
+    return;
+  }
 
-  console.log('[Discord AUTH] Gateway discovery fallback installed.');
+  console.warn('[Discord AUTH] Compatible Gateway URL hook unavailable; using normal discord.js login.');
 };
 
 installGatewayDiscoveryFallback();
