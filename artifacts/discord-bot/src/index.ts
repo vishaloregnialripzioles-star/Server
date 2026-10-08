@@ -204,6 +204,8 @@ const installGatewayDiscoveryFallback = () => {
   console.log('[Discord AUTH] Gateway connect override installed; REST /gateway/bot discovery will not block login.');
 };
 
+installGatewayDiscoveryFallback();
+
 const gatewayWebSocketProbe = async () => {
   console.log('[Discord WS] Probing Gateway WebSocket upgrade (no bot token, no IDENTIFY)...');
   await new Promise<void>(resolve => {
