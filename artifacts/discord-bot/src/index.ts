@@ -186,9 +186,13 @@ const discordAuthDiagnostics = async () => {
       }
       if (response.status === 429) {
         const retryAfter = response.headers.get('retry-after');
-        throw new Error(`Discord API rate-limited token validation (HTTP 429)${retryAfter ? `; retry-after=${retryAfter}s` : ''}.`);
+        console.warn(
+          `[Discord AUTH] /gateway/bot is rate-limited (HTTP 429)${retryAfter ? `; retry-after=${retryAfter}s` : ''}. Continuing to Gateway login; this diagnostic must never block the bot.`,
+        );
+        return;
       }
-      throw new Error(`Discord token validation failed with HTTP ${response.status}.`);
+      console.warn(`[Discord AUTH] Token diagnostic returned HTTP ${response.status}; continuing to Gateway login so Discord can provide the authoritative authentication result.`);
+      return;
     }
 
     const data = await response.json() as {
