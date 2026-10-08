@@ -1,5 +1,7 @@
 import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
 import { createServer } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { randomBytes } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
 import { connect as tlsConnect } from 'node:tls';
 import { registerEvents } from './events/index.js';
@@ -161,6 +163,54 @@ console.log('🔌 Starting Discord authentication + gateway connection...');
 await initStorage();
 await initGlobalAfk();
 
+const gatewayWebSocketProbe = async () => {
+  console.log('[Discord WS] Probing Gateway WebSocket upgrade (no bot token, no IDENTIFY)...');
+  await new Promise<void>(resolve => {
+    const startedAt = Date.now();
+    const key = randomBytes(16).toString('base64');
+    const req = httpsRequest({
+      host: 'gateway.discord.gg',
+      port: 443,
+      path: '/?v=10&encoding=json',
+      method: 'GET',
+      headers: {
+        Host: 'gateway.discord.gg',
+        Connection: 'Upgrade',
+        Upgrade: 'websocket',
+        'Sec-WebSocket-Version': '13',
+        'Sec-WebSocket-Key': key,
+        'User-Agent': 'SparxieBot-GatewayProbe/1.0',
+      },
+      timeout: 15000,
+    });
+
+    let settled = false;
+    const finish = (label: string, error?: unknown) => {
+      if (settled) return;
+      settled = true;
+      req.destroy();
+      if (error) {
+        console.error(`[Discord WS] ${label} FAILED after ${Date.now() - startedAt}ms:`, error);
+      } else {
+        console.log(`[Discord WS] ${label} OK after ${Date.now() - startedAt}ms`);
+      }
+      resolve();
+    };
+
+    req.once('upgrade', (response, socket) => {
+      console.log(`[Discord WS] HTTP upgrade -> ${response.statusCode}; connection=${response.headers.connection ?? 'unknown'}; upgrade=${response.headers.upgrade ?? 'unknown'}`);
+      socket.destroy();
+      finish('WebSocket upgrade');
+    });
+    req.once('response', response => {
+      finish(`WebSocket upgrade rejected with HTTP ${response.statusCode}`, new Error(`Expected HTTP 101 Switching Protocols, received ${response.statusCode}`));
+    });
+    req.once('error', error => finish('WebSocket request', error));
+    req.once('timeout', () => finish('WebSocket request', new Error('WebSocket upgrade timeout after 15000ms')));
+    req.end();
+  });
+};
+
 const gatewayDiagnostics = async () => {
   const host = 'gateway.discord.gg';
   console.log('[Discord NET] Probing Discord Gateway DNS...');
@@ -202,7 +252,7 @@ const gatewayDiagnostics = async () => {
   });
 };
 
-void gatewayDiagnostics().catch(error => console.error('[Discord NET] Diagnostic probe crashed:', error));
+void Promise.allSettled([gatewayDiagnostics(), gatewayWebSocketProbe()]).then(results => { for (const result of results) if (result.status === 'rejected') console.error('[Discord NET] Diagnostic probe crashed:', result.reason); });
 
 const gatewayWatchdog = setTimeout(() => {
   if (!client.isReady()) {
