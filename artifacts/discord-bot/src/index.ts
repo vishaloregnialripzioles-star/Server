@@ -29,6 +29,13 @@ const client = new Client({
     GatewayIntentBits.DirectMessages,
   ],
   partials: [Partials.Message, Partials.Reaction, Partials.Channel],
+  // Render can occasionally take longer to establish the Discord WebSocket.
+  // Give the Gateway handshake enough time to complete while keeping failures visible.
+  ws: {
+    handshakeTimeout: 45_000,
+    helloTimeout: 60_000,
+    readyTimeout: 45_000,
+  },
 });
 
 // The bot intentionally has several independent interaction handlers.
@@ -42,7 +49,7 @@ client.commands = new Collection();
 // interaction has a command ready immediately when Discord delivers it.
 for (const command of allCommands) client.commands.set(command.data.name, command);
 console.log(`📦 Preloaded ${client.commands.size} core slash commands before login`);
-client.on('debug', message => { if (/identify|gateway|ready|heartbeat|resume/i.test(message)) console.log(`[Discord] ${message}`); });
+client.on('debug', message => console.log(`[Discord DEBUG] ${message}`));
 registerEvents(client);
 
 client.once('ready', async () => {
@@ -133,7 +140,8 @@ client.once('ready', async () => {
 client.on('error', err => console.error('[Discord error]', err));
 client.on('warn', message => console.warn('[Discord warn]', message));
 
-// Gateway lifecycle diagnostics. These expose Discord close codes such as 4013/4014.
+// Gateway lifecycle diagnostics. These expose Discord close codes such as 4013/4014,
+// connection errors, reconnects, and the exact point where the Gateway stops progressing.
 client.on('shardReady', shardId => console.log('[Discord] shard ' + shardId + ' READY'));
 client.on('shardReconnecting', shardId => console.warn('[Discord] shard ' + shardId + ' reconnecting...'));
 client.on('shardError', (error, shardId) => console.error('[Discord] shard ' + shardId + ' error:', error));
@@ -149,11 +157,11 @@ await initGlobalAfk();
 const gatewayWatchdog = setTimeout(() => {
   if (!client.isReady()) {
     console.error(
-      '❌ Discord gateway has not reached READY after 30 seconds. ' +
-      'Check the gateway diagnostics above; if close code 4013/4014 appears, enable the required privileged intents in the Discord Developer Portal.',
+      '❌ Discord gateway has not reached READY after 90 seconds. ' +
+      'The full Gateway debug stream above should show whether the connection, handshake, identify, or READY phase is stuck.',
     );
   }
-}, 30000);
+}, 90000);
 
 client.once('ready', () => clearTimeout(gatewayWatchdog));
 
