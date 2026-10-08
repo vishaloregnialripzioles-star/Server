@@ -1,5 +1,7 @@
 import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
 import { createServer } from 'node:http';
+import { lookup } from 'node:dns/promises';
+import { connect as tlsConnect } from 'node:tls';
 import { registerEvents } from './events/index.js';
 import { handleDashboardApi } from './dashboardApi.js';
 import { initStorage } from './storage.js';
@@ -49,7 +51,11 @@ client.commands = new Collection();
 // interaction has a command ready immediately when Discord delivers it.
 for (const command of allCommands) client.commands.set(command.data.name, command);
 console.log(`📦 Preloaded ${client.commands.size} core slash commands before login`);
-client.on('debug', message => console.log(`[Discord DEBUG] ${message}`));
+client.on('debug', message => {
+  // discord.js can include the bot token in its own debug message. Never write it to Render logs.
+  if (/provided token/i.test(message)) return;
+  console.log(`[Discord DEBUG] ${message}`);
+});
 registerEvents(client);
 
 client.once('ready', async () => {
@@ -154,6 +160,49 @@ console.log('🔌 Starting Discord authentication + gateway connection...');
 await initStorage();
 await initGlobalAfk();
 
+const gatewayDiagnostics = async () => {
+  const host = 'gateway.discord.gg';
+  console.log('[Discord NET] Probing Discord Gateway DNS...');
+  try {
+    const addresses = await lookup(host, { all: true });
+    console.log(
+      '[Discord NET] DNS OK: ' +
+      addresses.map(address => `${address.address} (IPv${address.family})`).join(', '),
+    );
+  } catch (error) {
+    console.error('[Discord NET] DNS FAILED:', error);
+    return;
+  }
+
+  console.log('[Discord NET] Probing TLS connection to gateway.discord.gg:443...');
+  await new Promise<void>(resolve => {
+    const startedAt = Date.now();
+    const socket = tlsConnect({
+      host,
+      port: 443,
+      servername: host,
+      timeout: 15000,
+      rejectUnauthorized: true,
+    });
+
+    let settled = false;
+    const finish = (label: string, error?: unknown) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      if (error) console.error(`[Discord NET] TLS ${label} FAILED after ${Date.now() - startedAt}ms:`, error);
+      else console.log(`[Discord NET] TLS ${label} OK after ${Date.now() - startedAt}ms`);
+      resolve();
+    };
+
+    socket.once('secureConnect', () => finish('handshake'));
+    socket.once('error', error => finish('connection', error));
+    socket.once('timeout', () => finish('connection', new Error('TLS socket timeout after 15000ms')));
+  });
+};
+
+void gatewayDiagnostics().catch(error => console.error('[Discord NET] Diagnostic probe crashed:', error));
+
 const gatewayWatchdog = setTimeout(() => {
   if (!client.isReady()) {
     console.error(
@@ -166,14 +215,29 @@ const gatewayWatchdog = setTimeout(() => {
 client.once('ready', () => clearTimeout(gatewayWatchdog));
 
 try {
-  // Await login so invalid tokens, rejected intents, and gateway failures are
-  // surfaced to Render instead of leaving a misleading healthy process alive.
+  // Keep login bounded. If discord.js gets stuck before it can emit a shard
+  // error, Render will now receive a precise timeout plus the DNS/TLS probe result.
   console.log('[Discord] Calling client.login() now...');
-  await client.login(token);
+  const loginTimeoutMs = 120_000;
+  let loginTimer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      client.login(token),
+      new Promise<never>((_, reject) => {
+        loginTimer = setTimeout(
+          () => reject(new Error(`Discord gateway login timed out after ${loginTimeoutMs / 1000}s before READY.`)),
+          loginTimeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (loginTimer) clearTimeout(loginTimer);
+  }
   console.log(`[Discord] client.login() resolved; isReady=${client.isReady()}, user=${client.user?.tag ?? 'unknown'}`);
 } catch (err) {
   clearTimeout(gatewayWatchdog);
   console.error('[Discord login failed]', err);
   process.exitCode = 1;
+  try { client.destroy(); } catch {}
   throw err;
 }
