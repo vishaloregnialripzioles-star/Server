@@ -53,12 +53,26 @@ export async function isPrefixlessUser(message: Message): Promise<boolean> {
  * twice.
  */
 export async function handlePrefixlessMessage(message: Message): Promise<boolean> {
-  if (message.author.bot || !message.guild || !(await isPrefixlessUser(message))) return false;
+  if (message.author.bot || !message.guild) return false;
+  const authorized = await isPrefixlessUser(message);
+  if (!authorized) {
+    console.log(`[Prefixless] Rejected non-allowlisted user=${message.author.id} messageId=${message.id}`);
+    return false;
+  }
   const text = message.content.trim();
-  if (!text || text.startsWith(getGuildPrefix(message.guild.id))) return false;
+  if (!text) {
+    console.log(`[Prefixless] Ignored empty message from user=${message.author.id} messageId=${message.id}`);
+    return false;
+  }
+  const prefix = getGuildPrefix(message.guild.id);
+  if (text.startsWith(prefix)) return false;
 
-  const command = text.split(/\s+/)[0]?.toLowerCase();
-  if (!PREFIXLESS_COMMAND_NAMES.has(command)) return false;
+  const command = text.split(/\\s+/)[0]?.toLowerCase();
+  if (!PREFIXLESS_COMMAND_NAMES.has(command)) {
+    console.log(`[Prefixless] Unknown command token=${JSON.stringify(command)} user=${message.author.id} messageId=${message.id}`);
+    return false;
+  }
+  console.log(`[Prefixless] Accepted command=${command} user=${message.author.id} messageId=${message.id}`);
 
   const claimed = await claimCommandMessage(message.id);
   if (!claimed) {
