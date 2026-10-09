@@ -104,21 +104,22 @@ client.once('ready', async () => {
 
   try {
     const guildId = process.env.DISCORD_GUILD_ID?.trim();
-    const rawCommandData = [...client.commands.values()].map(command => command.data.toJSON());
+    const loadedCommands = [...client.commands.values()];
     // Discord bulk-overwrite rejects the entire payload if any command name is
-    // duplicated. Keep one definition per name so a duplicate cannot disable
-    // every slash command at once, and report the conflict clearly.
+    // duplicated. Keep one definition per name and make the runtime lookup use
+    // that same definition, so registration and execution cannot disagree.
     const commandByName = new Map<string, any>();
     const duplicateCommandNames = new Set<string>();
-    for (const command of rawCommandData) {
-      const name = String(command.name);
+    for (const command of loadedCommands) {
+      const name = String(command.data.toJSON().name);
       if (commandByName.has(name)) duplicateCommandNames.add(name);
       commandByName.set(name, command);
     }
     if (duplicateCommandNames.size) {
       console.error('[Slash sync] Duplicate command definitions detected; using the last loaded definition for: ' + [...duplicateCommandNames].sort().join(', '));
     }
-    const commandData = [...commandByName.values()];
+    for (const [name, command] of commandByName) client.commands.set(name, command);
+    const commandData = [...commandByName.values()].map(command => command.data.toJSON());
     const commandNames = commandData.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
     const target = guildId && /^\d+$/.test(guildId) ? 'guild' : 'global';
     const applicationId = client.user!.id;
