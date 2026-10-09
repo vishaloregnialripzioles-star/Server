@@ -171,52 +171,37 @@ await initGlobalAfk();
 // This bot uses one shard, so safely seed the canonical Gateway URL and avoid
 // making a rate-limited discovery request part of startup.
 const installGatewayDiscoveryFallback = () => {
-  const manager = client.ws as any;
-
-  // @discordjs/ws 1.x keeps the Gateway endpoint on the manager. Seed both
-  // the manager field and the connect argument so its REST discovery path
-  // cannot be selected on this single-shard bot.
-  if (!manager) {
-    console.warn('[Discord AUTH] WebSocketManager unavailable; using normal discord.js login.');
+  // discord.js 14.27 creates its internal @discordjs/ws manager inside
+  // client.ws.connect(), then fetches /gateway/bot before opening the socket.
+  // Overriding client.ws.connect() cannot skip that fetch. This narrowly
+  // intercepts only the rate-limited discovery endpoint and lets every other
+  // REST request pass through unchanged.
+  const rest = client.rest as any;
+  const originalGet = rest?.get;
+  if (!rest || typeof originalGet !== 'function') {
+    console.error('[Discord AUTH] REST discovery override unavailable; normal login may be rate-limited.');
     return;
   }
 
-  const gatewayUrl = 'wss://gateway.discord.gg/?v=10&encoding=json';
-  try {
-    manager.gateway = gatewayUrl;
-    console.log('[Discord AUTH] Seeded WebSocketManager.gateway with canonical Gateway URL.');
-  } catch (error) {
-    console.error('[Discord AUTH] Failed to seed WebSocketManager.gateway:', error);
-  }
-
-  const originalConnect = manager.connect;
-  if (typeof originalConnect !== 'function') {
-    console.warn('[Discord AUTH] WebSocketManager.connect() unavailable; using normal discord.js login.');
-    return;
-  }
-
-  manager.connect = async (options: any = {}) => {
-    console.log('[Discord AUTH] Intercepting Gateway manager.connect(); forcing canonical Gateway information.');
-    const gatewayInformation = {
-      ...(options?.gatewayInformation ?? {}),
-      url: gatewayUrl,
-      shards: 1,
-    };
-
-    try {
-      const result = await originalConnect.call(manager, {
-        ...options,
-        gatewayInformation,
-      });
-      console.log('[Discord AUTH] WebSocketManager.connect() completed.');
-      return result;
-    } catch (error) {
-      console.error('[Discord AUTH] WebSocketManager.connect() failed:', error);
-      throw error;
+  rest.get = async function (route: any, options?: any) {
+    const routePath = typeof route === 'string' ? route : String(route?.url ?? route?.path ?? '');
+    if (/^\/gateway\/bot(?:\?|$)/.test(routePath)) {
+      console.warn('[Discord AUTH] Skipping rate-limited /gateway/bot discovery; supplying single-shard Gateway information.');
+      return {
+        url: 'wss://gateway.discord.gg',
+        shards: 1,
+        session_start_limit: {
+          total: 1000,
+          remaining: 1000,
+          reset_after: 0,
+          max_concurrency: 1,
+        },
+      };
     }
+    return originalGet.call(this, route, options);
   };
 
-  console.log('[Discord AUTH] Gateway connect override installed; REST discovery bypass is active.');
+  console.log('[Discord AUTH] Targeted /gateway/bot discovery fallback installed; other REST requests are unchanged.');
 };
 installGatewayDiscoveryFallback();
 
