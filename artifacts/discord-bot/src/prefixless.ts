@@ -67,7 +67,7 @@ export async function handlePrefixlessMessage(message: Message): Promise<boolean
   const prefix = getGuildPrefix(message.guild.id);
   if (text.startsWith(prefix)) return false;
 
-  const command = text.split(/\\s+/)[0]?.toLowerCase();
+  const command = text.split(/\s+/)[0]?.toLowerCase();
   if (!PREFIXLESS_COMMAND_NAMES.has(command)) {
     console.log(`[Prefixless] Unknown command token=${JSON.stringify(command)} user=${message.author.id} messageId=${message.id}`);
     return false;
