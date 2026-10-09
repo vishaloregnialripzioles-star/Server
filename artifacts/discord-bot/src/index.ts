@@ -123,36 +123,31 @@ client.once('ready', async () => {
     const commandNames = commandData.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
     const target = guildId && /^\d+$/.test(guildId) ? 'guild' : 'global';
     const applicationId = client.user!.id;
+    const { REST, Routes } = await import('discord.js');
     const route = target === 'guild'
-      ? `https://discord.com/api/v10/applications/${applicationId}/guilds/${guildId}/commands`
-      : `https://discord.com/api/v10/applications/${applicationId}/commands`;
-    const authHeaders = { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' };
+      ? Routes.applicationGuildCommands(applicationId, guildId!)
+      : Routes.applicationCommands(applicationId);
     console.log(`📋 Registering slash commands (${commandNames.length}): ${commandNames.join(', ')}`);
     console.log(`🔐 Slash sync target: ${target}${target === 'guild' ? ` (${guildId})` : ' (global)'}`);
 
-    // Use a bounded native fetch for this single bulk overwrite. The previous
-    // REST queue could remain pending without printing success/failure, leaving
-    // startup logs ambiguous and slash-command registration unverified.
-    const response = await fetch(route, {
-      method: 'PUT',
-      headers: authHeaders,
-      body: JSON.stringify(commandData),
-      signal: AbortSignal.timeout(20000),
-    });
-    const responseText = await response.text();
+    // Let discord.js manage Discord's API rate-limit buckets and Retry-After
+    // responses instead of bypassing its REST manager with raw fetch.
+    const rest = new REST({ version: '10', retries: 2, timeout: 30000 }).setToken(token);
     let registered: any[] = [];
-    if (response.ok) {
-      try {
-        const parsed = JSON.parse(responseText);
-        registered = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        throw new Error('Discord returned a successful status with an invalid JSON response.');
-      }
-      console.log(`✅ Synced ${registered.length} ${target} slash commands${target === 'guild' ? ` to guild ${guildId}` : ''}`);
-    } else {
-      console.error(`❌ Discord slash sync failed: HTTP ${response.status} ${response.statusText}; response=${responseText.slice(0, 3000)}`);
-      throw new Error(`Discord rejected slash-command registration with HTTP ${response.status}`);
+    try {
+      registered = await rest.put(route, { body: commandData }) as any[];
+    } catch (error: any) {
+      const status = error?.status ?? error?.httpStatus ?? error?.rawError?.status;
+      const retryAfter = error?.retryAfter ?? error?.rawError?.retry_after;
+      console.error('[Slash sync] Discord REST manager failed:', {
+        status: status ?? 'unknown',
+        retryAfter: retryAfter ?? 'not provided',
+        message: error?.message ?? String(error),
+        code: error?.code ?? 'unknown',
+      });
+      throw error;
     }
+    console.log(`✅ Synced ${registered.length} ${target} slash commands${target === 'guild' ? ` to guild ${guildId}` : ''}`);
 
     const registeredNames = registered.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
     const missing = commandNames.filter(name => !registeredNames.includes(name));
