@@ -103,38 +103,40 @@ client.once('ready', async () => {
   } catch (err) { console.error('[Blox scanner command startup failed]', err); }
 
   try {
-    const { REST, Routes } = await import('discord.js');
     const guildId = process.env.DISCORD_GUILD_ID?.trim();
     const commandData = [...client.commands.values()].map(command => command.data.toJSON());
-    const rest = new REST({ version: '10' }).setToken(token);
-
     const commandNames = commandData.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
-    console.log(`📋 Registering slash commands (${commandNames.length}): ${commandNames.join(', ')}`);
-
-    let registered: any[] = [];
     const target = guildId && /^\d+$/.test(guildId) ? 'guild' : 'global';
+    const applicationId = client.user!.id;
     const route = target === 'guild'
-      ? Routes.applicationGuildCommands(client.user!.id, guildId!)
-      : Routes.applicationCommands(client.user!.id);
+      ? `https://discord.com/api/v10/applications/${applicationId}/guilds/${guildId}/commands`
+      : `https://discord.com/api/v10/applications/${applicationId}/commands`;
+    const authHeaders = { Authorization: `Bot ${token}`, 'Content-Type': 'application/json' };
+    console.log(`📋 Registering slash commands (${commandNames.length}): ${commandNames.join(', ')}`);
+    console.log(`🔐 Slash sync target: ${target}${target === 'guild' ? ` (${guildId})` : ' (global)'}`);
 
-    try {
-      registered = await rest.put(route, { body: commandData }) as any[];
-      console.log(`✅ Synced ${registered.length} ${target} slash commands${target === 'guild' ? ` to guild ${guildId}` : ''}`);
-    } catch (bulkError) {
-      // One invalid command can reject a bulk overwrite. Register commands
-      // individually so one broken command cannot hide the healthy commands.
-      console.error('❌ Bulk slash-command sync failed:', bulkError);
-      console.log('🛠️ Falling back to individual slash-command registration...');
-      registered = [];
-      for (const command of commandData) {
-        try {
-          const result = await rest.post(route, { body: command }) as any;
-          registered.push(result);
-        } catch (commandError) {
-          console.error(`❌ Failed to register /${String(command.name)}:`, commandError);
-        }
+    // Use a bounded native fetch for this single bulk overwrite. The previous
+    // REST queue could remain pending without printing success/failure, leaving
+    // startup logs ambiguous and slash-command registration unverified.
+    const response = await fetch(route, {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify(commandData),
+      signal: AbortSignal.timeout(20000),
+    });
+    const responseText = await response.text();
+    let registered: any[] = [];
+    if (response.ok) {
+      try {
+        const parsed = JSON.parse(responseText);
+        registered = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        throw new Error('Discord returned a successful status with an invalid JSON response.');
       }
-      console.log(`🛠️ Individual sync completed: ${registered.length}/${commandData.length} commands registered`);
+      console.log(`✅ Synced ${registered.length} ${target} slash commands${target === 'guild' ? ` to guild ${guildId}` : ''}`);
+    } else {
+      console.error(`❌ Discord slash sync failed: HTTP ${response.status} ${response.statusText}; response=${responseText.slice(0, 3000)}`);
+      throw new Error(`Discord rejected slash-command registration with HTTP ${response.status}`);
     }
 
     const registeredNames = registered.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
@@ -143,8 +145,9 @@ client.once('ready', async () => {
     if (missing.length) console.error(`❌ Discord registration missing: ${missing.join(', ')}`);
     if (extra.length) console.warn(`⚠️ Discord has extra commands: ${extra.join(', ')}`);
     console.log(`🔎 Slash command verification: ${registeredNames.length}/${commandNames.length} present`);
-    console.log(`🔐 Slash sync target: ${target}${target === 'guild' ? ` (${guildId})` : ' (global)'}`);
-  } catch (err) { console.error('[Slash sync failed]', err); }
+  } catch (err) {
+    console.error('[Slash sync failed]', err);
+  }
 
   try {
     const [{ startLoops }, { registerGlobalGameEvents }] = await Promise.all([import('./loops.js'), import('./globalGameEvents.js')]);
