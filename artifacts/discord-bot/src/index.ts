@@ -53,6 +53,13 @@ client.commands = new Collection();
 // interaction has a command ready immediately when Discord delivers it.
 for (const command of allCommands) client.commands.set(command.data.name, command);
 console.log(`📦 Preloaded ${client.commands.size} core slash commands before login`);
+// Safe Gateway diagnostics: log command event metadata only, never message content or tokens.
+client.on('interactionCreate', interaction => {
+  if (interaction.isChatInputCommand()) console.log('[Gateway Dispatch] InteractionCreate /' + interaction.commandName + ' id=' + interaction.id);
+});
+client.on('messageCreate', message => {
+  if (!message.author.bot && message.guild) console.log('[Gateway Dispatch] MessageCreate id=' + message.id + ' guild=' + message.guild.id + ' contentLength=' + message.content.length + ' memberCached=' + Boolean(message.member));
+});
 client.on('debug', message => {
   // discord.js can include the bot token in its own debug message. Never write it to Render logs.
   if (/provided token/i.test(message)) return;
