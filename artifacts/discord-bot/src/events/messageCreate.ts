@@ -114,8 +114,16 @@ if (displaySession) {
 
 // Messages that are not in Hack mode continue through the normal pipeline.
 if(guildConfig.bloxValueChannelId===message.channelId&&message.mentions.users.has(message.client.user?.id??''))return;
-if(await handlePrefixlessMessage(message))return;
-if(await runAutoMod(message))return;const restricted=loadGuild(message.guild.id),{chatBanRole,jailRole}=restricted.config,memberRoles=message.member.roles.cache;if((chatBanRole&&memberRoles.has(chatBanRole))||(jailRole&&memberRoles.has(jailRole))){await message.delete().catch(()=>undefined);return;}const commandPrefix=getGuildPrefix(message.guild.id);
+const prefixlessHandled=await handlePrefixlessMessage(message);
+if(prefixlessHandled){
+  console.log('[Message Command] Prefixless command handled messageId='+message.id);
+  return;
+}
+if(await runAutoMod(message))return;
+const restricted=loadGuild(message.guild.id),{chatBanRole,jailRole}=restricted.config,memberRoles=message.member.roles.cache;
+if((chatBanRole&&memberRoles.has(chatBanRole))||(jailRole&&memberRoles.has(jailRole))){await message.delete().catch(()=>undefined);return;}
+const commandPrefix=getGuildPrefix(message.guild.id);
+console.log('[Message Command] Prefix check messageId='+message.id+' startsWithPrefix='+message.content.startsWith(commandPrefix)+' prefixLength='+commandPrefix.length+' authorId='+message.author.id);
 const aiConfig=loadGuild(message.guild.id).config;
 const botId=message.client.user?.id;
 const mentionedBot=!!botId&&new RegExp(`<@!?${botId}>`).test(String(message.content??''));
