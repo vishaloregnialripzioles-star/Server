@@ -75,6 +75,9 @@ export async function handleTicketAIMessage(message:Message):Promise<boolean>{
       lastReply.set(ticket.id,Date.now());
     }
     return true;
+  } catch (error) {
+    console.error('[ticketAI] Failed to handle ticket message:', error);
+    return false;
   }
 }
 
