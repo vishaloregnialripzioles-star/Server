@@ -13,22 +13,36 @@ const ids = [
 export const PREFIXLESS_USERS = new Set(ids.map(id => id.trim()).filter(Boolean));
 export const PREFIXLESS_COMMAND_NAMES = new Set(allCommands.map(c => c.data.toJSON().name.toLowerCase()));
 
+// Resolve the application owner in the background, never inside the hot
+// message-processing path. A slow Discord REST request here used to hold every
+// ordinary prefix command (including .ping) before it reached the dispatcher.
+let ownerLookupStarted = false;
+function warmApplicationOwner(client: Message['client']): void {
+  if (ownerLookupStarted) return;
+  ownerLookupStarted = true;
+  void (async () => {
+    try {
+      const application = client.application;
+      if (!application) return;
+      const resolved = application.owner ? application : await application.fetch();
+      const owner = resolved.owner;
+      if (owner && 'id' in owner) PREFIXLESS_USERS.add(owner.id);
+      if (owner && 'members' in owner) {
+        for (const [, member] of owner.members ?? []) PREFIXLESS_USERS.add(member.id);
+      }
+      console.log('[Prefixless] Application owner lookup completed.');
+    } catch (error) {
+      console.warn('[Prefixless] Background application owner lookup failed:', error);
+    }
+  })();
+}
+
 export async function isPrefixlessUser(message: Message): Promise<boolean> {
   if (PREFIXLESS_USERS.has(message.author.id)) return true;
-
-  // Also resolve the Discord application owner so prefixless owner commands do
-  // not depend on an OWNER_USER_ID environment variable being present.
-  try {
-    const application = message.client.application;
-    if (application) {
-      const owner = application.owner ?? (await application.fetch()).owner;
-      if (owner && 'id' in owner && owner.id === message.author.id) return true;
-      if (owner && 'members' in owner && owner.members?.has(message.author.id)) return true;
-    }
-  } catch (error) {
-    console.warn('[Prefixless] Could not resolve application owner:', error);
-  }
-  return false;
+  warmApplicationOwner(message.client);
+  // Do not await application.fetch() here: command dispatch must never depend
+  // on the latency or availability of the Discord application REST endpoint.
+  return PREFIXLESS_USERS.has(message.author.id);
 }
 
 /**
