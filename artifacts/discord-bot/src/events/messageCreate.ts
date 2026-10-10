@@ -1,6 +1,6 @@
 import type { Message, BaseGuildTextChannel, GuildMember } from 'discord.js';
 import { PermissionFlagsBits } from 'discord.js';
-import { loadGuild, updateGuild, claimCommandMessage, claimMessageEvent } from '../storage.js';
+import { loadGuild, saveGuild, updateGuild, claimCommandMessage, claimMessageEvent } from '../storage.js';
 import { levelFromXp } from '../utils.js';
 import { handlePrefixCommand, getGuildPrefix } from '../prefixHandler.js';
 import { handleMissingPrefixCommand } from '../prefixBridge.js';
@@ -18,7 +18,41 @@ function escapeRegex(value:string):string{return value.replace(/[.*+?^${}()|[\]\
 function matchesWords(content:string,words:string[]):string|undefined{const n=content.toLocaleLowerCase();for(const word of words){const w=word.trim().toLocaleLowerCase();if(!w)continue;const re=new RegExp(`(^|[^\\p{L}\\p{N}_])${escapeRegex(w)}($|[^\\p{L}\\p{N}_])`,'u');if(re.test(n))return w;}return undefined;}
 function immune(message:Message):boolean{if(!message.guild||!message.member)return true;const d=loadGuild(message.guild.id);return message.author.id===message.guild.ownerId||(d.extraOwners??[]).includes(message.author.id)||(d.antiNuke?.whitelist??[]).includes(message.author.id);}
 function pushWindow(map:Map<string,number[]>,key:string,seconds:number):number[]{const now=Date.now(),windowMs=Math.max(1,seconds||5)*1000,h=(map.get(key)??[]).filter(t=>now-t<windowMs);h.push(now);map.set(key,h);return h;}
-function trackActivity(message:Message):void{if(!message.guild||message.author.bot)return;const guildId=message.guild.id,userId=message.author.id,now=Date.now(),day=new Date(now).toISOString().slice(0,10),month=day.slice(0,7),words=(message.content.toLocaleLowerCase().match(/[\p{L}\p{N}']+/gu)??[]).filter(w=>w.length>=4&&w.length<=32).slice(0,80);updateGuild(guildId,d=>{const a=d.activity,u=a.users[userId]??{totalMessages:0,activeDays:0,firstSeen:now,lastSeen:now,daily:{},monthly:{}};const before=u.daily[day]?.count??0;if(!u.daily[day])u.daily[day]={count:0,words:{}};u.totalMessages++;u.lastSeen=now;if(before===0)u.activeDays++;u.daily[day].count++;for(const w of words)u.daily[day].words[w]=(u.daily[day].words[w]??0)+1;u.monthly[month]=(u.monthly[month]??0)+1;a.users[userId]=u;a.totalMessages++;});}
+// Activity statistics were previously serializing and synchronously writing the
+// entire guild database on every chat message. In busy servers that blocks the
+// Node event loop long enough for prefix/slash interactions to time out. Update
+// the in-memory cache immediately and persist activity in a short, coalesced batch.
+const activityFlushTimers=new Map<string,ReturnType<typeof setTimeout>>();
+function scheduleActivityFlush(guildId:string):void{
+  if(activityFlushTimers.has(guildId))return;
+  const timer=setTimeout(()=>{
+    activityFlushTimers.delete(guildId);
+    try{saveGuild(guildId,loadGuild(guildId));}
+    catch(error){console.error('[Activity] Batched persistence failed for guild '+guildId,error);}
+  },5000);
+  timer.unref?.();
+  activityFlushTimers.set(guildId,timer);
+}
+function trackActivity(message:Message):void{
+  if(!message.guild||message.author.bot)return;
+  const guildId=message.guild.id,userId=message.author.id,now=Date.now(),day=new Date(now).toISOString().slice(0,10),month=day.slice(0,7);
+  const words=(message.content.toLocaleLowerCase().match(/[\p{L}\p{N}']+/gu)??[]).filter(w=>w.length>=4&&w.length<=32).slice(0,80);
+  const data=loadGuild(guildId),a=data.activity;
+  const u=a.users[userId]??{totalMessages:0,activeDays:0,firstSeen:now,lastSeen:now,daily:{},monthly:{}};
+  const before=u.daily[day]?.count??0;
+  if(!u.daily[day])u.daily[day]={count:0,words:{}};
+  u.totalMessages++;u.lastSeen=now;
+  if(before===0)u.activeDays++;
+  u.daily[day].count++;
+  const dailyWords=u.daily[day].words;
+  for(const w of words){
+    if(dailyWords[w]===undefined&&Object.keys(dailyWords).length>=2000)continue;
+    dailyWords[w]=(dailyWords[w]??0)+1;
+  }
+  u.monthly[month]=(u.monthly[month]??0)+1;
+  a.users[userId]=u;a.totalMessages++;
+  scheduleActivityFlush(guildId);
+}
 async function punish(message:Message,reason:string,rule:any):Promise<void>{const action=rule?.action??loadGuild(message.guild!.id).config.automod?.action??'delete_timeout',d=loadGuild(message.guild!.id),template=rule?.templateId?(d.config.moderationTemplates??[]).find(x=>x.id===rule.templateId):undefined;if(action==='delete'||action==='delete_timeout'||action==='dm_warn')await message.delete().catch(()=>undefined);if(action==='warn'||action==='dm_warn'){const text=template?.message??`⚠️ Your message was removed by AutoMod: **${reason}**`;if(action==='dm_warn')await message.author.send(text).catch(()=>undefined);else await message.reply(text).catch(()=>undefined);}if(action==='timeout'||action==='delete_timeout')await message.member?.timeout(10*60*1000,`AutoMod: ${reason}`).catch(()=>undefined);}
 async function runAutoMod(message:Message):Promise<boolean>{if(!message.guild||!message.member||message.author.bot||immune(message))return false;const d=loadGuild(message.guild.id),cfg=d.config.automod;if(!cfg?.enabled||message.member.permissions.has(PermissionFlagsBits.Administrator)||message.member.permissions.has(PermissionFlagsBits.ManageGuild))return false;let reason:string|undefined,rule:any;const banned=matchesWords(message.content,cfg.bannedWords??[]);if(banned){reason=`banned word: ${banned}`;rule=cfg.bannedWordsRule;}if(!reason&&cfg.antiScam){const scam=matchesWords(message.content,cfg.antiScamWords??[]);if(scam){reason=`anti-scam word: ${scam}`;rule=cfg.antiScamRule;}}if(!reason&&cfg.suspiciousLinks&&/https?:\/\/(?:discord\.gift|discordgift|free[-_ ]?nitro|nitro[-_ ]?gift|steamcommunitty|discorcl|discordapp\.gift)/i.test(message.content)){reason='suspicious link';rule=cfg.suspiciousLinksRule;}const mentionCount=message.mentions.users.size+message.mentions.roles.size;if(!reason&&cfg.massMentions&&mentionCount>0){const r=cfg.mentions??{windowSeconds:5,maxCount:3},h=pushWindow(mentionTracker,`${message.guild.id}:${message.author.id}`,r.windowSeconds??5);if(h.length>=(r.maxCount??3)||mentionCount>=(r.maxCount??3)){reason='mention spam';rule=r;}}if(!reason&&cfg.antiSpam){const r=cfg.spam??{windowSeconds:5,maxCount:6},h=pushWindow(spamTracker,`${message.guild.id}:${message.author.id}`,r.windowSeconds??6);if(h.length>=(r.maxCount??6)){reason='message spam';rule=r;}}if(!reason&&cfg.spaceSpam){const blank=message.content.split(/\r?\n/).filter(x=>!x.trim()).length,r=cfg.space??{windowSeconds:5,maxCount:5},h=blank>0?pushWindow(spaceTracker,`${message.guild.id}:${message.author.id}`,r.windowSeconds??5):[];if(blank>=(r.maxCount??5)||h.length>=(r.maxCount??5)){reason='space/dot spam';rule=r;}}if(!reason)return false;await punish(message,reason,rule);return true;}
 export async function handleMessageCreate(message:Message):Promise<void>{
