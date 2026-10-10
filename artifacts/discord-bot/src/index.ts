@@ -21,6 +21,46 @@ process.on('uncaughtException', error => {
   process.exitCode = 1;
 });
 
+// Use Node's native HTTPS client for Discord REST command sync. The discord.js
+// REST manager's requests to api.discord.com have stalled in this Render runtime,
+// while native HTTPS is already used successfully by the Gateway diagnostics.
+const directDiscordApi = async (method: string, route: string, body?: unknown): Promise<any> => {
+  const payload = body === undefined ? undefined : Buffer.from(JSON.stringify(body));
+  return await new Promise((resolve, reject) => {
+    const req = httpsRequest({
+      hostname: 'discord.com',
+      port: 443,
+      path: '/api/v10' + route,
+      method,
+      headers: {
+        Authorization: 'Bot ' + token,
+        'User-Agent': 'SparxieBot/1.0 (Discord command sync)',
+        ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': String(payload.length) } : {}),
+      },
+      timeout: 25000,
+    }, response => {
+      const chunks: Buffer[] = [];
+      response.on('data', chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      response.on('end', () => {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        let parsed: any = raw;
+        try { parsed = raw ? JSON.parse(raw) : null; } catch {}
+        const status = response.statusCode ?? 0;
+        if (status < 200 || status >= 300) {
+          const detail = typeof parsed === 'object' && parsed ? JSON.stringify(parsed) : String(parsed ?? '');
+          reject(new Error(`Discord REST ${method} ${route} returned HTTP ${status}: ${detail.slice(0, 1200)}`));
+          return;
+        }
+        resolve(parsed);
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error(`Native Discord REST request timed out: ${method} ${route}`)));
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+};
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -153,7 +193,7 @@ client.once('ready', async () => {
         timer.unref?.();
       });
       registered = await Promise.race([
-        rest.put(route, { body: primaryData }) as Promise<any[]>,
+        directDiscordApi('PUT', route, primaryData) as Promise<any[]>,
         syncTimeout,
       ]);
     } catch (error: any) {
@@ -181,13 +221,13 @@ client.once('ready', async () => {
       const knownNames = new Set(commandNames);
       const syncOverflowForGuild = async (targetGuildId: string): Promise<void> => {
         const guildRoute = Routes.applicationGuildCommands(applicationId, targetGuildId);
-        const existing = await rest.get(guildRoute) as any[];
+        const existing = await directDiscordApi('GET', guildRoute) as any[];
         // Preserve unrelated guild-only commands, remove stale copies of this
         // bot's known commands, then add the overflow commands for this guild.
         const retained = existing.filter(command => !knownNames.has(String(command.name)));
         const payload = [...retained, ...overflowData];
         if (payload.length > 100) throw new Error(`Guild ${targetGuildId} has too many unrelated guild commands to add overflow safely.`);
-        await rest.put(guildRoute, { body: payload });
+        await directDiscordApi('PUT', guildRoute, payload);
         console.log(`✅ Synced guild overflow for ${targetGuildId}: ${overflowData.map(c => c.name).join(', ')}`);
       };
       for (const guild of client.guilds.cache.values()) {
