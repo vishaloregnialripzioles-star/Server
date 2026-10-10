@@ -1,7 +1,7 @@
 import type { Client, Message } from 'discord.js';
 import { allCommands } from './commands/index.js';
-import { handleMissingPrefixCommand } from './prefixBridge.js';
-import { getGuildPrefix } from './prefixHandler.js';
+import { handleMissingPrefixCommand, PREFIX_NATIVE } from './prefixBridge.js';
+import { getGuildPrefix, handlePrefixCommand } from './prefixHandler.js';
 import { claimCommandMessage } from './storage.js';
 
 const ids = [
@@ -15,7 +15,10 @@ const ids = [
   '1425090863947714613',
 ];
 export const PREFIXLESS_USERS = new Set(ids.map(id => id.trim()).filter(Boolean));
-export const PREFIXLESS_COMMAND_NAMES = new Set(allCommands.map(c => c.data.toJSON().name.toLowerCase()));
+export const PREFIXLESS_COMMAND_NAMES = new Set([
+  ...allCommands.map(c => c.data.toJSON().name.toLowerCase()),
+  ...PREFIX_NATIVE,
+]);
 
 // Resolve the application owner in the background, never inside the hot
 // message-processing path. A slow Discord REST request here used to hold every
@@ -88,7 +91,20 @@ export async function handlePrefixlessMessage(message: Message): Promise<boolean
     value: `${getGuildPrefix(message.guild.id)}${text}`,
     enumerable: true,
   });
-  await handleMissingPrefixCommand(proxy, true, false).catch(err => console.error('[prefixless]', err));
+  // Native prefix commands should use their native handler (not the slash
+  // adapter), which preserves their message parsing and normal permission checks.
+  // Slash-only commands continue through the bridge with the real member permissions.
+  if (PREFIX_NATIVE.has(command)) {
+    await handlePrefixCommand(proxy).catch(err => console.error('[prefixless native]', err));
+  } else {
+    const handled = await handleMissingPrefixCommand(proxy, true, false).catch(err => {
+      console.error('[prefixless bridge]', err);
+      return false;
+    });
+    if (!handled) {
+      await handlePrefixCommand(proxy).catch(err => console.error('[prefixless fallback]', err));
+    }
+  }
   return true;
 }
 
