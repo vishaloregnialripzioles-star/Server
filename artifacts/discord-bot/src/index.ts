@@ -124,7 +124,7 @@ client.once('ready', async () => {
     const commandNames = commandData.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
     const overflowData = commandData.length > 100 ? commandData.slice(100) : [];
     const primaryData = overflowData.length ? commandData.slice(0, 100) : commandData;
-    const configuredGuildId = guildId && /^\\d+$/.test(guildId) ? guildId : undefined;
+    const configuredGuildId = guildId && /^\d+$/.test(guildId) ? guildId : undefined;
     // If we exceed Discord's global limit, use the global+guild split regardless
     // of DISCORD_GUILD_ID; otherwise preserve the configured guild-sync behavior.
     const target = overflowData.length ? 'global' : (configuredGuildId ? 'guild' : 'global');
