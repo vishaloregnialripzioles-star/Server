@@ -61,8 +61,32 @@ export async function handlePrefixCommand(message: Message): Promise<void> {
   const member = message.member!;
   const guild = message.guild;
 
-  const reply = (content: string | object) =>
-    message.reply(content).catch(() => undefined);
+  const reply = async (content: string | object) => {
+    try {
+      return await message.reply(content as any);
+    } catch (error) {
+      console.error('[Prefix Command] Reply reference failed; trying a normal channel send.', {
+        command: message.content.slice(prefix.length).trim().split(/\\s+/)[0]?.toLowerCase(),
+        messageId: message.id,
+        channelId: message.channelId,
+        error,
+      });
+      const channel: any = message.channel;
+      if (typeof channel?.send === 'function') {
+        try {
+          return await channel.send(content as any);
+        } catch (sendError) {
+          console.error('[Prefix Command] Channel send also failed.', {
+            command: message.content.slice(prefix.length).trim().split(/\\s+/)[0]?.toLowerCase(),
+            messageId: message.id,
+            channelId: message.channelId,
+            error: sendError,
+          });
+        }
+      }
+      return undefined;
+    }
+  };
 
   if (cmd === 'hack') {
     if (!canUseHack(message.author.id)) { await reply('❌ You are not allowed to use hack mode.'); return; }
