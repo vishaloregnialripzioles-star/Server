@@ -173,7 +173,7 @@ client.once('ready', async () => {
     // of DISCORD_GUILD_ID; otherwise preserve the configured guild-sync behavior.
     const target = overflowData.length ? 'global' : (configuredGuildId ? 'guild' : 'global');
     const applicationId = client.user!.id;
-    const { REST, Routes } = await import('discord.js');
+    const { Routes } = await import('discord.js');
     const route = target === 'guild'
       ? Routes.applicationGuildCommands(applicationId, configuredGuildId!)
       : Routes.applicationCommands(applicationId);
@@ -185,7 +185,7 @@ client.once('ready', async () => {
     }
 
     let registered: any[] = [];
-    let primaryReadSucceeded = false;
+    let primarySyncCompleted = false;
     const normalizeOption = (option: any): any => ({
       type: option.type,
       name: option.name,
@@ -221,7 +221,7 @@ client.once('ready', async () => {
       let existing: any[] | null = null;
       try {
         existing = await directDiscordApi('GET', route) as any[];
-        primaryReadSucceeded = true;
+
       } catch (readError: any) {
         const status = readError?.status ?? 'unknown';
         const retryAfter = Number(readError?.retryAfter);
@@ -238,7 +238,7 @@ client.once('ready', async () => {
           await new Promise(resolve => setTimeout(resolve, waitMs));
           try {
             existing = await directDiscordApi('GET', route) as any[];
-            primaryReadSucceeded = true;
+
           } catch (retryError: any) {
             console.error('[Slash sync] Read-only retry failed; skipping command writes for this startup:', {
               status: retryError?.status ?? 'unknown',
@@ -252,10 +252,12 @@ client.once('ready', async () => {
       if (existing !== null) {
         if (sameCommands(existing, primaryData)) {
           registered = existing;
+          primarySyncCompleted = true;
           console.log(`✅ Slash commands already match Discord (${registered.length} ${target}); skipped unnecessary overwrite.`);
         } else {
           console.log(`[Slash sync] Definitions differ; sending one registration PUT for ${primaryData.length} ${target} commands...`);
           registered = await directDiscordApi('PUT', route, primaryData) as any[];
+          primarySyncCompleted = true;
           console.log(`✅ Synced ${registered.length} ${target} slash commands${target === 'guild' ? ` to guild ${configuredGuildId}` : ''}`);
         }
       } else {
@@ -270,7 +272,7 @@ client.once('ready', async () => {
       });
     }
 
-    if (primaryReadSucceeded) {
+    if (primarySyncCompleted) {
       const registeredNames = registered.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
       const primaryNames = primaryData.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
       const missing = primaryNames.filter(name => !registeredNames.includes(name));
@@ -280,7 +282,7 @@ client.once('ready', async () => {
       console.log(`🔎 Slash command verification: ${registeredNames.length}/${primaryNames.length} present in primary scope`);
     }
 
-    if (overflowData.length && primaryReadSucceeded) {
+    if (overflowData.length && primarySyncCompleted) {
       const knownNames = new Set(commandNames);
       const syncOverflowForGuild = async (targetGuildId: string): Promise<void> => {
         const guildRoute = Routes.applicationGuildCommands(applicationId, targetGuildId);
