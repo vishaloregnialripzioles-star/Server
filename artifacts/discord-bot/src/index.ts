@@ -105,9 +105,10 @@ client.once('ready', async () => {
   try {
     const guildId = process.env.DISCORD_GUILD_ID?.trim();
     const loadedCommands = [...client.commands.values()];
-    // Discord bulk-overwrite rejects the entire payload if any command name is
-    // duplicated. Keep one definition per name and make the runtime lookup use
-    // that same definition, so registration and execution cannot disagree.
+    // Discord permits at most 100 global chat-input commands. A bulk overwrite
+    // with 101+ commands is rejected in full, which can leave newly added commands
+    // such as /hack missing. Keep the first 100 global and register overflow as
+    // guild commands so every command remains available in every joined server.
     const commandByName = new Map<string, any>();
     const duplicateCommandNames = new Set<string>();
     for (const command of loadedCommands) {
@@ -121,21 +122,28 @@ client.once('ready', async () => {
     for (const [name, command] of commandByName) client.commands.set(name, command);
     const commandData = [...commandByName.values()].map(command => command.data.toJSON());
     const commandNames = commandData.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
-    const target = guildId && /^\d+$/.test(guildId) ? 'guild' : 'global';
+    const overflowData = commandData.length > 100 ? commandData.slice(100) : [];
+    const primaryData = overflowData.length ? commandData.slice(0, 100) : commandData;
+    const configuredGuildId = guildId && /^\\d+$/.test(guildId) ? guildId : undefined;
+    // If we exceed Discord's global limit, use the global+guild split regardless
+    // of DISCORD_GUILD_ID; otherwise preserve the configured guild-sync behavior.
+    const target = overflowData.length ? 'global' : (configuredGuildId ? 'guild' : 'global');
     const applicationId = client.user!.id;
     const { REST, Routes } = await import('discord.js');
     const route = target === 'guild'
-      ? Routes.applicationGuildCommands(applicationId, guildId!)
+      ? Routes.applicationGuildCommands(applicationId, configuredGuildId!)
       : Routes.applicationCommands(applicationId);
-    console.log(`📋 Registering slash commands (${commandNames.length}): ${commandNames.join(', ')}`);
-    console.log(`🔐 Slash sync target: ${target}${target === 'guild' ? ` (${guildId})` : ' (global)'}`);
+    console.log(`📋 Registering slash commands (${commandData.length} total; ${primaryData.length} in ${target} scope; ${overflowData.length} guild-scoped overflow): ${commandNames.join(', ')}`);
+    console.log(`🔐 Slash sync target: ${target}${target === 'guild' ? ` (${configuredGuildId})` : ' (global)'}`);
+    if (overflowData.length) {
+      console.warn('[Slash sync] Discord global limit is 100. Overflow will be registered as guild commands: ' + overflowData.map(c => c.name).join(', '));
+      if (configuredGuildId) console.warn('[Slash sync] DISCORD_GUILD_ID was set, but the command count exceeds 100; using global+guild overflow so no command is dropped.');
+    }
 
-    // Let discord.js manage Discord's API rate-limit buckets and Retry-After
-    // responses instead of bypassing its REST manager with raw fetch.
     const rest = new REST({ version: '10', retries: 2, timeout: 30000 }).setToken(token);
     let registered: any[] = [];
     try {
-      registered = await rest.put(route, { body: commandData }) as any[];
+      registered = await rest.put(route, { body: primaryData }) as any[];
     } catch (error: any) {
       const status = error?.status ?? error?.httpStatus ?? error?.rawError?.status;
       const retryAfter = error?.retryAfter ?? error?.rawError?.retry_after;
@@ -147,14 +155,40 @@ client.once('ready', async () => {
       });
       throw error;
     }
-    console.log(`✅ Synced ${registered.length} ${target} slash commands${target === 'guild' ? ` to guild ${guildId}` : ''}`);
+    console.log(`✅ Synced ${registered.length} ${target} slash commands${target === 'guild' ? ` to guild ${configuredGuildId}` : ''}`);
 
     const registeredNames = registered.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
-    const missing = commandNames.filter(name => !registeredNames.includes(name));
-    const extra = registeredNames.filter(name => !commandNames.includes(name));
-    if (missing.length) console.error(`❌ Discord registration missing: ${missing.join(', ')}`);
-    if (extra.length) console.warn(`⚠️ Discord has extra commands: ${extra.join(', ')}`);
-    console.log(`🔎 Slash command verification: ${registeredNames.length}/${commandNames.length} present`);
+    const primaryNames = primaryData.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
+    const missing = primaryNames.filter(name => !registeredNames.includes(name));
+    const extra = registeredNames.filter(name => !primaryNames.includes(name));
+    if (missing.length) console.error(`❌ Discord registration missing from primary scope: ${missing.join(', ')}`);
+    if (extra.length) console.warn(`⚠️ Discord has extra commands in primary scope: ${extra.join(', ')}`);
+    console.log(`🔎 Slash command verification: ${registeredNames.length}/${primaryNames.length} present in primary scope`);
+
+    if (overflowData.length) {
+      const knownNames = new Set(commandNames);
+      const syncOverflowForGuild = async (targetGuildId: string): Promise<void> => {
+        const guildRoute = Routes.applicationGuildCommands(applicationId, targetGuildId);
+        const existing = await rest.get(guildRoute) as any[];
+        // Preserve unrelated guild-only commands, remove stale copies of this
+        // bot's known commands, then add the overflow commands for this guild.
+        const retained = existing.filter(command => !knownNames.has(String(command.name)));
+        const payload = [...retained, ...overflowData];
+        if (payload.length > 100) throw new Error(`Guild ${targetGuildId} has too many unrelated guild commands to add overflow safely.`);
+        await rest.put(guildRoute, { body: payload });
+        console.log(`✅ Synced guild overflow for ${targetGuildId}: ${overflowData.map(c => c.name).join(', ')}`);
+      };
+      for (const guild of client.guilds.cache.values()) {
+        try {
+          await syncOverflowForGuild(guild.id);
+        } catch (error) {
+          console.error(`[Slash sync] Could not register guild overflow for ${guild.id}:`, error);
+        }
+      }
+      client.on('guildCreate', guild => {
+        void syncOverflowForGuild(guild.id).catch(error => console.error(`[Slash sync] Could not register overflow for new guild ${guild.id}:`, error));
+      });
+    }
   } catch (err) {
     console.error('[Slash sync failed]', err);
   }
