@@ -143,7 +143,40 @@ client.once('ready', async () => {
     const rest = new REST({ version: '10', retries: 2, timeout: 30000 }).setToken(token);
     let registered: any[] = [];
     try {
-      registered = await rest.put(route, { body: primaryData }) as any[];
+      // Avoid repeatedly bulk-overwriting an unchanged application command set
+      // on every restart. Discord may return HTTP 429 after repeated deploys;
+      // read the current definitions first and only PUT when the payload differs.
+      const stable = (value: any): any => {
+        if (Array.isArray(value)) return value.map(stable);
+        if (value && typeof value === 'object') {
+          return Object.fromEntries(Object.keys(value).sort().map(key => [key, stable(value[key])]));
+        }
+        return value;
+      };
+      const comparable = (command: any) => stable({
+        name: command.name,
+        description: command.description,
+        type: command.type ?? 1,
+        options: command.options ?? [],
+        default_member_permissions: command.default_member_permissions ?? null,
+        dm_permission: command.dm_permission ?? null,
+        nsfw: command.nsfw ?? false,
+        contexts: command.contexts ?? null,
+        integration_types: command.integration_types ?? null,
+        name_localizations: command.name_localizations ?? null,
+        description_localizations: command.description_localizations ?? null,
+      });
+      const existing = await rest.get(route) as any[];
+      const desiredByName = [...primaryData].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      const existingByName = [...(Array.isArray(existing) ? existing : [])].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      const unchanged = desiredByName.length === existingByName.length
+        && desiredByName.every((command, index) => JSON.stringify(comparable(command)) === JSON.stringify(comparable(existingByName[index])));
+      if (unchanged) {
+        registered = existingByName;
+        console.log('[Slash sync] Existing command definitions match; skipping unnecessary bulk overwrite.');
+      } else {
+        registered = await rest.put(route, { body: primaryData }) as any[];
+      }
     } catch (error: any) {
       const status = error?.status ?? error?.httpStatus ?? error?.rawError?.status;
       const retryAfter = error?.retryAfter ?? error?.rawError?.retry_after;
