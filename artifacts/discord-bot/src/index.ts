@@ -48,7 +48,11 @@ const directDiscordApi = async (method: string, route: string, body?: unknown): 
         const status = response.statusCode ?? 0;
         if (status < 200 || status >= 300) {
           const detail = typeof parsed === 'object' && parsed ? JSON.stringify(parsed) : String(parsed ?? '');
-          reject(new Error(`Discord REST ${method} ${route} returned HTTP ${status}: ${detail.slice(0, 1200)}`));
+          const error: any = new Error(`Discord REST ${method} ${route} returned HTTP ${status}: ${detail.slice(0, 1200)}`);
+          error.status = status;
+          error.retryAfter = Number(response.headers['retry-after'] ?? (typeof parsed === 'object' && parsed ? parsed.retry_after : NaN));
+          error.cloudflare1015 = /1015/.test(detail);
+          reject(error);
           return;
         }
         resolve(parsed);
@@ -180,44 +184,103 @@ client.once('ready', async () => {
       if (configuredGuildId) console.warn('[Slash sync] DISCORD_GUILD_ID was set, but the command count exceeds 100; using global+guild overflow so no command is dropped.');
     }
 
-    const rest = new REST({ version: '10', retries: 2, timeout: 30000 }).setToken(token);
     let registered: any[] = [];
+    let primaryReadSucceeded = false;
+    const normalizeOption = (option: any): any => ({
+      type: option.type,
+      name: option.name,
+      description: option.description,
+      required: option.required ?? false,
+      choices: option.choices?.map((choice: any) => ({ name: choice.name, value: choice.value })),
+      options: option.options?.map(normalizeOption),
+      autocomplete: option.autocomplete ?? false,
+      channel_types: option.channel_types,
+      min_value: option.min_value,
+      max_value: option.max_value,
+      min_length: option.min_length,
+      max_length: option.max_length,
+    });
+    const normalizeCommand = (command: any): any => ({
+      type: command.type ?? 1,
+      name: command.name,
+      description: command.description,
+      options: (command.options ?? []).map(normalizeOption),
+      default_member_permissions: command.default_member_permissions ?? null,
+      dm_permission: command.dm_permission ?? true,
+      nsfw: command.nsfw ?? false,
+    });
+    const sameCommands = (left: any[], right: any[]): boolean => {
+      const normalizeList = (items: any[]) => items.map(normalizeCommand)
+        .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      return JSON.stringify(normalizeList(left)) === JSON.stringify(normalizeList(right));
+    };
     try {
-      // Do not make command registration depend on a preliminary GET. On this
-      // Render instance that GET never completed, so slash sync silently stalled
-      // before the PUT and Discord never received the current command definitions.
-      // A single bounded bulk overwrite is the authoritative sync operation.
-      console.log(`[Slash sync] Sending registration PUT for ${primaryData.length} ${target} commands...`);
-      const syncTimeout = new Promise<never>((_, reject) => {
-        const timer = setTimeout(() => reject(new Error('Slash registration timed out after 35 seconds')), 35_000);
-        timer.unref?.();
-      });
-      registered = await Promise.race([
-        directDiscordApi('PUT', route, primaryData) as Promise<any[]>,
-        syncTimeout,
-      ]);
+      // Read before writing. Repeated bulk overwrites from every Render restart
+      // were contributing to Discord/Cloudflare rate limits even when definitions
+      // had not changed. Never issue a PUT when Discord cannot be queried.
+      let existing: any[] | null = null;
+      try {
+        existing = await directDiscordApi('GET', route) as any[];
+        primaryReadSucceeded = true;
+      } catch (readError: any) {
+        const status = readError?.status ?? 'unknown';
+        const retryAfter = Number(readError?.retryAfter);
+        const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(60_000, Math.max(1_000, retryAfter * 1000))
+          : 35_000;
+        console.error('[Slash sync] Could not read existing commands; avoiding a risky overwrite:', {
+          status,
+          retryAfter: readError?.retryAfter ?? 'not provided',
+          message: readError?.message ?? String(readError),
+        });
+        if (status === 429 || readError?.cloudflare1015) {
+          console.warn(`[Slash sync] Rate limit detected; waiting ${Math.ceil(waitMs / 1000)}s before one read-only retry.`);
+          await new Promise(resolve => setTimeout(resolve, waitMs));
+          try {
+            existing = await directDiscordApi('GET', route) as any[];
+            primaryReadSucceeded = true;
+          } catch (retryError: any) {
+            console.error('[Slash sync] Read-only retry failed; skipping command writes for this startup:', {
+              status: retryError?.status ?? 'unknown',
+              retryAfter: retryError?.retryAfter ?? 'not provided',
+              message: retryError?.message ?? String(retryError),
+            });
+          }
+        }
+      }
+
+      if (existing !== null) {
+        if (sameCommands(existing, primaryData)) {
+          registered = existing;
+          console.log(`✅ Slash commands already match Discord (${registered.length} ${target}); skipped unnecessary overwrite.`);
+        } else {
+          console.log(`[Slash sync] Definitions differ; sending one registration PUT for ${primaryData.length} ${target} commands...`);
+          registered = await directDiscordApi('PUT', route, primaryData) as any[];
+          console.log(`✅ Synced ${registered.length} ${target} slash commands${target === 'guild' ? ` to guild ${configuredGuildId}` : ''}`);
+        }
+      } else {
+        console.warn('[Slash sync] Registration was skipped because the current command list could not be read safely.');
+      }
     } catch (error: any) {
-      const status = error?.status ?? error?.httpStatus ?? error?.rawError?.status;
-      const retryAfter = error?.retryAfter ?? error?.rawError?.retry_after;
-      console.error('[Slash sync] Discord registration PUT failed:', {
-        status: status ?? 'unknown',
-        retryAfter: retryAfter ?? 'not provided',
+      console.error('[Slash sync] Command synchronization failed:', {
+        status: error?.status ?? 'unknown',
+        retryAfter: error?.retryAfter ?? 'not provided',
         message: error?.message ?? String(error),
         code: error?.code ?? 'unknown',
       });
-      throw error;
     }
-    console.log(`✅ Synced ${registered.length} ${target} slash commands${target === 'guild' ? ` to guild ${configuredGuildId}` : ''}`);
 
-    const registeredNames = registered.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
-    const primaryNames = primaryData.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
-    const missing = primaryNames.filter(name => !registeredNames.includes(name));
-    const extra = registeredNames.filter(name => !primaryNames.includes(name));
-    if (missing.length) console.error(`❌ Discord registration missing from primary scope: ${missing.join(', ')}`);
-    if (extra.length) console.warn(`⚠️ Discord has extra commands in primary scope: ${extra.join(', ')}`);
-    console.log(`🔎 Slash command verification: ${registeredNames.length}/${primaryNames.length} present in primary scope`);
+    if (primaryReadSucceeded) {
+      const registeredNames = registered.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
+      const primaryNames = primaryData.map(command => String(command.name)).sort((a,b)=>a.localeCompare(b));
+      const missing = primaryNames.filter(name => !registeredNames.includes(name));
+      const extra = registeredNames.filter(name => !primaryNames.includes(name));
+      if (missing.length) console.error(`❌ Discord registration missing from primary scope: ${missing.join(', ')}`);
+      if (extra.length) console.warn(`⚠️ Discord has extra commands in primary scope: ${extra.join(', ')}`);
+      console.log(`🔎 Slash command verification: ${registeredNames.length}/${primaryNames.length} present in primary scope`);
+    }
 
-    if (overflowData.length) {
+    if (overflowData.length && primaryReadSucceeded) {
       const knownNames = new Set(commandNames);
       const syncOverflowForGuild = async (targetGuildId: string): Promise<void> => {
         const guildRoute = Routes.applicationGuildCommands(applicationId, targetGuildId);
@@ -227,14 +290,25 @@ client.once('ready', async () => {
         const retained = existing.filter(command => !knownNames.has(String(command.name)));
         const payload = [...retained, ...overflowData];
         if (payload.length > 100) throw new Error(`Guild ${targetGuildId} has too many unrelated guild commands to add overflow safely.`);
+        if (sameCommands(existing, payload)) {
+          console.log(`✅ Guild overflow already matches for ${targetGuildId}; skipped overwrite.`);
+          return;
+        }
         await directDiscordApi('PUT', guildRoute, payload);
         console.log(`✅ Synced guild overflow for ${targetGuildId}: ${overflowData.map(c => c.name).join(', ')}`);
       };
-      for (const guild of client.guilds.cache.values()) {
+      const guildsToSync = configuredGuildId
+        ? [client.guilds.cache.get(configuredGuildId)].filter(Boolean) as any[]
+        : [...client.guilds.cache.values()];
+      for (const guild of guildsToSync) {
         try {
           await syncOverflowForGuild(guild.id);
-        } catch (error) {
+        } catch (error: any) {
           console.error(`[Slash sync] Could not register guild overflow for ${guild.id}:`, error);
+          if (error?.status === 429 || error?.cloudflare1015) {
+            console.warn('[Slash sync] Stopping overflow writes after a rate-limit response.');
+            break;
+          }
         }
       }
       client.on('guildCreate', guild => {
