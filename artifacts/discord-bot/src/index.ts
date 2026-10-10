@@ -225,26 +225,31 @@ client.once('ready', async () => {
       } catch (readError: any) {
         const status = readError?.status ?? 'unknown';
         const retryAfter = Number(readError?.retryAfter);
-        const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
-          ? Math.min(60_000, Math.max(1_000, retryAfter * 1000))
-          : 35_000;
+        const hasRetryAfter = Number.isFinite(retryAfter) && retryAfter > 0;
         console.error('[Slash sync] Could not read existing commands; avoiding a risky overwrite:', {
           status,
           retryAfter: readError?.retryAfter ?? 'not provided',
           message: readError?.message ?? String(readError),
         });
         if (status === 429 || readError?.cloudflare1015) {
-          console.warn(`[Slash sync] Rate limit detected; waiting ${Math.ceil(waitMs / 1000)}s before one read-only retry.`);
-          await new Promise(resolve => setTimeout(resolve, waitMs));
-          try {
-            existing = await directDiscordApi('GET', route) as any[];
-
-          } catch (retryError: any) {
-            console.error('[Slash sync] Read-only retry failed; skipping command writes for this startup:', {
-              status: retryError?.status ?? 'unknown',
-              retryAfter: retryError?.retryAfter ?? 'not provided',
-              message: retryError?.message ?? String(retryError),
-            });
+          if (hasRetryAfter && retryAfter > 120) {
+            // Cloudflare 1015 can block the source IP for hours. Never clamp
+            // Retry-After down to a short delay; that would retry into the same
+            // block and make the situation worse.
+            console.warn(`[Slash sync] Discord/Cloudflare requested a ${retryAfter}s cooldown. Skipping retries and all command writes for this startup.`);
+          } else {
+            const waitMs = hasRetryAfter ? Math.max(1_000, retryAfter * 1000 + 1_000) : 35_000;
+            console.warn(`[Slash sync] Rate limit detected; waiting ${Math.ceil(waitMs / 1000)}s before one read-only retry.`);
+            await new Promise(resolve => setTimeout(resolve, waitMs));
+            try {
+              existing = await directDiscordApi('GET', route) as any[];
+            } catch (retryError: any) {
+              console.error('[Slash sync] Read-only retry failed; skipping command writes for this startup:', {
+                status: retryError?.status ?? 'unknown',
+                retryAfter: retryError?.retryAfter ?? 'not provided',
+                message: retryError?.message ?? String(retryError),
+              });
+            }
           }
         }
       }
