@@ -6,6 +6,9 @@ import { claimCommandMessage } from './storage.js';
 
 const ids = [
   process.env.OWNER_USER_ID ?? '',
+  // Primary bot owner: keep owner prefixless access working even when the
+  // optional Render OWNER_USER_ID variable has not been configured.
+  '1504354088538869892',
   ...(process.env.OWNER_USER_IDS ?? '').split(/[\s,]+/),
   '1405884975860940854',
   '1530840594115596309',
@@ -85,7 +88,7 @@ export async function handlePrefixlessMessage(message: Message): Promise<boolean
     value: `${getGuildPrefix(message.guild.id)}${text}`,
     enumerable: true,
   });
-  await handleMissingPrefixCommand(proxy, true, true).catch(err => console.error('[prefixless]', err));
+  await handleMissingPrefixCommand(proxy, true, false).catch(err => console.error('[prefixless]', err));
   return true;
 }
 
