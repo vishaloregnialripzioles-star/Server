@@ -71,14 +71,21 @@ export async function handlePrefixlessMessage(message: Message): Promise<boolean
     return false;
   }
   const prefix = getGuildPrefix(message.guild.id);
-  if (text.startsWith(prefix)) return false;
+  // Owner/friend commands work both without a prefix and with the familiar
+  // dot prefix, even if this server has configured a different custom prefix.
+  // The alias remains restricted to the allowlist checked above.
+  const hasConfiguredPrefix = text.startsWith(prefix);
+  const hasDotAlias = prefix !== '.' && text.startsWith('.') && text.length > 1;
+  if (hasConfiguredPrefix && !hasDotAlias) return false;
+  const commandText = hasDotAlias ? text.slice(1).trim() : text;
+  if (!commandText) return false;
 
-  const command = text.split(/\s+/)[0]?.toLowerCase();
+  const command = commandText.split(/\s+/)[0]?.toLowerCase();
   if (!PREFIXLESS_COMMAND_NAMES.has(command)) {
     console.log(`[Prefixless] Unknown command token=${JSON.stringify(command)} user=${message.author.id} messageId=${message.id}`);
     return false;
   }
-  console.log(`[Prefixless] Accepted command=${command} user=${message.author.id} messageId=${message.id}`);
+  console.log(`[Prefixless] Accepted command=${command} user=${message.author.id} messageId=${message.id} route=${hasDotAlias ? 'dot-alias' : hasConfiguredPrefix ? 'configured-prefix' : 'prefixless'}`);
 
   const claimed = await claimCommandMessage(message.id);
   if (!claimed) {
@@ -88,21 +95,37 @@ export async function handlePrefixlessMessage(message: Message): Promise<boolean
 
   const proxy = Object.create(message) as Message;
   Object.defineProperty(proxy, 'content', {
-    value: `${getGuildPrefix(message.guild.id)}${text}`,
+    value: `${prefix}${commandText}`,
     enumerable: true,
   });
   // Native prefix commands should use their native handler (not the slash
   // adapter), which preserves their message parsing and normal permission checks.
   // Slash-only commands continue through the bridge with the real member permissions.
   if (PREFIX_NATIVE.has(command)) {
-    await handlePrefixCommand(proxy).catch(err => console.error('[prefixless native]', err));
+    try {
+      await handlePrefixCommand(proxy);
+    } catch (err) {
+      console.error('[prefixless native]', err);
+      await message.reply('❌ I received that command but could not finish it. Please check the bot logs.').catch(async () => {
+        await (message.channel as any).send('❌ I received that command but could not finish it. Please check the bot logs.').catch(() => undefined);
+      });
+    }
   } else {
-    const handled = await handleMissingPrefixCommand(proxy, true, false).catch(err => {
+    let handled = false;
+    try {
+      handled = await handleMissingPrefixCommand(proxy, true, false);
+    } catch (err) {
       console.error('[prefixless bridge]', err);
-      return false;
-    });
+    }
     if (!handled) {
-      await handlePrefixCommand(proxy).catch(err => console.error('[prefixless fallback]', err));
+      try {
+        await handlePrefixCommand(proxy);
+      } catch (err) {
+        console.error('[prefixless fallback]', err);
+        await message.reply('❌ I received that command but could not finish it. Please check the bot logs.').catch(async () => {
+          await (message.channel as any).send('❌ I received that command but could not finish it. Please check the bot logs.').catch(() => undefined);
+        });
+      }
     }
   }
   return true;
