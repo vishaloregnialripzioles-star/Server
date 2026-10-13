@@ -135,9 +135,12 @@ export function buildHelpMenu(category?:string|null,commands:any=commandRegistry
 export const help:Command={
   data:new SlashCommandBuilder().setName('help').setDescription('Open the complete Sparxie command directory').addStringOption(o=>o.setName('category').setDescription('Show one category').addChoices(...CATEGORY_ORDER.map(c=>({name:`${emojiFor(c)} ${c}`.slice(0,100),value:c.toLowerCase()})))),
   async execute(interaction){
-    // Resolve the owner's application emojis for every help entry point, including prefix commands.
-    await primeHelpApplicationEmojis(interaction.client);
+    // Acknowledge immediately. Application-emoji REST requests can be slow or
+    // rate-limited on Render, and must never run before Discord's 3-second ACK.
     await interaction.deferReply();
+    // Resolve emojis only after acknowledging, so a slow fetch cannot cause
+    // "Application did not respond". primeHelpApplicationEmojis has a fallback.
+    await primeHelpApplicationEmojis(interaction.client);
     const prefix=(await import('../prefixHandler.js')).getGuildPrefix(interaction.guild?.id??'');
     const commands=Array.from(interaction.client.commands?.values?.()??commandRegistry);
     const filter=interaction.options.getString('category');
