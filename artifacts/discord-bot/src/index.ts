@@ -336,6 +336,28 @@ client.once('ready', async () => {
   } catch (err) { console.error('[Background startup failed]', err); }
 });
 
+// Diagnose stalled outbound responses without changing command behavior or bypassing Discord's rate limits.
+client.rest.on('rateLimited', (info: any) => {
+  console.error('[Discord REST] rate-limited request', {
+    route: info?.route ?? 'unknown',
+    method: info?.method ?? 'unknown',
+    global: Boolean(info?.global),
+    retryAfterMs: info?.retryAfter ?? info?.retryAfterMs ?? 'unknown',
+    majorParameter: info?.majorParameter ?? 'unknown',
+  });
+});
+
+client.once('ready', () => {
+  void directDiscordApi('GET', '/users/@me')
+    .then((user: any) => console.log('[Discord REST Probe] Native HTTPS API OK; botId=' + String(user?.id ?? 'unknown')))
+    .catch((error: any) => console.error('[Discord REST Probe] Native HTTPS API failed:', {
+      status: error?.status ?? 'unknown',
+      retryAfter: error?.retryAfter ?? 'not provided',
+      cloudflare1015: Boolean(error?.cloudflare1015),
+      message: String(error?.message ?? error).slice(0, 500),
+    }));
+});
+
 client.on('error', err => console.error('[Discord error]', err));
 client.on('warn', message => console.warn('[Discord warn]', message));
 
