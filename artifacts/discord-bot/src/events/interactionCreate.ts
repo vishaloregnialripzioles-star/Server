@@ -127,15 +127,31 @@ export async function handleInteractionCreate(interaction: Interaction): Promise
     if(originalEditReply)rawInteraction.editReply=async(payload:any)=>originalEditReply(await patchPayload(payload));
     if(originalFollowUp)rawInteraction.followUp=async(payload:any)=>originalFollowUp(await patchPayload(payload));
     if(originalUpdate)rawInteraction.update=async(payload:any)=>originalUpdate(await patchPayload(payload));
+    const slashStartedAt = Date.now();
+    console.log('[Slash] Execute start /' + interaction.commandName + ' interaction=' + interaction.id);
     try {
       await command.execute(interaction);
+      console.log('[Slash] Execute finished /' + interaction.commandName + ' interaction=' + interaction.id +
+        ' elapsedMs=' + (Date.now() - slashStartedAt) +
+        ' replied=' + interaction.replied + ' deferred=' + interaction.deferred);
+      // Guard against a command handler that accidentally returns without
+      // acknowledging the interaction. This is deliberately a post-execution
+      // fallback, so it cannot race a legitimate slow command or change the
+      // visibility of a command's intended response.
+      if (!interaction.replied && !interaction.deferred) {
+        console.error('[Slash] Handler returned without acknowledging /' + interaction.commandName);
+        await originalReply({ content: '⚠️ This command finished without sending a response. Please try again; the issue has been logged.', flags: 64 })
+          .catch(error => console.error('[Slash] Fallback acknowledgement failed /' + interaction.commandName + ':', error));
+      }
     } catch (err) {
-      console.error('[Slash] Error in /' + interaction.commandName + ':', err);
+      console.error('[Slash] Error in /' + interaction.commandName + ' interaction=' + interaction.id +
+        ' elapsedMs=' + (Date.now() - slashStartedAt) + ' replied=' + interaction.replied +
+        ' deferred=' + interaction.deferred + ':', err);
       const payload = { content: '❌ An error occurred while running this command.', flags: 64 };
       if (interaction.replied || interaction.deferred) {
         await originalFollowUp(payload).catch(() => undefined);
       } else {
-        await originalReply(payload).catch(() => undefined);
+        await originalReply(payload).catch(error => console.error('[Slash] Error acknowledgement failed /' + interaction.commandName + ':', error));
       }
     } finally {
       if(originalReply)rawInteraction.reply=originalReply;
