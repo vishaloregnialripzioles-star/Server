@@ -146,6 +146,7 @@ client.once('ready', async () => {
     console.log('🔎 Loaded /bloxscanner command');
   } catch (err) { console.error('[Blox scanner command startup failed]', err); }
 
+  if (process.env.SYNC_SLASH_COMMANDS === 'true') {
   try {
     const guildId = process.env.DISCORD_GUILD_ID?.trim();
     const loadedCommands = [...client.commands.values()];
@@ -324,6 +325,9 @@ client.once('ready', async () => {
     }
   } catch (err) {
     console.error('[Slash sync failed]', err);
+  }
+  } else {
+    console.log('[Slash sync] Automatic command registration disabled to prevent repeated REST writes. Set SYNC_SLASH_COMMANDS=true only for an intentional one-time sync.');
   }
 
   try {
