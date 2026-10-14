@@ -4,6 +4,24 @@ import { DEFAULT_EMBED_COLOR } from '../embedDefaults.js';
 
 export const HELP_SELECT_CUSTOM_ID='sparxie_help_category';
 
+// The avatar is populated from the live bot user when Help is opened. Styling is
+// applied at EmbedBuilder serialization so embeds from existing commands inherit
+// the same clean Sparxie identity without rewriting their existing emojis/content.
+let botProfileAvatarUrl: string | undefined;
+const originalEmbedToJSON = EmbedBuilder.prototype.toJSON;
+(EmbedBuilder.prototype as any).toJSON = function(...args: any[]) {
+  const json: any = originalEmbedToJSON.apply(this, args);
+  if (botProfileAvatarUrl) {
+    if (json.color === undefined || json.color === null) json.color = DEFAULT_EMBED_COLOR;
+    if (!json.author) json.author = { name: 'Sparxie', icon_url: botProfileAvatarUrl };
+    else if (!json.author.icon_url) json.author.icon_url = botProfileAvatarUrl;
+    if (!json.thumbnail) json.thumbnail = { url: botProfileAvatarUrl };
+    if (!json.footer) json.footer = { text: 'Sparxie • Community Bot', icon_url: botProfileAvatarUrl };
+    else if (!json.footer.icon_url) json.footer.icon_url = botProfileAvatarUrl;
+  }
+  return json;
+};
+
 // These are APPLICATION EMOJI IDs supplied by the bot owner.
 // Do not guess their names: Discord is the source of truth for the emoji name.
 const CUSTOM_EMOJI_IDS:Record<string,string>={
@@ -49,6 +67,7 @@ const resolvedApplicationEmojis=new Map<string,ResolvedEmoji>();
 
 export async function primeHelpApplicationEmojis(client:any):Promise<void>{
   try{
+    botProfileAvatarUrl = client?.user?.displayAvatarURL?.({ size: 256, extension: 'png' }) ?? botProfileAvatarUrl;
     const manager=client?.application?.emojis;
     if(!manager?.fetch)return;
     const emojis=await manager.fetch();
@@ -108,14 +127,14 @@ export function findHelpCategory(category?:string|null,commands:any=commandRegis
   if(!category||category.toLowerCase()==='all')return undefined;
   return getHelpCategories(commands,prefix).find(c=>c.name.toLowerCase()===category.toLowerCase());
 }
-function formatCommand(entry:HelpEntry):string{return`• ${entry.name}${entry.premium?' '+emojiFor('Premium'):''} — ${entry.description}`;}
+function formatCommand(entry:HelpEntry):string{return`• \`${entry.name}\`${entry.premium?' '+emojiFor('Premium'):''} — ${entry.description}`;}
 
 export function buildHelpEmbed(category?:string|null,prefix='.',commands:any=commandRegistry):EmbedBuilder{
   const categories=getHelpCategories(commands,prefix);
   const selected=category?categories.find(c=>c.name.toLowerCase()===category.toLowerCase()):undefined;
   const count=categories.reduce((n,c)=>n+c.commands.length,0);
   const premiumEmoji=emojiFor('Premium');
-  const embed=new EmbedBuilder().setColor(DEFAULT_EMBED_COLOR).setAuthor({name:'Sparxie Help Center'}).setFooter({text:'Sparxie • Complete command directory'}).setTimestamp();
+  const embed=new EmbedBuilder().setColor(DEFAULT_EMBED_COLOR).setAuthor({name:'Sparxie Help Center',iconURL:botProfileAvatarUrl}).setFooter({text:'Sparxie • Complete command directory',iconURL:botProfileAvatarUrl}).setTimestamp();
   if(!selected)embed.setTitle('✨ Welcome to Sparxie').setDescription(`Your complete command directory, organized by category.\n\n**Prefix:** \`${prefix}\`\n**Command entries:** \`${count}\`\n**${premiumEmoji}:** Premium feature when premium metadata is configured.\n\n${categories.map(c=>`${c.emoji} **${c.name}** — ${c.commands.length}`).join('\n')}\n\nUse \`${prefix}help <category>\` or the selector below.`);
   else{
     embed.setTitle(`${selected.emoji} ${selected.name}`).setDescription(`${selected.commands.length} command entries.\n${premiumEmoji} = Premium.`);
